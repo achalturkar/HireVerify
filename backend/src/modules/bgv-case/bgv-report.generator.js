@@ -251,10 +251,10 @@ const drawFullRow = (doc, label, value) => {
   const valueWidth = PAGE_WIDTH - labelWidth;
   const y = doc.y;
   doc.font('Helvetica-Bold').fontSize(9.5);
-  const labelHeight = doc.heightOfString(String(label), { width: labelWidth - 16 });
+  const labelHeight = doc.heightOfString(String(label), { width: labelWidth - 16 }) + 12;
   doc.font('Helvetica').fontSize(9.5);
-  const valueHeight = doc.heightOfString(String(value ?? '-'), { width: valueWidth - 16 });
-  const height = Math.max(24, labelHeight, valueHeight) + 12;
+  const valueHeight = doc.heightOfString(String(value ?? '-'), { width: valueWidth - 16 }) + 12;
+  const height = Math.max(24, labelHeight, valueHeight);
 
   doc.fillColor(colors.labelBg).rect(PAGE_LEFT, y, labelWidth, height).fill();
   doc.fillColor(colors.valueBg).rect(PAGE_LEFT + labelWidth, y, valueWidth, height).fill();
@@ -268,7 +268,7 @@ const drawFullRow = (doc, label, value) => {
 const drawFooter = (doc, companyName) => {
   const colors = colorsFor(doc);
   doc.save().strokeColor('#CBD5E1').moveTo(PAGE_LEFT, FOOTER_Y).lineTo(547, FOOTER_Y).stroke();
-  doc.fillColor(colors.muted).font('Helvetica').fontSize(8).text(`Confidential - ${companyName} - All rights reserved`, PAGE_LEFT, FOOTER_Y + 8);
+  doc.fillColor(colors.muted).font('Helvetica').fontSize(8).text(`Confidential - ${companyName} - All rights reserved`, PAGE_LEFT, FOOTER_Y + 8, { width: PAGE_WIDTH, align: 'center' });
   doc.restore();
 };
 
