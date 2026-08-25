@@ -121,8 +121,4 @@ const start = async () => {
   }
 };
 
-const questionLoader = require('./modules/question/question.loader');
-
-questionLoader.loadQuestions();
-
 start();

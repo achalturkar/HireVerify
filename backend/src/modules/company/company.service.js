@@ -19,6 +19,7 @@ const toDto = (company) => ({
   id: company.id,
   name: company.name,
   slug: company.slug,
+  shortCode: company.shortCode,
   contactEmail: company.contactEmail,
   contactPhone: company.contactPhone,
   logoUrl: company.logoUrl,
@@ -212,9 +213,10 @@ const update = async ({ id, payload, req }) => {
   const existing = await repo.findById(id);
   if (!existing) throw new NotFoundError('Company not found');
   const data = {};
-  ['name', 'contactEmail', 'contactPhone', 'primaryColor', 'address', 'settings'].forEach((k) => {
+  ['name', 'shortCode', 'contactEmail', 'contactPhone', 'primaryColor', 'address', 'settings'].forEach((k) => {
     if (payload[k] !== undefined) data[k] = payload[k];
   });
+  if (data.shortCode !== undefined) data.shortCode = data.shortCode ? String(data.shortCode).trim().toUpperCase() : null;
 
   // Each image field follows: new file wins > explicit removal clears it >
   // plain URL string in body sets it > otherwise leave untouched.
@@ -270,24 +272,26 @@ const getStats = async ({ id }) => {
   const company = await repo.findById(id);
   if (!company) throw new NotFoundError('Company not found');
 
-  const [users, clients, candidates, assessments, totalAttempts, completedAttempts, results] = await Promise.all([
+  const [users, clients, candidates, bgvCases, pendingCases, inProgressCases, completedCases, reports] = await Promise.all([
     prisma.user.count({ where: { companyId: id, isDeleted: false } }),
     prisma.client.count({ where: { companyId: id, isDeleted: false } }),
     prisma.candidate.count({ where: { companyId: id, isDeleted: false } }),
-    prisma.assessment.count({ where: { companyId: id, isDeleted: false } }),
-    prisma.examAttempt.count({ where: { companyId: id } }),
-    prisma.examAttempt.count({ where: { companyId: id, status: 'SUBMITTED' } }),
-    prisma.assessmentResult.count({ where: { attempt: { companyId: id } } }),
+    prisma.bGVCase.count({ where: { companyId: id } }),
+    prisma.bGVCase.count({ where: { companyId: id, status: { in: ['DRAFT', 'INITIATED', 'CONSENT_PENDING'] } } }),
+    prisma.bGVCase.count({ where: { companyId: id, status: { in: ['IN_PROGRESS', 'UNDER_REVIEW', 'ON_HOLD'] } } }),
+    prisma.bGVCase.count({ where: { companyId: id, status: 'COMPLETED' } }),
+    prisma.bGVReport.count({ where: { companyId: id } }),
   ]);
 
   return {
     users,
     clients,
     candidates,
-    assessments,
-    totalAttempts,
-    completedAttempts,
-    results,
+    bgvCases,
+    pendingCases,
+    inProgressCases,
+    completedCases,
+    reports,
   };
 };
 

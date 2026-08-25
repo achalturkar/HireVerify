@@ -48,7 +48,7 @@ if (config.swagger.enabled) mountSwagger(app);
 // Root ping
 app.get('/', (_req, res) =>
   res.json({
-    name: 'Managerial Assessment Portal API',
+    name: 'Background Verification Portal API',
     version: '1.0.0',
     docs: '/api/docs',
     health: '/api/v1/health',

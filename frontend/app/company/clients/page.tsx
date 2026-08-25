@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Search,
   Plus,
@@ -19,7 +20,10 @@ import {
 import { useAuth } from '@/src/auth/AuthProvider';
 import ClientFormModal from '@/src/components/layout/company/client/ClientFormModal';
 import ClientConfirmDialog from '@/src/components/layout/company/client/ClientConfirmDialog';
-import ClientViewModal from '@/src/components/layout/company/client/ClientViewModal';
+// Clicking a client now navigates to the full detail page (/clients/[id]),
+// which has an Overview tab covering what this modal used to show plus a
+// Candidates tab — so the modal is no longer used here.
+// import ClientViewModal from '@/src/components/layout/company/client/ClientViewModal';
 import {
   listClients,
   createClient,
@@ -67,6 +71,7 @@ function StatusBadge({ status }: { status: ClientStatus }) {
 
 export default function ClientsPage() {
   const { user: currentUser, accessToken } = useAuth();
+  const router = useRouter();
   const isSuperAdmin = Boolean(currentUser?.role?.isSuperAdmin);
 
   const [clients, setClients] = useState<Client[]>([]);
@@ -86,8 +91,6 @@ export default function ClientsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const [viewTarget, setViewTarget] = useState<Client | null>(null);
-
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -96,8 +99,6 @@ export default function ClientsPage() {
 
   const [banner, setBanner] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
 
-
-  
   useEffect(() => {
     const t = setTimeout(() => {
       setSearch(searchInput.trim());
@@ -161,8 +162,8 @@ export default function ClientsPage() {
     setModalMode('edit');
   };
 
-  const openView = (client: Client) => {
-    setViewTarget(client);
+  const goToDetail = (client: Client) => {
+    router.push(`/company/clients/${client.id}`);
   };
 
   const closeModal = () => {
@@ -355,162 +356,162 @@ export default function ClientsPage() {
                 className="text-[11px] uppercase tracking-wide text-[var(--muted)] border-b border-[var(--border)]"
                 style={{ fontFamily: 'var(--font-mono)' }}
               >
-              <th className="px-5 py-3 font-medium">Client</th>
-              <th className="px-5 py-3 font-medium">Contact</th>
-              {isSuperAdmin && <th className="px-5 py-3 font-medium">Company</th>}
-              <th className="px-5 py-3 font-medium">Status</th>
-              <th className="px-5 py-3 font-medium">Created</th>
-              <th className="px-5 py-3 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={isSuperAdmin ? 6 : 5} className="px-5 py-10 text-center text-[13px] text-[var(--muted)]">
-                  Loading clients…
-                </td>
+                <th className="px-5 py-3 font-medium">Client</th>
+                <th className="px-5 py-3 font-medium">Contact</th>
+                {isSuperAdmin && <th className="px-5 py-3 font-medium">Company</th>}
+                <th className="px-5 py-3 font-medium">Status</th>
+                <th className="px-5 py-3 font-medium">Created</th>
+                <th className="px-5 py-3 font-medium text-right">Actions</th>
               </tr>
-            )}
-
-            {!loading && loadError && (
-              <tr>
-                <td colSpan={isSuperAdmin ? 6 : 5} className="px-5 py-10 text-center text-[13px] text-[#FF6B6B]">
-                  {loadError}
-                </td>
-              </tr>
-            )}
-
-            {!loading && !loadError && clients.length === 0 && (
-              <tr>
-                <td colSpan={isSuperAdmin ? 6 : 5} className="px-5 py-10 text-center text-[13px] text-[var(--muted)]">
-                  No clients match these filters.
-                </td>
-              </tr>
-            )}
-
-            {!loading &&
-              !loadError &&
-              clients.map((c, i) => (
-                <tr
-                  key={c.id}
-                  onClick={() => openView(c)}
-                  className="border-t border-[var(--border)] hover:bg-[var(--surface-muted)] cursor-pointer"
-                >
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      {c.logoUrl ? (
-                        <img
-                          src={c.logoUrl}
-                          alt=""
-                          className="w-8 h-8 rounded-full object-cover shrink-0 bg-[var(--surface-muted)]"
-                        />
-                      ) : (
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0 ${
-                            i % 2 === 0 ? 'bg-[var(--primary)]/15 text-[var(--primary)]' : 'bg-[#F2AE55]/15 text-[#F2AE55]'
-                          }`}
-                        >
-                          {initials(c.name)}
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-[13.5px] text-[var(--foreground)] truncate">{c.name}</p>
-                        <p
-                          className="text-[11.5px] text-[var(--muted)] truncate"
-                          style={{ fontFamily: 'var(--font-mono)' }}
-                        >
-                          {c.clientCode}
-                          {c.industry ? ` · ${c.industry}` : ''}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-[12.5px] text-[var(--muted)]">
-                    {c.contactName && <p className="text-[13px] text-[var(--foreground)]">{c.contactName}</p>}
-                    {c.contactEmail && (
-                      <p className="flex items-center gap-1.5 text-[var(--muted)]">
-                        <Mail size={11} /> {c.contactEmail}
-                      </p>
-                    )}
-                    {c.contactPhone && (
-                      <p className="flex items-center gap-1.5 text-[var(--muted)]">
-                        <Phone size={11} /> {c.contactPhone}
-                      </p>
-                    )}
-                    {!c.contactName && !c.contactEmail && !c.contactPhone && <span>—</span>}
-                  </td>
-                  {isSuperAdmin && (
-                    <td className="px-5 py-3 text-[13px] text-[var(--muted)]">
-                      <span className="flex items-center gap-1.5">
-                        <Building2 size={12} className="text-[var(--muted)]" />
-                        {c.company?.name ?? '—'}
-                      </span>
-                    </td>
-                  )}
-                  <td className="px-5 py-3">
-                    <StatusBadge status={c.status} />
-                  </td>
-                  <td className="px-5 py-3 text-[12.5px] text-[var(--muted)]" style={{ fontFamily: 'var(--font-mono)' }}>
-                    {new Date(c.createdAt).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </td>
-                  <td className="px-5 py-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => openView(c)}
-                        className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-muted)] transition-colors"
-                        aria-label={`View ${c.name}`}
-                      >
-                        <Eye size={13} />
-                      </button>
-                      {c.website && (
-                        <a
-                          href={c.website}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-muted)] transition-colors"
-                          aria-label={`Visit ${c.name} website`}
-                        >
-                          <Globe size={13} />
-                        </a>
-                      )}
-                      <button
-                        onClick={() =>
-                          setStatusTarget({ client: c, next: c.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' })
-                        }
-                        className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
-                          c.status === 'ACTIVE'
-                            ? 'text-[var(--muted)] hover:text-[#F2AE55] hover:bg-[#F2AE55]/10'
-                            : 'text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10'
-                        }`}
-                        aria-label={c.status === 'ACTIVE' ? `Deactivate ${c.name}` : `Activate ${c.name}`}
-                      >
-                        {c.status === 'ACTIVE' ? <PowerOff size={13} /> : <Power size={13} />}
-                      </button>
-                      <button
-                        onClick={() => openEdit(c)}
-                        className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
-                        aria-label={`Edit ${c.name}`}
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(c)}
-                        className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[#FF6B6B] hover:bg-[#FF6B6B]/10 transition-colors"
-                        aria-label={`Delete ${c.name}`}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+            </thead>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={isSuperAdmin ? 6 : 5} className="px-5 py-10 text-center text-[13px] text-[var(--muted)]">
+                    Loading clients…
                   </td>
                 </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>
+              )}
+
+              {!loading && loadError && (
+                <tr>
+                  <td colSpan={isSuperAdmin ? 6 : 5} className="px-5 py-10 text-center text-[13px] text-[#FF6B6B]">
+                    {loadError}
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !loadError && clients.length === 0 && (
+                <tr>
+                  <td colSpan={isSuperAdmin ? 6 : 5} className="px-5 py-10 text-center text-[13px] text-[var(--muted)]">
+                    No clients match these filters.
+                  </td>
+                </tr>
+              )}
+
+              {!loading &&
+                !loadError &&
+                clients.map((c, i) => (
+                  <tr
+                    key={c.id}
+                    onClick={() => goToDetail(c)}
+                    className="border-t border-[var(--border)] hover:bg-[var(--surface-muted)] cursor-pointer"
+                  >
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        {c.logoUrl ? (
+                          <img
+                            src={c.logoUrl}
+                            alt=""
+                            className="w-8 h-8 rounded-full object-cover shrink-0 bg-[var(--surface-muted)]"
+                          />
+                        ) : (
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0 ${
+                              i % 2 === 0 ? 'bg-[var(--primary)]/15 text-[var(--primary)]' : 'bg-[#F2AE55]/15 text-[#F2AE55]'
+                            }`}
+                          >
+                            {initials(c.name)}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-[13.5px] text-[var(--foreground)] truncate">{c.name}</p>
+                          <p
+                            className="text-[11.5px] text-[var(--muted)] truncate"
+                            style={{ fontFamily: 'var(--font-mono)' }}
+                          >
+                            {c.clientCode}
+                            {c.industry ? ` · ${c.industry}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-[12.5px] text-[var(--muted)]">
+                      {c.contactName && <p className="text-[13px] text-[var(--foreground)]">{c.contactName}</p>}
+                      {c.contactEmail && (
+                        <p className="flex items-center gap-1.5 text-[var(--muted)]">
+                          <Mail size={11} /> {c.contactEmail}
+                        </p>
+                      )}
+                      {c.contactPhone && (
+                        <p className="flex items-center gap-1.5 text-[var(--muted)]">
+                          <Phone size={11} /> {c.contactPhone}
+                        </p>
+                      )}
+                      {!c.contactName && !c.contactEmail && !c.contactPhone && <span>—</span>}
+                    </td>
+                    {isSuperAdmin && (
+                      <td className="px-5 py-3 text-[13px] text-[var(--muted)]">
+                        <span className="flex items-center gap-1.5">
+                          <Building2 size={12} className="text-[var(--muted)]" />
+                          {c.company?.name ?? '—'}
+                        </span>
+                      </td>
+                    )}
+                    <td className="px-5 py-3">
+                      <StatusBadge status={c.status} />
+                    </td>
+                    <td className="px-5 py-3 text-[12.5px] text-[var(--muted)]" style={{ fontFamily: 'var(--font-mono)' }}>
+                      {new Date(c.createdAt).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </td>
+                    <td className="px-5 py-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => goToDetail(c)}
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-muted)] transition-colors"
+                          aria-label={`View ${c.name}`}
+                        >
+                          <Eye size={13} />
+                        </button>
+                        {c.website && (
+                          <a
+                            href={c.website}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-muted)] transition-colors"
+                            aria-label={`Visit ${c.name} website`}
+                          >
+                            <Globe size={13} />
+                          </a>
+                        )}
+                        <button
+                          onClick={() =>
+                            setStatusTarget({ client: c, next: c.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' })
+                          }
+                          className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
+                            c.status === 'ACTIVE'
+                              ? 'text-[var(--muted)] hover:text-[#F2AE55] hover:bg-[#F2AE55]/10'
+                              : 'text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10'
+                          }`}
+                          aria-label={c.status === 'ACTIVE' ? `Deactivate ${c.name}` : `Activate ${c.name}`}
+                        >
+                          {c.status === 'ACTIVE' ? <PowerOff size={13} /> : <Power size={13} />}
+                        </button>
+                        <button
+                          onClick={() => openEdit(c)}
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
+                          aria-label={`Edit ${c.name}`}
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(c)}
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[#FF6B6B] hover:bg-[#FF6B6B]/10 transition-colors"
+                          aria-label={`Delete ${c.name}`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
 
         {/* Pagination */}
         <div className="flex items-center justify-between px-5 py-3.5 border-t border-[var(--border)]">
@@ -540,19 +541,6 @@ export default function ClientsPage() {
           </div>
         </div>
       </div>
-
-      {viewTarget && (
-        <ClientViewModal
-          client={viewTarget}
-          isSuperAdmin={isSuperAdmin}
-          onClose={() => setViewTarget(null)}
-          onEdit={() => {
-            const client = viewTarget;
-            setViewTarget(null);
-            openEdit(client);
-          }}
-        />
-      )}
 
       {modalMode && (
         <ClientFormModal

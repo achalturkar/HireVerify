@@ -205,7 +205,7 @@ export default function UsersPage() {
             <button
               type="button"
               onClick={openCreate}
-              className="flex items-center gap-1.5 rounded-lg bg-[var(--primary)] text-[#0B0F26] text-[13px] font-semibold px-4 py-2.5 hover:opacity-90 transition-opacity shrink-0"
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13px] font-semibold px-4 py-2.5 hover:opacity-90 transition-opacity shrink-0"
             >
               Invite user
             </button>

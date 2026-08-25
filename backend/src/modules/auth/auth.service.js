@@ -38,7 +38,7 @@ const toUserDto = (user) => ({
   phone: user.phone,
   companyId: user.companyId,
   company: user.company
-    ? { id: user.company.id, name: user.company.name, slug: user.company.slug, status: user.company.status }
+    ? { id: user.company.id, name: user.company.name, slug: user.company.slug, status: user.company.status, primaryColor: user.company.primaryColor, logoUrl: user.company.logoUrl }
     : null,
   role: {
     id: user.role.id,

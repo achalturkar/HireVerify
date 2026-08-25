@@ -8,6 +8,9 @@ export interface Company {
 
     status: string;
 
+    primaryColor: string | null;
+        logoUrl: string | null;
+
 }
 
 export interface Role {

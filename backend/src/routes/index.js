@@ -9,15 +9,11 @@ const permissionRoutes = require('../modules/permission/permission.routes');
 const userRoutes = require('../modules/user/user.routes');
 const clientRoutes = require('../modules/client/client.routes');
 const healthRoutes = require('../modules/health/health.routes');
-const assessmentRoutes = require('../modules/assessment/assessment.routes');
-const questionRandomRoutes = require('../modules/question/question.random.routes');
 const contactRoutes = require('../modules/contact/contact.routes');
 
 const candidateRoutes = require('../modules/candidate/candidate.routes');
-const candidateInvitationRoutes = require('../modules/candidate-invitation/candidate-invitation.routes');
-const examAttemptRoutes = require('../modules/exam-attempt/exam-attempt.routes');
-const candidateAnswerRoutes = require('../modules/candidate-answer/candidate-answer.routes');
-const assessmentResultRoutes = require('../modules/assessment-result/assessment-result.routes');
+const bgvCaseRoutes = require('../modules/bgv-case/bgv-case.routes');
+const verificationRoutes = require('../modules/verification/verification.routes');
 
 const router = express.Router();
 
@@ -30,16 +26,12 @@ router.use('/permissions', permissionRoutes);
 router.use('/users', userRoutes);
 router.use('/clients', clientRoutes);
 
-router.use('/assessment', assessmentRoutes);
 
 // NEW
-router.use('/question-bank', questionRandomRoutes);
 router.use('/contact', contactRoutes);
 
 router.use('/candidates', candidateRoutes);
-router.use('/candidate-invitation', candidateInvitationRoutes);
-router.use('/exam-attempts', examAttemptRoutes);
-router.use('/candidate-answers', candidateAnswerRoutes);
-router.use(['/assessment-result', '/assessment-results'], assessmentResultRoutes);
+router.use('/bgv/cases', bgvCaseRoutes);
+router.use('/bgv/verifications', verificationRoutes);
 
 module.exports = router;

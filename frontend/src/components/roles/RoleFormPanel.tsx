@@ -49,8 +49,8 @@ export function RoleFormPanel({
     setError(null);
     setFieldErrors({});
     if (mode === 'edit' && role) {
-      setForm({ name: role.name, description: role.description ?? '', companyId: role.companyId ?? '' });
-      setSelectedIds(new Set(role.permissions.map((p) => p.id)));
+      setForm({ name: role.name ?? '', description: role.description ?? '', companyId: role.companyId ?? '' });
+      setSelectedIds(new Set((role.permissions ?? []).map((p) => p.id)));
     } else {
       setForm(emptyState);
       setSelectedIds(new Set());

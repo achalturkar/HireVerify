@@ -16,41 +16,39 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://hireassess.brainhuntventures.com"),
+  metadataBase: new URL("https://hireverify.brainhuntventures.com"),
 
   title: {
-    default: "HireAssess | Online Assessment Platform",
-    template: "%s | HireAssess",
+    default: "HireVerify | Background Verification Platform",
+    template: "%s | HireVerify",
   },
 
   description:
-    "HireAssess is a modern online assessment platform that helps companies create assessments, invite candidates, evaluate skills, and generate detailed reports.",
+    "HireVerify is a background verification platform that helps companies manage candidates, verification checks, documents, consent, and authorized client reports.",
 
   keywords: [
-    "HireAssess",
-    "Assessment Platform",
-    "Online Assessment",
-    "Hiring Assessment",
-    "Behavioural Assessment",
-    "Psychometric Test",
-    "Skill Assessment",
-    "Candidate Evaluation",
+    "HireVerify",
+    "Background Verification",
+    "BGV Platform",
+    "Candidate Verification",
+    "Verification Checks",
+    "Employment Verification",
+    "Identity Verification",
     "Recruitment Software",
     "Hiring Platform",
     "Campus Recruitment",
-    "Logical Assessment",
-    "Employee Assessment",
+    "Client Reports",
   ],
 
   authors: [
     {
-      name: "HireAssess",
+      name: "HireVerify",
     },
   ],
 
-  creator: "HireAssess",
+  creator: "HireVerify",
 
-  publisher: "HireAssess",
+  publisher: "HireVerify",
 
   robots: {
     index: true,
@@ -70,11 +68,11 @@ export const metadata: Metadata = {
   },
 
   openGraph: {
-    title: "HireAssess | Online Assessment Platform",
+    title: "HireVerify | Background Verification Platform",
     description:
-      "Create online assessments, invite candidates, analyze results, and hire smarter with HireAssess.",
-    url: "https://hireassess.brainhuntventures.com",
-    siteName: "HireAssess",
+      "Manage background verification cases, checks, consent, documents, and secure client reports with HireVerify.",
+    url: "https://hireverify.brainhuntventures.com",
+    siteName: "HireVerify",
     locale: "en_US",
     type: "website",
 
@@ -83,16 +81,16 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "HireAssess",
+        alt: "HireVerify",
       },
     ],
   },
 
   twitter: {
     card: "summary_large_image",
-    title: "HireAssess | Online Assessment Platform",
+    title: "HireVerify | Background Verification Platform",
     description:
-      "Online assessment platform for companies to evaluate candidates efficiently.",
+      "Background verification platform for companies and authorized clients.",
     images: ["/og-image.png"],
   },
 

@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import ContactClient from "@/src/components/layout/contactClient";
 
 export const metadata: Metadata = {
-  title: "Contact Us | HireAssess",
+  title: "Contact Us | HireVerify",
   description:
-    "Get in touch with HireAssess for product demos, support, enterprise solutions, and partnership opportunities.",
+    "Get in touch with HireVerify for background verification support, enterprise solutions, and partnerships.",
   keywords: [
-    "HireAssess Contact",
-    "Assessment Platform Support",
+    "HireVerify Contact",
+    "Background Verification Support",
     "Recruitment Software Contact",
     "Customer Support",
   ],
@@ -15,10 +15,10 @@ export const metadata: Metadata = {
     canonical: "/contact",
   },
   openGraph: {
-    title: "Contact HireAssess",
+    title: "Contact HireVerify",
     description:
-      "Contact HireAssess for demos, support, and enterprise solutions.",
-    url: "https://hireassess.brainhuntventures.com/contact",
+      "Contact HireVerify for background verification support and enterprise solutions.",
+    url: "https://hireverify.brainhuntventures.com/contact",
   },
 };
 

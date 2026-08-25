@@ -50,10 +50,11 @@ interface CompanyDetailsResponse {
     users: number;
     clients: number;
     candidates: number;
-    assessments: number;
-    totalAttempts: number;
-    completedAttempts: number;
-    results: number;
+    bgvCases: number;
+    pendingCases: number;
+    inProgressCases: number;
+    completedCases: number;
+    reports: number;
   };
   auditLogs: Array<{
     id: string;
@@ -194,7 +195,7 @@ export default function CompanyDetailPage() {
   }
 
   const { company, admin, stats, auditLogs } = details;
-  const completionRate = stats.totalAttempts > 0 ? Math.round((stats.completedAttempts / stats.totalAttempts) * 100) : 0;
+  const completionRate = stats.bgvCases > 0 ? Math.round((stats.completedCases / stats.bgvCases) * 100) : 0;
   const resolvedLogo = resolveLogoUrl(company.logoUrl);
 
   return (
@@ -343,7 +344,7 @@ export default function CompanyDetailPage() {
           <StatCard label="Users" value={stats.users} icon={Users} color="var(--primary)" />
           <StatCard label="Clients" value={stats.clients} icon={Briefcase} color="var(--primary)" />
           <StatCard label="Candidates" value={stats.candidates} icon={User} color="var(--accent)" />
-          <StatCard label="Assessments" value={stats.assessments} icon={FileText} color="var(--danger)" />
+          <StatCard label="BGV Cases" value={stats.bgvCases} icon={FileText} color="var(--danger)" />
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -353,7 +354,7 @@ export default function CompanyDetailPage() {
               <div>
                 <div className="flex justify-between text-[12px] mb-2">
                   <span className="text-[var(--muted)]">Total</span>
-                  <span className="text-[var(--foreground)] font-bold">{stats.totalAttempts}</span>
+                  <span className="text-[var(--foreground)] font-bold">{stats.pendingCases}</span>
                 </div>
                 <div className="w-full h-2 bg-[var(--surface-muted)] rounded-full overflow-hidden">
                   <div className="h-full bg-[var(--primary)]" style={{ width: '100%' }} />
@@ -362,7 +363,7 @@ export default function CompanyDetailPage() {
               <div>
                 <div className="flex justify-between text-[12px] mb-2">
                   <span className="text-[var(--muted)]">Completed ({completionRate}%)</span>
-                  <span className="text-[var(--primary)] font-bold">{stats.completedAttempts}</span>
+                  <span className="text-[var(--primary)] font-bold">{stats.inProgressCases}</span>
                 </div>
                 <div className="w-full h-2 bg-[var(--surface-muted)] rounded-full overflow-hidden">
                   <div className="h-full bg-[var(--primary)]" style={{ width: `${completionRate}%` }} />
@@ -372,12 +373,12 @@ export default function CompanyDetailPage() {
           </div>
 
           <div className="rounded-xl border border-[var(--border)] bg-gradient-to-br from-[var(--surface)] to-[color-mix(in_srgb,var(--surface)_65%,var(--background))] p-6">
-            <p className="text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wide mb-4">Assessment Results</p>
+            <p className="text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wide mb-4">BGV Reports</p>
             <div className="flex items-center gap-4">
               <CheckCircle2 size={32} className="text-[var(--primary)]" />
               <div>
                 <p className="text-[32px] font-bold text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
-                  {stats.results}
+                  {stats.reports}
                 </p>
                 <p className="text-[12px] text-[var(--muted)]">Reports Generated</p>
               </div>

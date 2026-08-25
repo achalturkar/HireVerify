@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   AlertCircle,
   MessageCircle,
+  FileText,
 } from 'lucide-react';
 import PublicNav from '@/src/components/ui/publicnav';
 import BrandMark from '@/src/components/ui/BrandMark';
@@ -24,15 +25,15 @@ const PHONE_NUMBERS = [
 
 const CONTACT_OPTIONS = [
   {
-    title: 'Sales & product enquiries',
-    description: 'Discuss assessments, pricing, setup, and rollout plans for your team.',
+    title: 'Sales & quotations',
+    description: 'Discuss verification packages, pricing, onboarding, and rollout plans for your team.',
     phone: PHONE_NUMBERS[0],
     email: 'contact@brainhuntventures.com',
     icon: MessageSquareText,
   },
   {
     title: 'Technical support',
-    description: 'Need help with access, invitations, reports, or platform usage?',
+    description: 'Need help with candidate access, verification cases, checks, or reports?',
     phone: PHONE_NUMBERS[1],
     email: 'suhas@brainhuntventures.com',
     icon: ShieldCheck,
@@ -44,6 +45,12 @@ const CONTACT_OPTIONS = [
     email: null,
     icon: MessageCircle,
   },
+];
+
+const HERO_HIGHLIGHTS = [
+  { icon: Clock3, label: 'Response within 1 business day' },
+  { icon: ShieldCheck, label: 'Secure, role-based access by design' },
+  { icon: FileText, label: 'PAN, UAN, Court & more' },
 ];
 
 export default function ContactClient() {
@@ -100,45 +107,43 @@ export default function ContactClient() {
             <div className="max-w-2xl">
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)]/80 px-3.5 py-1.5 text-[12px] font-medium text-[var(--muted)] backdrop-blur">
                 <BrandMark size={16} />
-                Contact HireAssess
+                Contact HireVerify
               </div>
               <h1
                 className="text-4xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl"
                 style={{ fontFamily: 'var(--font-display)' }}
               >
-                Let&rsquo;s make hiring decisions clearer, faster, and more consistent.
+                Let&rsquo;s make background verification clearer, faster, and more reliable.
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-8 text-[var(--muted)]">
-                Whether you&rsquo;re exploring the platform, planning a rollout, or need help with candidate
-                assessments, our team is ready to help.
+                Whether you&rsquo;re exploring the platform, planning a rollout, requesting a quotation, or need
+                help with a candidate verification case, our team is ready to help.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
                 <a
-                  href="mailto:support@hireassess.com"
+                  href={`mailto:${CONTACT_OPTIONS[0].email}`}
                   className="inline-flex items-center gap-2 rounded-full bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-[var(--primary-foreground)] transition-colors hover:opacity-90"
                 >
                   <Mail size={16} />
-                  Email support
+                  Email us
                 </a>
                 <a
-                  href="tel:+919876543210"
+                  href={PHONE_NUMBERS[0].href}
                   className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-5 py-3 text-sm font-semibold text-[var(--foreground)] transition-colors hover:bg-[var(--surface-muted)]"
                 >
                   <Phone size={16} />
-                  Call us now
+                  Call sales
                 </a>
               </div>
 
               <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-[var(--muted)]">
-                <span className="flex items-center gap-1.5">
-                  <Clock3 size={14} className="text-[var(--primary)]" />
-                  Response within 1 business day
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <ShieldCheck size={14} className="text-[var(--primary)]" />
-                  Remote-first, worldwide support
-                </span>
+                {HERO_HIGHLIGHTS.map(({ icon: Icon, label }) => (
+                  <span key={label} className="flex items-center gap-1.5">
+                    <Icon size={14} className="text-[var(--primary)]" />
+                    {label}
+                  </span>
+                ))}
               </div>
             </div>
 
@@ -150,7 +155,7 @@ export default function ContactClient() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[var(--foreground)]">Primary contact</p>
-                  <p className="text-sm text-[var(--muted)]">Remote-first • Worldwide support</p>
+                  <p className="text-sm text-[var(--muted)]">Nagpur, India • Remote-friendly support</p>
                 </div>
               </div>
 
@@ -178,11 +183,11 @@ export default function ContactClient() {
 
                 <div className="rounded-2xl border border-[var(--border)] bg-[var(--background)]/70 p-4">
                   <p className="text-sm font-semibold text-[var(--foreground)]">Email</p>
-                  <a href="mailto:suhas@brainhuntventures.com" className="mt-1 block text-sm text-[var(--primary)] hover:underline">
-                    suhas@brainhuntventures.com
-                  </a>
                   <a href="mailto:contact@brainhuntventures.com" className="mt-1 block text-sm text-[var(--primary)] hover:underline">
                     contact@brainhuntventures.com
+                  </a>
+                  <a href="mailto:suhas@brainhuntventures.com" className="mt-1 block text-sm text-[var(--primary)] hover:underline">
+                    suhas@brainhuntventures.com
                   </a>
                 </div>
                 <div className="rounded-2xl border border-[var(--border)] bg-[var(--background)]/70 p-4">
@@ -238,11 +243,11 @@ export default function ContactClient() {
                     className="mt-2 text-2xl font-semibold tracking-tight text-[var(--foreground)]"
                     style={{ fontFamily: 'var(--font-display)' }}
                   >
-                    Share your goals and we&rsquo;ll help you shape the right assessment experience.
+                    Share your goals and we&rsquo;ll help you shape the right verification workflow.
                   </h2>
                   <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                    Tell us a little about your team, hiring goals, or the challenge you&rsquo;re solving. We&rsquo;ll
-                    reach out with the next steps.
+                    Tell us about your team, your candidate volume, and the checks you need — PAN, UAN, court,
+                    or others. We&rsquo;ll reach out with the next steps and, if you&rsquo;d like, a quotation.
                   </p>
                 </div>
               </div>
@@ -336,7 +341,7 @@ export default function ContactClient() {
                   value={formData.message}
                   onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                   className="w-full rounded-2xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm outline-none ring-0 transition focus:border-[var(--primary)]"
-                  placeholder="Tell us about your team, your hiring goals, and the kind of assessment experience you want."
+                  placeholder="Tell us about your team, verification volume, and the checks you need — PAN, UAN, court, or others."
                 />
               </label>
 
@@ -350,7 +355,7 @@ export default function ContactClient() {
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-[var(--primary-foreground)] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {loading ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
-                  {loading ? 'Sending...' : 'Send '}
+                  {loading ? 'Sending...' : 'Send message'}
                 </button>
               </div>
             </form>

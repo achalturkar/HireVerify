@@ -21,6 +21,7 @@
     "joi": "^18.2.3",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
+    "mupdf": "^1.28.0",
     "nodemailer": "^6.10.1",
     "pdfkit": "^0.14.0",
     "recharts": "^3.10.1",
@@ -28,7 +29,8 @@
     "swagger-ui-express": "^5.0.1",
     "uuid": "^11.0.3",
     "winston": "^3.17.0",
-    "winston-daily-rotate-file": "^5.0.0"
+    "winston-daily-rotate-file": "^5.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@prisma/client": "^6.19.3",

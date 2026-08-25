@@ -2,136 +2,41 @@
 
 const { prisma } = require('../../common/prisma');
 
-/**
- * Create Candidate
- */
-const create = (data) =>
-  prisma.candidate.create({
-    data,
-  });
+const create = (data) => prisma.candidate.create({ data });
 
-/**
- * Find Candidate By ID
- */
-const findById = (
-  id,
-  companyId,
-  { includeDeleted = false } = {}
-) =>
+const findById = (id, companyId, { includeDeleted = false } = {}) =>
   prisma.candidate.findFirst({
-    where: {
-      id,
-      companyId,
-      ...(includeDeleted ? {} : { isDeleted: false }),
-    },
+    where: { id, companyId, ...(includeDeleted ? {} : { isDeleted: false }) },
+    include: { _count: { select: { bgvCases: true } } },
   });
 
-/**
- * Find Candidate By Email within an Assessment
- * Used to prevent duplicate candidates on the same assessment.
- */
-const findByEmail = (assessmentId, email) =>
+const findByEmail = (companyId, clientId, email) =>
   prisma.candidate.findFirst({
-    where: {
-      assessmentId,
-      email: {
-        equals: email,
-        mode: 'insensitive',
-      },
-      isDeleted: false,
-    },
+    where: { companyId, clientId, email: { equals: email, mode: 'insensitive' }, isDeleted: false },
   });
 
-/**
- * Update Candidate
- */
-const update = (id, data) =>
-  prisma.candidate.update({
-    where: { id },
-    data,
-  });
+const update = (id, data) => prisma.candidate.update({ where: { id }, data });
 
-/**
- * Soft Delete
- */
-const softDelete = (id) =>
-  prisma.candidate.update({
-    where: { id },
-    data: {
-      isDeleted: true,
-      deletedAt: new Date(),
-    },
-  });
+const softDelete = (id) => prisma.candidate.update({
+  where: { id },
+  data: { isDeleted: true, deletedAt: new Date() },
+});
 
-/**
- * Set Status
- */
-const setStatus = (id, status) =>
-  prisma.candidate.update({
-    where: { id },
-    data: { status },
-  });
-
-/**
- * List Candidates
- */
-const list = async ({
-  companyId,
-  skip,
-  limit,
-  search,
-  assessmentId,
-  clientId,
-  status,
-  sortBy,
-  sortOrder,
-  includeDeleted,
-}) => {
+const list = async ({ companyId, skip, limit, search, clientId, status, sortBy, sortOrder, includeDeleted }) => {
   const where = {
     companyId,
-
-    ...(includeDeleted
-      ? {}
-      : {
-          isDeleted: false,
-        }),
-
-    ...(assessmentId ? { assessmentId } : {}),
-
+    ...(includeDeleted ? {} : { isDeleted: false }),
     ...(clientId ? { clientId } : {}),
-
     ...(status ? { status } : {}),
-
-    ...(search
-      ? {
-          OR: [
-            {
-              firstName: {
-                contains: search,
-                mode: 'insensitive',
-              },
-            },
-            {
-              lastName: {
-                contains: search,
-                mode: 'insensitive',
-              },
-            },
-            {
-              email: {
-                contains: search,
-                mode: 'insensitive',
-              },
-            },
-            {
-              phone: {
-                contains: search,
-                mode: 'insensitive',
-              },
-            },
-          ],
-        }
-      : {}),
+    ...(search ? {
+      OR: [
+        { candidateCode: { contains: search, mode: 'insensitive' } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
+      ],
+    } : {}),
   };
 
   const [items, total] = await Promise.all([
@@ -139,28 +44,13 @@ const list = async ({
       where,
       skip,
       take: limit,
-      orderBy: {
-        [sortBy]: sortOrder,
-      },
+      orderBy: { [sortBy]: sortOrder },
+      include: { _count: { select: { bgvCases: true } } },
     }),
-
-    prisma.candidate.count({
-      where,
-    }),
+    prisma.candidate.count({ where }),
   ]);
 
-  return {
-    items,
-    total,
-  };
+  return { items, total };
 };
 
-module.exports = {
-  create,
-  findById,
-  findByEmail,
-  update,
-  softDelete,
-  setStatus,
-  list,
-};
+module.exports = { create, findById, findByEmail, update, softDelete, list };

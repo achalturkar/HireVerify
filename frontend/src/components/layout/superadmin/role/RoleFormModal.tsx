@@ -44,7 +44,7 @@ export default function RoleFormModal({
   const [description, setDescription] = useState(role?.description ?? '');
   const [companyId, setCompanyId] = useState(role?.companyId ?? '');
   const [permissionIds, setPermissionIds] = useState<string[]>(
-    role?.permissions.map((p) => p.id) ?? []
+    role?.permissions?.map((p) => p.id) ?? []
   );
 
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);

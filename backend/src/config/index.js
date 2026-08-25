@@ -55,7 +55,7 @@ const config = {
     secure: process.env.SMTP_SECURE === 'true',
     user: process.env.SMTP_USER || '',
     password: process.env.SMTP_PASSWORD || '',
-    fromName: process.env.SMTP_FROM_NAME || 'HireAssess Assessment Portal',
+    fromName: process.env.SMTP_FROM_NAME || 'BGV Portal',
     fromEmail: process.env.SMTP_FROM_EMAIL || 'no-reply@portal.com',
   },
 
@@ -76,6 +76,17 @@ const config = {
   upload: {
     dir: process.env.UPLOAD_DIR || 'uploads',
     maxSizeMb: parseInt(process.env.UPLOAD_MAX_SIZE_MB || '5', 10),
+  },
+
+  azureTableStorage: {
+    connectionString: process.env.AZURE_STORAGE_CONNECTION_STRING || '',
+    tableName: process.env.AZURE_STORAGE_TABLE_NAME || 'BGVReports',
+  },
+
+  surepass: {
+    baseUrl: process.env.SUREPASS_BASE_URL || '',
+    bearerToken: process.env.SUREPASS_BEARER_TOKEN || '',
+    panEndpoint: process.env.SUREPASS_PAN_ENDPOINT || '',
   },
 
   swagger: {

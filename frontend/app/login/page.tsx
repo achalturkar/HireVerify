@@ -17,6 +17,7 @@ import {
   Sparkles,
   ArrowRight,
   Building2,
+  CheckCircle2,
 } from 'lucide-react';
 import BrandMark from '@/src/components/ui/BrandMark';
 import PublicNav from '@/src/components/ui/publicnav';
@@ -25,22 +26,17 @@ import PublicRoute from '@/src/auth/PublicRoute';
 import { login } from '@/src/auth/auth-service';
 import { ApiError } from '@/src/lib/api';
 
-const SIDE_TRAITS = [
-  { label: 'Problem solving', score: 92 },
-  { label: 'Integrity', score: 88 },
-  { label: 'Communication', score: 65 },
+// Illustrative case shown in the "sample report" preview card — demo data only
+const SIDE_CHECKS = [
+  { label: 'PAN verification', result: 'Verified', color: '#3FDCC0' },
+  { label: 'UAN verification', result: 'Verified', color: '#3FDCC0' },
+  { label: 'Court verification', result: 'No record found', color: '#818CF8' },
 ];
 
-function traitColor(score: number) {
-  if (score >= 85) return { from: '#3FDCC0', to: '#63e8d1', text: '#3FDCC0' };
-  if (score >= 70) return { from: '#F2AE55', to: '#f7c47f', text: '#F2AE55' };
-  return { from: '#FF6B6B', to: '#ff9494', text: '#FF6B6B' };
-}
-
 const SIDE_HIGHLIGHTS = [
-  { icon: ClipboardList, title: 'Role-specific assessments', color: '#3FDCC0' },
+  { icon: ClipboardList, title: 'Centralized case management', color: '#3FDCC0' },
   { icon: Users, title: 'Invite & track candidates', color: '#818CF8' },
-  { icon: BarChart3, title: 'Trait-scored reports', color: '#F2AE55' },
+  { icon: BarChart3, title: 'Client-ready reports', color: '#F2AE55' },
   { icon: ShieldCheck, title: 'Role-based access', color: '#F472B6' },
 ];
 
@@ -133,7 +129,6 @@ function LoginContent() {
         }}
       />
       <style>{`
-        @keyframes sidebar-fill { from { width: 0%; } to { width: var(--target-width); } }
         @keyframes ringPulse {
           0% { box-shadow: 0 0 0 0 rgba(63,220,192,0.35); }
           70% { box-shadow: 0 0 0 8px rgba(63,220,192,0); }
@@ -171,7 +166,7 @@ function LoginContent() {
               style={{ borderColor: 'var(--border)', background: 'var(--surface-muted)', color: 'var(--muted)' }}
             >
               <Sparkles size={12} className="text-[#3FDCC0]" />
-              Assessment platform
+              Background verification platform
             </div>
 
             <h2
@@ -180,12 +175,12 @@ function LoginContent() {
             >
               Hiring decisions,{' '}
               <span className="bg-gradient-to-r from-[#3FDCC0] to-[#F2AE55] bg-clip-text text-transparent">
-                backed by data.
+                backed by verified facts.
               </span>
             </h2>
             <p className="text-[13px] mt-2.5 leading-relaxed" style={{ color: 'var(--muted)' }}>
-              Build assessments, invite candidates, and review trait-level reports the moment
-              a candidate submits.
+              Manage verification cases, review findings, and share approved reports securely
+              with your clients once a candidate submits their information.
             </p>
 
             {/* Feature highlights — compact 2x2 grid */}
@@ -209,7 +204,7 @@ function LoginContent() {
               ))}
             </div>
 
-            {/* Mini live scorecard */}
+            {/* Mini live case preview */}
             <div
               className="mt-5 rounded-xl border p-4"
               style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
@@ -219,43 +214,41 @@ function LoginContent() {
                   className="text-[9.5px] uppercase tracking-[0.14em]"
                   style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}
                 >
-                  Sample report
+                  Sample verification case
                 </p>
                 <span className="flex items-center gap-1 rounded-full bg-[#3FDCC0]/12 text-[#3FDCC0] text-[10px] font-semibold px-2 py-0.5">
                   <BarChart3 size={10} />
                   Ready
                 </span>
               </div>
-              <div className="space-y-2">
-                {SIDE_TRAITS.map((trait, i) => {
-                  const c = traitColor(trait.score);
-                  return (
-                    <div key={trait.label}>
-                      <div className="flex items-center justify-between text-[11px] mb-1">
-                        <span style={{ color: 'var(--muted)' }}>{trait.label}</span>
-                        <span style={{ color: c.text, fontFamily: 'var(--font-mono)' }}>{trait.score}</span>
-                      </div>
-                      <div
-                        className="h-1.5 rounded-full overflow-hidden"
-                        style={{ background: 'var(--surface-muted)' }}
-                      >
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            // @ts-expect-error custom property for keyframe
-                            '--target-width': `${trait.score}%`,
-                            background: `linear-gradient(to right, ${c.from}, ${c.to})`,
-                            animation: `sidebar-fill 0.8s ease-out ${i * 0.1}s both`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="space-y-2.5">
+                {SIDE_CHECKS.map((check) => (
+                  <div key={check.label} className="flex items-center justify-between text-[11.5px]">
+                    <span className="flex items-center gap-1.5" style={{ color: 'var(--foreground)' }}>
+                      <CheckCircle2 size={12} style={{ color: check.color }} />
+                      {check.label}
+                    </span>
+                    <span style={{ color: check.color, fontFamily: 'var(--font-mono)' }}>{check.result}</span>
+                  </div>
+                ))}
+              </div>
+              <div
+                className="flex items-center justify-between mt-3 pt-3 border-t"
+                style={{ borderColor: 'var(--border)' }}
+              >
+                <span className="text-[10.5px]" style={{ color: 'var(--muted)' }}>
+                  Overall case result
+                </span>
+                <span
+                  className="text-[11.5px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{ color: '#3FDCC0', background: 'rgba(63,220,192,0.12)', fontFamily: 'var(--font-mono)' }}
+                >
+                  Clear
+                </span>
               </div>
             </div>
 
-            {/* Register company / assessment callout */}
+            {/* Register company callout */}
             <div className="mt-4 rounded-xl border border-[#3FDCC0]/20 bg-[#3FDCC0]/[0.06] px-3.5 py-3 flex items-center gap-3">
               <span className="shrink-0 w-8 h-8 rounded-lg bg-[#3FDCC0]/15 text-[#3FDCC0] flex items-center justify-center">
                 <Building2 size={15} />
@@ -290,7 +283,7 @@ function LoginContent() {
                 Welcome back
               </h1>
               <p className="text-[12px] mt-1" style={{ color: 'var(--muted)' }}>
-                Sign in to your HireAssess account
+                Sign in to your HireVerify account
               </p>
             </Link>
 
@@ -303,7 +296,7 @@ function LoginContent() {
                 Welcome back
               </h1>
               <p className="text-[12.5px] mt-1" style={{ color: 'var(--muted)' }}>
-                Sign in to your HireAssess account
+                Sign in to your HireVerify account
               </p>
             </div>
 

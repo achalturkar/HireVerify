@@ -34,15 +34,13 @@ const PERMISSIONS = [
   { key: 'client.inactivate', module: 'client', action: 'inactivate', description: 'Inactivate clients' },
 
   // ==========================
-  // Assessment
+  // BGV Cases
   // ==========================
-  { key: 'assessment.create', module: 'assessment', action: 'create', description: 'Create assessments' },
-  { key: 'assessment.view', module: 'assessment', action: 'view', description: 'View assessments' },
-  { key: 'assessment.update', module: 'assessment', action: 'update', description: 'Update assessments' },
-  { key: 'assessment.delete', module: 'assessment', action: 'delete', description: 'Delete assessments' },
-  { key: 'assessment.publish', module: 'assessment', action: 'publish', description: 'Publish assessments' },
-  { key: 'assessment.activate', module: 'assessment', action: 'activate', description: 'Activate assessments' },
-  { key: 'assessment.inactivate', module: 'assessment', action: 'inactivate', description: 'Inactivate assessments' },
+  { key: 'bgv.case.create', module: 'bgv.case', action: 'create', description: 'Create BGV cases' },
+  { key: 'bgv.case.view', module: 'bgv.case', action: 'view', description: 'View BGV cases' },
+  { key: 'bgv.case.update', module: 'bgv.case', action: 'update', description: 'Update BGV cases' },
+  { key: 'bgv.case.cancel', module: 'bgv.case', action: 'cancel', description: 'Cancel BGV cases' },
+  { key: 'bgv.case.assign', module: 'bgv.case', action: 'assign', description: 'Assign BGV cases' },
 
   // ==========================
   // Candidate
@@ -57,62 +55,23 @@ const PERMISSIONS = [
 
 
   // ==========================
-  // Candidate Invitation
+  // BGV Processing
   // ==========================
-  {
-    key: 'candidate_invitation.create',
-    module: 'candidate_invitation',
-    action: 'create',
-    description: 'Create candidate invitations'
-  },
-  {
-    key: 'candidate_invitation.view',
-    module: 'candidate_invitation',
-    action: 'view',
-    description: 'View candidate invitations'
-  },
-  {
-    key: 'candidate_invitation.update',
-    module: 'candidate_invitation',
-    action: 'update',
-    description: 'Update candidate invitations'
-  },
-  {
-    key: 'candidate_invitation.delete',
-    module: 'candidate_invitation',
-    action: 'delete',
-    description: 'Delete candidate invitations'
-  },
-  {
-    key: 'candidate_invitation.send',
-    module: 'candidate_invitation',
-    action: 'send',
-    description: 'Send candidate invitation emails'
-  },
-  {
-    key: 'candidate_invitation.resend',
-    module: 'candidate_invitation',
-    action: 'resend',
-    description: 'Resend candidate invitation emails'
-  },
-
-  // ==========================
-  // Test Attempts
-  // ==========================
-  { key: 'exam_attempt.view', module: 'exam-attempt', action: 'view', description: 'View attempts' },
-  { key: 'exam_attempt.reset', module: 'exam-attempt', action: 'reset', description: 'Reset attempts' },
-  { key: 'exam_attempt.forceSubmit', module: 'exam-attempt', action: 'forceSubmit', description: 'Force submit attempts' },
-  { key: 'exam_attempt.update', module: 'exam-attempt', action: 'forceSubmit', description: 'Force submit attempts' },
-
-  // ==========================
-  // Results
-  // ==========================
-  { key: 'assessment_result.view', module: 'result', action: 'view', description: 'View results' },
-  { key: 'assessment_result.export', module: 'result', action: 'export', description: 'Export results' },
-  { key: 'assessment_result.download', module: 'result', action: 'download', description: 'Download reports' },
-
-
-  { key: 'candidate_answer.view', module: 'candiadate-answer', action: 'view', description: 'view answers' },
+  { key: 'bgv.verification.view', module: 'bgv.verification', action: 'view', description: 'View verification checks' },
+  { key: 'bgv.verification.create', module: 'bgv.verification', action: 'create', description: 'Create verification checks' },
+  { key: 'bgv.verification.retry', module: 'bgv.verification', action: 'retry', description: 'Retry verification checks' },
+  { key: 'bgv.verification.review', module: 'bgv.verification', action: 'review', description: 'Review verification results' },
+  { key: 'bgv.verification.override', module: 'bgv.verification', action: 'override', description: 'Override verification results' },
+  { key: 'bgv.document.view', module: 'bgv.document', action: 'view', description: 'View candidate documents' },
+  { key: 'bgv.document.upload', module: 'bgv.document', action: 'upload', description: 'Upload candidate documents' },
+  { key: 'bgv.document.delete', module: 'bgv.document', action: 'delete', description: 'Delete candidate documents' },
+  { key: 'bgv.consent.view', module: 'bgv.consent', action: 'view', description: 'View candidate consent' },
+  { key: 'bgv.consent.manage', module: 'bgv.consent', action: 'manage', description: 'Manage candidate consent' },
+  { key: 'bgv.report.view', module: 'bgv.report', action: 'view', description: 'View BGV reports' },
+  { key: 'bgv.report.generate', module: 'bgv.report', action: 'generate', description: 'Generate BGV reports' },
+  { key: 'bgv.report.approve', module: 'bgv.report', action: 'approve', description: 'Approve BGV reports' },
+  { key: 'bgv.report.send', module: 'bgv.report', action: 'send', description: 'Make BGV reports available to clients' },
+  { key: 'bgv.report.download', module: 'bgv.report', action: 'download', description: 'Download BGV reports' },
 
 
   

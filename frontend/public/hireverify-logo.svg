@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 210" role="img" aria-labelledby="title desc">
+  <title id="title">HireVerify</title>
+  <desc id="desc">HireVerify background verification portal logo</desc>
+  <defs>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#52D9A9" />
+      <stop offset="0.52" stop-color="#10BFC7" />
+      <stop offset="1" stop-color="#087B8A" />
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#teal)" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke-width="31" d="M34 115c-24-30-5-72 29-72 16 0 28 8 39 22l51 67 60-91c12-18 32-27 52-24" />
+    <path stroke-width="31" d="M92 155c25 28 69 24 90-8l63-96c13-20 34-29 55-25" />
+    <path stroke-width="31" d="M101 69l55 76c12 17 34 27 55 20" opacity=".8" />
+  </g>
+  <text x="310" y="137" fill="#2F4054" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="700" letter-spacing="-2">Hire<tspan fill="#0C6E7C">Verify</tspan></text>
+</svg>

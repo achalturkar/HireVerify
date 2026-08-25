@@ -1,6 +1,6 @@
 "use client";
 
-import type { PaginationMeta } from "@/src/lib/typess";
+import type { PaginationMeta } from "@/src/types/user";
 
 export function Pagination({
   meta,

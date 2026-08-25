@@ -7,16 +7,17 @@ import {
   Users,
   ShieldCheck,
   Contact,
-  BookOpen,
-  ClipboardList,
-  CalendarClock,
-  BarChart3,
+  FileCheck2,
+  FilePlus2,
+  FileText,
   Settings,
   ChevronLeft,
   X,
   UserCircle,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
+import { resolveLogoUrl } from '@/src/lib/logo';
+import BrandMark from '@/src/components/ui/BrandMark';
 
 function initials(name: string) {
   return name
@@ -43,13 +44,12 @@ const menuGroups: { label: string; items: { name: string; href: string; icon: ty
     ],
   },
   {
-    label: 'Assessments',
+    label: 'Verification',
     items: [
-      { name: 'Assessments', href: '/company/assessments', icon: ClipboardList },
-      { name: 'Results', href: '/company/results', icon: BarChart3 },
-      // { name: 'Question Bank', href: '/company/question-bank', icon: BookOpen },
-      // { name: 'Schedules', href: '/company/schedules', icon: CalendarClock },
-      // { name: 'Reports', href: '/company/reports', icon: BarChart3 },
+      { name: 'BGV Cases', href: '/company/bgv-cases', icon: FileCheck2 },
+      { name: 'Manual BGV', href: '/company/manual-bgv', icon: FilePlus2 },
+      { name: 'Verifications', href: '/company/verifications', icon: ShieldCheck },
+      { name: 'Reports', href: '/company/reports', icon: FileText },
     ],
   },
   {
@@ -74,21 +74,34 @@ export default function CompanySidebar({ collapsed, onToggleCollapse, mobileOpen
   const pathname = usePathname();
   const { user } = useAuth();
   const companyName = user?.company?.name;
+  const companyLogo = resolveLogoUrl(user?.company?.logoUrl);
 
   const content = (
     <div className="flex h-full flex-col bg-[var(--surface)] text-[var(--foreground)]">
       {/* Logo row */}
       <div className={`flex items-center gap-2.5 px-5 h-16 shrink-0 border-b border-[var(--border)] ${collapsed ? 'justify-center px-0' : ''}`}>
-        <svg width="26" height="26" viewBox="0 0 30 30" fill="none" className="shrink-0">
-          <rect x="3" y="12" width="7" height="15" rx="2" fill="#3FDCC0" />
-          <rect x="12.5" y="4" width="7" height="23" rx="2" fill="#F2AE55" />
-          <rect x="22" y="9" width="5" height="18" rx="2" fill="#3FDCC0" opacity="0.55" />
-        </svg>
-        {!collapsed && (
-          <span className="text-[16px] font-semibold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
-            HireAssess
-          </span>
+        {companyLogo ? (
+          <img src={companyLogo} alt={`${companyName || 'Company'} logo`} title={`${companyName || 'Company'} logo`} className="h-9 w-9 shrink-0 rounded-lg object-contain" />
+        ) : (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)] text-sm font-bold text-[var(--primary-foreground)]">
+            {companyName?.trim().charAt(0).toUpperCase() || 'H'}
+          </div>
         )}
+        {!collapsed && (
+          <div className="min-w-0">
+            <span className="block truncate text-[15px] font-semibold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
+              {companyName || 'Company Portal'}
+            </span>
+          </div>
+        )}
+        <button
+          onClick={onToggleCollapse}
+          className="ml-auto hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--primary)] md:flex"
+          aria-label={collapsed ? 'Expand HireVerify portal' : 'Collapse HireVerify portal'}
+          title={collapsed ? 'Expand HireVerify portal' : 'Collapse HireVerify portal'}
+        >
+          <ChevronLeft size={16} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
+        </button>
         <button onClick={onCloseMobile} className="ml-auto md:hidden text-[var(--muted)] hover:text-[var(--foreground)]" aria-label="Close menu">
           <X size={20} />
         </button>
@@ -137,9 +150,9 @@ export default function CompanySidebar({ collapsed, onToggleCollapse, mobileOpen
         ))}
       </nav>
 
-      {/* Company badge + collapse toggle */}
+      {/* Company badge */}
       <div className="shrink-0 border-t border-[var(--border)] p-3">
-        {companyName && (
+        {/* {companyName && (
           <div className={`flex items-center gap-2.5 px-2 py-2 mb-1 ${collapsed ? 'justify-center px-0' : ''}`}>
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0 bg-[var(--primary)]/15 text-[var(--primary)]">
               {initials(companyName)}
@@ -153,14 +166,13 @@ export default function CompanySidebar({ collapsed, onToggleCollapse, mobileOpen
               </div>
             )}
           </div>
-        )}
-        <button
-          onClick={onToggleCollapse}
-          className="hidden md:flex items-center gap-2 w-full px-2 py-2 rounded-lg text-[12px] text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)] transition-colors"
-        >
-          <ChevronLeft size={16} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
-          {!collapsed && 'Collapse'}
-        </button>
+        )} */}
+        <div className={`flex items-center gap-2 px-2 pt-2 ${collapsed ? 'justify-center px-0' : ''}`}>
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/15" title="HireVerify">
+            <BrandMark size={16} />
+          </span>
+          {!collapsed && <span className="text-[12px] font-semibold tracking-tight text-[var(--foreground)]">HireVerify</span>}
+        </div>
       </div>
     </div>
   );

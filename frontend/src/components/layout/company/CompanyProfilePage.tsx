@@ -92,7 +92,7 @@ function SectionCard({
 }
 
 const inputClasses =
-  'w-full rounded-lg bg-[#0F1330] border border-white/[0.08] px-3 py-2.5 text-[13.5px] text-[#F2F4FA] placeholder:text-[#565F8C] outline-none transition-colors focus:border-[#3FDCC0]/50 focus:ring-1 focus:ring-[#3FDCC0]/30 disabled:opacity-50 disabled:cursor-not-allowed';
+  'w-full rounded-lg bg-[var(--surface-muted)] border border-[var(--border)] px-3 py-2.5 text-[13.5px] text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none transition-colors focus:border-[var(--primary)]/50 focus:ring-1 focus:ring-[var(--primary)]/30 disabled:opacity-50 disabled:cursor-not-allowed';
 
 // ---- Shared image state, one instance per field (logo / signature / stamp) ----
 
@@ -253,9 +253,10 @@ function ImageDropzone({
 }
 
 type ImageField = 'logo' | 'signature' | 'stamp';
+const primaryColorPalette = ['#0E8C78', '#1F417A', '#2563EB', '#7C3AED', '#C2410C', '#BE123C', '#374151', '#0F766E'];
 
 export default function CompanyProfilePage() {
-  const { user, accessToken } = useAuth();
+  const { user, accessToken, refreshUser } = useAuth();
   const companyId = user?.company?.id;
 
   const [loading, setLoading] = useState(true);
@@ -264,6 +265,7 @@ export default function CompanyProfilePage() {
   const [form, setForm] = useState({
     name: '',
     slug: '',
+    shortCode: '',
     contactEmail: '',
     contactPhone: '',
     address: '',
@@ -289,6 +291,7 @@ export default function CompanyProfilePage() {
         setForm({
           name: data.name ?? '',
           slug: data.slug ?? '',
+          shortCode: data.shortCode ?? '',
           contactEmail: data.contactEmail ?? '',
           contactPhone: data.contactPhone ?? '',
           address: data.address ?? '',
@@ -364,6 +367,7 @@ export default function CompanyProfilePage() {
       const payload = new FormData();
       payload.append('name', form.name.trim());
       payload.append('slug', form.slug.trim());
+      if (form.shortCode.trim()) payload.append('shortCode', form.shortCode.trim().toUpperCase());
       if (form.contactEmail.trim()) payload.append('contactEmail', form.contactEmail.trim());
       if (form.contactPhone.trim()) payload.append('contactPhone', form.contactPhone.trim());
       if (form.address.trim()) payload.append('address', form.address.trim());
@@ -386,9 +390,11 @@ export default function CompanyProfilePage() {
       });
 
       const updated = await updateCompany(companyId, payload, accessToken);
+      await refreshUser();
       setForm({
         name: updated.name ?? '',
         slug: updated.slug ?? '',
+        shortCode: updated.shortCode ?? '',
         contactEmail: updated.contactEmail ?? '',
         contactPhone: updated.contactPhone ?? '',
         address: updated.address ?? '',
@@ -459,7 +465,7 @@ export default function CompanyProfilePage() {
         <SectionCard
           eyebrow="Identity"
           title="Logo"
-          description="Your logo appears on candidate reports, invitation emails, and the assessment portal."
+          description="Your logo appears on BGV reports, verification emails, and the HireVerify portal."
         >
           <ImageDropzone
             label="Logo"
@@ -534,6 +540,17 @@ export default function CompanyProfilePage() {
               />
             </div>
             <div>
+              <FieldLabel hint="Used in BGV references">Company short code</FieldLabel>
+              <input
+                value={form.shortCode}
+                onChange={(e) => setForm((f) => ({ ...f, shortCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) }))}
+                placeholder="CWW"
+                maxLength={10}
+                className={inputClasses}
+                disabled={loading}
+              />
+            </div>
+            <div>
               <FieldLabel>Contact email</FieldLabel>
               <div className="relative">
                 <Mail size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#565F8C]" />
@@ -560,18 +577,38 @@ export default function CompanyProfilePage() {
             </div>
             <div>
               <FieldLabel hint="Used on reports & the portal">Primary color</FieldLabel>
-              <div className="relative">
-                <span
-                  className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full border border-white/20"
-                  style={{ backgroundColor: swatch ?? '#0F1330' }}
+              <div className="flex gap-2">
+                <input
+                  type="color"
+                  value={/^#[0-9a-f]{6}$/i.test(form.primaryColor) ? form.primaryColor : '#3FDCC0'}
+                  onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value.toUpperCase() }))}
+                  disabled={loading}
+                  className="h-11 w-12 cursor-pointer rounded-lg border border-white/10 bg-[#0F1330] p-1 disabled:cursor-not-allowed"
+                  aria-label="Choose primary color"
                 />
                 <input
                   value={form.primaryColor}
                   onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value }))}
                   placeholder="#3FDCC0"
-                  className={`${inputClasses} pl-9`}
+                  pattern="^#[0-9a-fA-F]{6}$"
+                  className={inputClasses}
                   disabled={loading}
                 />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {primaryColorPalette.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, primaryColor: color }))}
+                    disabled={loading}
+                    className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50 ${form.primaryColor.toUpperCase() === color ? 'border-[#F2F4FA] ring-2 ring-[#3FDCC0]/40' : 'border-white/20'}`}
+                    style={{ backgroundColor: color }}
+                    aria-label={`Select ${color}`}
+                    title={color}
+                  />
+                ))}
+                <span className="text-[11px] text-[#8891B8]">Select a palette color or enter a hex code.</span>
               </div>
             </div>
           </div>

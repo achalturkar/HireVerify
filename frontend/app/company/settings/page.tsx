@@ -479,6 +479,8 @@ interface CompanyFormState {
   primaryColor: string;
 }
 
+const primaryColorPalette = ['#0E8C78', '#1F417A', '#2563EB', '#7C3AED', '#C2410C', '#BE123C', '#374151', '#0F766E'];
+
 function CompanyTab({ companyId, accessToken, canEdit }: { companyId: string; accessToken: string | null; canEdit: boolean }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -638,13 +640,39 @@ function CompanyTab({ companyId, accessToken, canEdit }: { companyId: string; ac
             </div>
             <div>
               <label className={`block text-[11.5px] font-medium mb-1.5 ${textMuted}`}>Primary color</label>
-              <input
-                className={inputBase}
-                value={form.primaryColor}
-                onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value }))}
-                placeholder="#3FDCC0"
-                disabled={!canEdit || saving}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="color"
+                  value={/^#[0-9a-f]{6}$/i.test(form.primaryColor) ? form.primaryColor : '#3FDCC0'}
+                  onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value.toUpperCase() }))}
+                  disabled={!canEdit || saving}
+                  className="h-11 w-12 cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-1 disabled:cursor-not-allowed"
+                  aria-label="Choose primary color"
+                />
+                <input
+                  className={inputBase}
+                  value={form.primaryColor}
+                  onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value }))}
+                  placeholder="#3FDCC0"
+                  pattern="^#[0-9a-fA-F]{6}$"
+                  disabled={!canEdit || saving}
+                />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {primaryColorPalette.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, primaryColor: color }))}
+                    disabled={!canEdit || saving}
+                    className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50 ${form.primaryColor.toUpperCase() === color ? 'border-[var(--foreground)] ring-2 ring-[var(--primary)]/40' : 'border-white/20'}`}
+                    style={{ backgroundColor: color }}
+                    aria-label={`Select ${color}`}
+                    title={color}
+                  />
+                ))}
+                <span className={`text-[11px] ${textMuted}`}>Choose a palette color or enter a hex code.</span>
+              </div>
             </div>
           </div>
 

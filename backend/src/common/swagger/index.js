@@ -8,10 +8,10 @@ const options = {
   definition: {
     openapi: '3.0.3',
     info: {
-      title: 'Managerial Assessment Portal API',
+      title: 'Background Verification Portal API',
       version: '1.0.0',
       description:
-        'Multi-tenant SaaS backend for the Managerial Assessment Portal. Implements STEP 1 (Auth + core infra) and STEP 2 (Company Management + Dynamic RBAC).',
+        'Multi-tenant SaaS backend for the Background Verification Portal with company isolation and dynamic RBAC.',
     },
     servers: [{ url: '/api/v1', description: 'API v1' }],
     components: {

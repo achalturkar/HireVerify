@@ -7,17 +7,9 @@ interface BrandMarkProps {
 
 export default function BrandMark({ size = 26, className = '' }: BrandMarkProps) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 30 30"
-      fill="none"
-      className={className}
-      aria-hidden="true"
-    >
-      <rect x="3" y="12" width="7" height="15" rx="2" fill="#3FDCC0" />
-      <rect x="12.5" y="4" width="7" height="23" rx="2" fill="#F2AE55" />
-      <rect x="22" y="9" width="5" height="18" rx="2" fill="#3FDCC0" opacity="0.55" />
+    <svg width={size} height={size} viewBox="0 0 30 30" fill="none" className={className} aria-hidden="true">
+      <path d="M4 16.5 10.2 23c1.9 2 5.1 1.8 6.7-.5L24.8 7" stroke="#16B9B8" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="m6 9 6.2 7.2" stroke="#56D9A7" strokeWidth="4.5" strokeLinecap="round" />
     </svg>
   );
 }

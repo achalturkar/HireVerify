@@ -68,13 +68,13 @@ export function UserFormPanel({
     setPassword('');
     if (mode === 'edit' && user) {
       setForm({
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
+        firstName: user.firstName ?? '',
+        lastName: user.lastName ?? '',
+        email: user.email ?? '',
         phone: user.phone ?? '',
         roleId: user.role?.id ?? '',
         companyId: user.companyId ?? '',
-        status: user.status,
+        status: user.status ?? 'ACTIVE',
       });
     } else {
       setForm({ ...emptyState, companyId: isSuperAdmin ? '' : defaultCompanyId ?? '' });

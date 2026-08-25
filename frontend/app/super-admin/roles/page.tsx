@@ -5,7 +5,7 @@ import { Search, Plus, Pencil, Trash2, ChevronLeft, ChevronRight, ShieldCheck, L
 import { useAuth } from '@/src/auth/AuthProvider';
 
 import { listRoles, createRole, updateRole, deleteRole, ApiError } from '@/src/lib/api/roles';
-import { listCompanies } from '@/src/lib/api/users';
+import { listCompanyOptions } from '@/src/lib/api/users';
 import type { Role, RoleFormValues, PaginationMeta, CompanyRef } from '@/src/types/role';
 import RoleConfirmDialog from '@/src/components/layout/superadmin/role/RoleConfirmDialog ';
 import RoleFormModal from '@/src/components/layout/superadmin/role/RoleFormModal';
@@ -13,7 +13,7 @@ import RoleFormModal from '@/src/components/layout/superadmin/role/RoleFormModal
 const PAGE_SIZE = 10;
 
 export default function RolesPage() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, accessToken } = useAuth();
   const isSuperAdmin = Boolean(currentUser?.role?.isSuperAdmin);
 
   const [roles, setRoles] = useState<Role[]>([]);
@@ -66,11 +66,11 @@ export default function RolesPage() {
 
   useEffect(() => {
     if (isSuperAdmin) {
-      listCompanies()
+      listCompanyOptions(accessToken)
         .then(setCompanies)
         .catch(() => setCompanies([]));
     }
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, accessToken]);
 
   useEffect(() => {
     if (banner) {

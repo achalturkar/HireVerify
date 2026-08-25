@@ -17,6 +17,7 @@ interface CompanyResponse {
   id: string;
   name: string;
   slug: string;
+  shortCode: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
   logoUrl: string | null;
@@ -33,10 +34,11 @@ interface StatsResponse {
   users: number;
   clients: number;
   candidates: number;
-  assessments: number;
-  totalAttempts: number;
-  completedAttempts: number;
-  results: number;
+  bgvCases: number;
+  pendingCases: number;
+  inProgressCases: number;
+  completedCases: number;
+  reports: number;
 }
 
 export async function getCompany(companyId: string, accessToken: string | null): Promise<CompanyResponse> {

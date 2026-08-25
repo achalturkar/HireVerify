@@ -185,8 +185,8 @@ const buildCompanyAdminWelcomeEmail = ({ companyName, adminName, email, password
       <h2 style="margin:0 0 6px; font-size:20px;">Welcome, ${adminName} 👋</h2>
       <p style="margin:0 0 16px; font-size:14px; color:${BRAND_MUTED};">
         Your administrator account for <strong>${companyName}</strong> has been created on HireAssess — the
-        platform your team will use to build role-specific assessments, invite candidates, and review
-        trait-level scoring and reports as they come in.
+        platform your team will use to manage background verification cases, verification checks, and
+        authorized client reports.
       </p>
       <table style="margin: 4px 0 20px; border-collapse: collapse;">
         ${infoRow('Email', email)}
@@ -202,120 +202,7 @@ const buildCompanyAdminWelcomeEmail = ({ companyName, adminName, email, password
   }),
 });
 
-/**
- * Candidate invitation email. Sent when an invitation is created (and
- * again, with a fresh link, when one is resent). `companyLogoUrl` is
- * prioritized over the platform logo here — from the candidate's
- * perspective this invitation is from the company, not from HireAssess.
- * `assessmentName` and `durationMinutes` are optional; when provided they
- * make the email noticeably more specific about what the candidate is
- * about to do.
- */
-const buildCandidateInvitationEmail = ({
-  candidateName,
-  companyName,
-  inviteUrl,
-  expiresAt,
-  assessmentName,
-  durationMinutes,
-  companyLogoUrl,
-}) => {
-  const expiryLabel = expiresAt
-    ? new Date(expiresAt).toLocaleString(undefined, {
-        weekday: 'long',
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-    : null;
-
-  const durationLabel = durationMinutes ? `~${durationMinutes} minutes` : null;
-  const assessmentLabel = assessmentName ? `the <strong>${assessmentName}</strong> assessment` : 'an assessment';
-
-  return {
-    subject: assessmentName
-      ? `${companyName} invited you to complete the ${assessmentName} assessment`
-      : `${companyName} invited you to complete an assessment`,
-    html: emailShell({
-      logoUrl: companyLogoUrl,
-      signOffName: `${companyName} Hiring Team`,
-      footerNote: `Sent on behalf of ${companyName} via HireAssess.`,
-      bodyHtml: `
-        <h2 style="margin:0 0 6px; font-size:20px;">Hi ${candidateName},</h2>
-        <p style="margin:0 0 14px; font-size:14px; color:${BRAND_MUTED};">
-          <strong>${companyName}</strong> has invited you to complete ${assessmentLabel} as part of your
-          application. It's a chance to show your strengths in a structured way, alongside your resume —
-          the hiring team will use it to get a clearer, more consistent picture of your fit for the role.
-        </p>
-
-        ${
-          durationLabel
-            ? `<table style="margin: 4px 0 14px; border-collapse: collapse;">
-                 ${infoRow('Estimated time', durationLabel)}
-                 ${infoRow('Format', 'Online, self-paced')}
-               </table>`
-            : ''
-        }
-
-        <p style="margin:0 0 6px; font-size:13px; font-weight:600; color:${BRAND_HEADING};">A few tips before you start:</p>
-        <ul style="margin:0 0 16px; padding-left:18px; font-size:13px; color:${BRAND_MUTED};">
-          <li style="margin-bottom:4px;">Find a quiet space with a stable internet connection.</li>
-          <li style="margin-bottom:4px;">Your progress saves automatically, so a dropped connection won't cost you your answers.</li>
-          <li>Answer instinctively — there's no single "correct" way to respond to every question.</li>
-        </ul>
-
-        ${ctaButton(inviteUrl, 'Start assessment')}
-
-        ${
-          expiryLabel
-            ? `<p style="color: ${BRAND_WARNING}; font-size: 13px; font-weight: 600; margin: 10px 0 0;">⏳ This invitation link expires ${expiryLabel}.</p>`
-            : ''
-        }
-
-        <p style="color: ${BRAND_MUTED}; font-size: 12px; margin-top: 20px;">
-          If the button above doesn't work, copy and paste this link into your browser:<br />
-          <span style="word-break: break-all;">${inviteUrl}</span>
-        </p>
-      `,
-    }),
-  };
-};
-
-/**
- * Candidate thank-you email sent after successful submission.
- * `companyLogoUrl` is optional and prioritized over the platform logo for
- * the same reason as the invitation email — this reads as coming from the
- * company whose assessment the candidate just completed.
- */
-const buildCandidateThankYouEmail = ({ candidateName, companyName, assessmentName, companyLogoUrl }) => ({
-  subject: `Thank you for completing the ${assessmentName} assessment`,
-  html: emailShell({
-    logoUrl: companyLogoUrl,
-    signOffName: `${companyName} Hiring Team`,
-    footerNote: `This is a confirmation that your responses for ${companyName} were received successfully.`,
-    bodyHtml: `
-      <h2 style="margin:0 0 6px; font-size:20px;">Hi ${candidateName},</h2>
-      <p style="margin:0 0 14px; font-size:14px; color:${BRAND_MUTED};">
-        Thank you for taking the time to complete the <strong>${assessmentName}</strong> assessment for
-        <strong>${companyName}</strong>. We've successfully received your responses.
-      </p>
-      <p style="margin:0 0 14px; font-size:13px; color:${BRAND_MUTED};">
-        Your results are now with ${companyName}'s hiring team for review as part of the next steps in
-        their process. They'll be in touch if you're moving forward — in the meantime, we genuinely
-        appreciate the time and thought you put into this.
-      </p>
-      <p style="margin:0; font-size:12.5px; color:${BRAND_MUTED};">
-        If you have any questions in the meantime, feel free to reply to this email or reach out to the
-        hiring team at ${companyName} directly.
-      </p>
-    `,
-  }),
-});
-
 module.exports = {
   sendMail,
   buildCompanyAdminWelcomeEmail,
-  buildCandidateInvitationEmail,
-  buildCandidateThankYouEmail,
 };

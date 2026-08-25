@@ -32,7 +32,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
         </svg>
         {!collapsed && (
           <span className="text-[16px] font-semibold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
-            HireAssess
+            HireVerify
           </span>
         )}
         <button

@@ -1,15 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { X, Loader2, UserPlus, User, Mail, Phone, Users, ClipboardList } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { X, Loader2, UserPlus, User, Mail, Phone, Users, CalendarDays, MapPin, VenusAndMars } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { listClients } from '@/src/lib/api/clients';
-import { listAssessments } from '@/src/lib/api/assessments';
 import type { Client } from '@/src/types/client';
-import type { Assessment } from '@/src/types/assessment';
 import type { Candidate, CandidateFormValues } from '@/src/types/candidate';
 
-interface CandidateFormModalProps {
+interface Props {
   mode: 'create' | 'edit';
   candidate: Candidate | null;
   submitting: boolean;
@@ -18,240 +16,60 @@ interface CandidateFormModalProps {
   onSubmit: (values: CandidateFormValues) => void;
 }
 
-// Inputs sit inside a --surface panel, so they use --surface-muted as a
-// "sunken" background — same convention as the other form panels.
-const inputClass =
-  'w-full rounded-lg bg-[var(--surface-muted)] border border-[var(--border)] px-3 py-2.5 text-[13.5px] text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none focus:border-[#3FDCC0]/50 focus:ring-1 focus:ring-[#3FDCC0]/30 transition-colors';
+const inputClass = 'w-full rounded-lg bg-[var(--surface-muted)] border border-[var(--border)] px-3 py-2.5 text-[13.5px] text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none focus:border-[#3FDCC0]/50 focus:ring-1 focus:ring-[#3FDCC0]/30 transition-colors';
 
-function Field({
-  label,
-  icon: Icon,
-  children,
-}: {
-  label: string;
-  icon?: React.ComponentType<{ size?: number }>;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-[12px] text-[var(--muted)] flex items-center gap-1.5">
-        {Icon && <Icon size={12} />}
-        {label}
-      </label>
-      {children}
-    </div>
-  );
+function Field({ label, icon: Icon, children }: { label: string; icon?: React.ComponentType<{ size?: number }>; children: React.ReactNode }) {
+  return <div className="space-y-1.5"><label className="text-[12px] text-[var(--muted)] flex items-center gap-1.5">{Icon && <Icon size={12} />}{label}</label>{children}</div>;
 }
 
-export default function CandidateFormModal({
-  mode,
-  candidate,
-  submitting,
-  error,
-  onClose,
-  onSubmit,
-}: CandidateFormModalProps) {
+export default function CandidateFormModal({ mode, candidate, submitting, error, onClose, onSubmit }: Props) {
   const { accessToken } = useAuth();
-
   const [values, setValues] = useState<CandidateFormValues>({
     clientId: candidate?.clientId ?? '',
-    assessmentId: candidate?.assessmentId ?? '',
     firstName: candidate?.firstName ?? '',
     lastName: candidate?.lastName ?? '',
     email: candidate?.email ?? '',
     phone: candidate?.phone ?? '',
+    dateOfBirth: candidate?.dateOfBirth ? candidate.dateOfBirth.slice(0, 10) : '',
+    gender: candidate?.gender ?? '',
+    currentAddress: candidate?.currentAddress ?? '',
+    permanentAddress: candidate?.permanentAddress ?? '',
   });
-
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loadingClients, setLoadingClients] = useState(mode === 'create');
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const [clients, setClients] = useState<Client[]>([]);
-  const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [loadingOptions, setLoadingOptions] = useState(mode === 'create');
-  const [optionsError, setOptionsError] = useState<string | null>(null);
-
   useEffect(() => {
-    if (mode !== 'create') return;
     let cancelled = false;
-    (async () => {
-      setLoadingOptions(true);
-      setOptionsError(null);
-      try {
-        const [clientsRes, assessmentsRes] = await Promise.all([
-          listClients({ page: 1, limit: 200, status: 'ACTIVE', sortBy: 'name', sortOrder: 'asc' }, accessToken),
-          listAssessments(
-            { page: 1, limit: 200, status: 'ACTIVE', sortBy: 'name', sortOrder: 'asc' },
-            accessToken
-          ),
-        ]);
-        if (!cancelled) {
-          setClients(clientsRes.items);
-          setAssessments(assessmentsRes.items);
-        }
-      } catch {
-        if (!cancelled) setOptionsError('Could not load clients/assessments.');
-      } finally {
-        if (!cancelled) setLoadingOptions(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [mode, accessToken]);
+    setLoadingClients(true);
+    listClients({ page: 1, limit: 200, status: 'ACTIVE', sortBy: 'name', sortOrder: 'asc' }, accessToken)
+      .then((result) => { if (!cancelled) setClients(result.items); })
+      .finally(() => { if (!cancelled) setLoadingClients(false); });
+    return () => { cancelled = true; };
+  }, [accessToken]);
 
-  const assessmentOptions = useMemo(
-    () => assessments.filter((a) => a.clientId === values.clientId),
-    [assessments, values.clientId]
-  );
+  const set = (field: keyof CandidateFormValues) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setValues((current) => ({ ...current, [field]: event.target.value }));
 
-  const set = (field: keyof CandidateFormValues) => (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => setValues((v) => ({ ...v, [field]: e.target.value }));
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
     setValidationError(null);
-
-    if (!values.firstName.trim() || !values.lastName.trim()) {
-      setValidationError('First and last name are required.');
-      return;
-    }
-    if (!values.email.trim()) {
-      setValidationError('Email is required.');
-      return;
-    }
-    if (mode === 'create' && !values.clientId) {
-      setValidationError('Select a client.');
-      return;
-    }
-    if (mode === 'create' && !values.assessmentId) {
-      setValidationError('Select an assessment.');
-      return;
-    }
-
+    if (mode === 'create' && !values.clientId) return setValidationError('Select a client.');
+    if (!values.firstName.trim() || !values.lastName.trim()) return setValidationError('First and last name are required.');
+    if (!values.email.trim()) return setValidationError('Email is required.');
     onSubmit(values);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg max-h-[90vh] flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
-          <div className="flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-lg bg-[#3FDCC0]/15 text-[#3FDCC0] flex items-center justify-center">
-              <UserPlus size={16} />
-            </span>
-            <h2 className="text-[15px] font-semibold text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
-              {mode === 'create' ? 'Invite candidate' : 'Edit candidate'}
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-muted)] transition-colors"
-            aria-label="Close"
-          >
-            <X size={16} />
-          </button>
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="w-full max-w-2xl max-h-[92vh] rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden flex flex-col">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0"><div className="flex items-center gap-2.5"><span className="w-8 h-8 rounded-lg bg-[#3FDCC0]/15 text-[#3FDCC0] flex items-center justify-center"><UserPlus size={16} /></span><div><h2 className="text-[15px] font-semibold">{mode === 'create' ? 'Add candidate' : 'Edit candidate'}</h2><p className="text-[11px] text-[var(--muted)]">Candidate information for background verification</p></div></div><button onClick={onClose} aria-label="Close"><X size={16} /></button></div>
+      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 space-y-5">{(error || validationError) && <div className="rounded-lg bg-[#FF6B6B]/10 border border-[#FF6B6B]/25 text-[#FF6B6B] text-[13px] px-3.5 py-2.5">{validationError || error}</div>}
+          <section className="space-y-3"><h3 className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">Case relationship</h3><Field label="Client" icon={Users}><select value={values.clientId} onChange={set('clientId')} disabled={loadingClients} className={`${inputClass} disabled:opacity-60`}><option value="">{loadingClients ? 'Loading...' : 'Select client...'}</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name} ({client.clientCode})</option>)}</select></Field></section>
+          <section className="space-y-3"><h3 className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">Personal information</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Field label="First name" icon={User}><input value={values.firstName} onChange={set('firstName')} className={inputClass} autoComplete="given-name" /></Field><Field label="Last name" icon={User}><input value={values.lastName} onChange={set('lastName')} className={inputClass} autoComplete="family-name" /></Field><Field label="Email" icon={Mail}><input type="email" value={values.email} onChange={set('email')} className={inputClass} autoComplete="email" /></Field><Field label="Phone" icon={Phone}><input value={values.phone} onChange={set('phone')} className={inputClass} autoComplete="tel" /></Field><Field label="Date of birth" icon={CalendarDays}><input type="date" value={values.dateOfBirth} onChange={set('dateOfBirth')} className={inputClass} /></Field><Field label="Gender" icon={VenusAndMars}><select value={values.gender} onChange={set('gender')} className={inputClass}><option value="">Prefer not to say</option><option value="FEMALE">Female</option><option value="MALE">Male</option><option value="NON_BINARY">Non-binary</option><option value="OTHER">Other</option></select></Field></div></section>
+          <section className="space-y-3"><h3 className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">Address information</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Field label="Current address" icon={MapPin}><textarea value={values.currentAddress} onChange={set('currentAddress')} className={`${inputClass} min-h-24 resize-y`} placeholder="Current residential address" /></Field><Field label="Permanent address" icon={MapPin}><textarea value={values.permanentAddress} onChange={set('permanentAddress')} className={`${inputClass} min-h-24 resize-y`} placeholder="Permanent residential address" /></Field></div></section>
         </div>
-
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
-          <div className="px-6 py-5 space-y-4">
-            {(error || validationError || optionsError) && (
-              <div className="rounded-lg bg-[#FF6B6B]/10 border border-[#FF6B6B]/25 text-[#FF6B6B] text-[13px] px-3.5 py-2.5">
-                {validationError || error || optionsError}
-              </div>
-            )}
-
-            {mode === 'create' && (
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Client" icon={Users}>
-                  <select
-                    value={values.clientId}
-                    onChange={(e) => setValues((v) => ({ ...v, clientId: e.target.value, assessmentId: '' }))}
-                    disabled={loadingOptions}
-                    className={`${inputClass} disabled:opacity-60`}
-                  >
-                    <option value="">{loadingOptions ? 'Loading…' : 'Select client…'}</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Assessment" icon={ClipboardList}>
-                  <select
-                    value={values.assessmentId}
-                    onChange={set('assessmentId')}
-                    disabled={loadingOptions || !values.clientId}
-                    className={`${inputClass} disabled:opacity-60`}
-                  >
-                    <option value="">
-                      {!values.clientId ? 'Select a client first' : 'Select assessment…'}
-                    </option>
-                    {assessmentOptions.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name} ({a.level})
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="First name" icon={User}>
-                <input
-                  value={values.firstName}
-                  onChange={set('firstName')}
-                  placeholder="Jane"
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Last name" icon={User}>
-                <input value={values.lastName} onChange={set('lastName')} placeholder="Doe" className={inputClass} />
-              </Field>
-              <Field label="Email" icon={Mail}>
-                <input
-                  type="email"
-                  value={values.email}
-                  onChange={set('email')}
-                  placeholder="jane.doe@example.com"
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Phone" icon={Phone}>
-                <input
-                  value={values.phone}
-                  onChange={set('phone')}
-                  placeholder="+1 555 010 2030"
-                  className={inputClass}
-                />
-              </Field>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="flex items-center justify-end gap-2.5 px-6 py-4 border-t border-[var(--border)] shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="rounded-lg px-4 py-2.5 text-[13px] font-medium text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex items-center gap-2 rounded-lg bg-[#3FDCC0] text-[#0B0F26] text-[13px] font-semibold px-4 py-2.5 hover:bg-[#3FDCC0]/90 transition-colors disabled:opacity-50"
-            >
-              {submitting && <Loader2 size={14} className="animate-spin" />}
-              {mode === 'create' ? 'Invite candidate' : 'Save changes'}
-            </button>
-          </div>
-        </form>
-      </div>
+        <div className="sticky bottom-0 flex shrink-0 justify-end gap-2.5 border-t border-[var(--border)] bg-[var(--surface)] px-6 py-4"><button type="button" onClick={onClose} disabled={submitting} className="rounded-lg px-4 py-2.5 text-[13px] text-[var(--muted)]">Cancel</button><button type="submit" disabled={submitting || loadingClients} className="flex min-w-[128px] items-center justify-center gap-2 rounded-lg bg-[#3FDCC0] px-4 py-2.5 text-[13px] font-semibold text-[#0B0F26]">{submitting && <Loader2 size={14} className="animate-spin" />}{mode === 'create' ? 'Add candidate' : 'Save changes'}</button></div>
+      </form>
     </div>
-  );
+  </div>;
 }

@@ -2,4 +2,4 @@ User-agent: *
 
 Allow: /
 
-Sitemap: https://hireassess.brainhuntventures.com/sitemap.xml
+Sitemap: https://hireverify.brainhuntventures.com/sitemap.xml

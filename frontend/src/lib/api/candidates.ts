@@ -116,11 +116,10 @@ export interface ListCandidatesParams {
   page: number;
   limit: number;
   search?: string;
-  assessmentId?: string;
   clientId?: string;
   status?: CandidateStatus | '';
   includeDeleted?: boolean;
-  sortBy?: 'firstName' | 'lastName' | 'email' | 'status' | 'createdAt' | 'updatedAt';
+  sortBy?: 'candidateCode' | 'firstName' | 'lastName' | 'email' | 'status' | 'createdAt' | 'updatedAt';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -137,7 +136,6 @@ export async function listCandidates(
   qs.set('page', String(params.page));
   qs.set('limit', String(params.limit));
   if (params.search) qs.set('search', params.search);
-  if (params.assessmentId) qs.set('assessmentId', params.assessmentId);
   if (params.clientId) qs.set('clientId', params.clientId);
   if (params.status) qs.set('status', params.status);
   if (params.includeDeleted) qs.set('includeDeleted', 'true');
@@ -157,12 +155,15 @@ export async function getCandidate(id: string, accessToken?: string | null): Pro
 }
 
 export interface CandidatePayload {
-  assessmentId: string;
   clientId: string;
   firstName: string;
   lastName: string;
   email: string;
   phone?: string;
+  dateOfBirth?: string | null;
+  gender?: string | null;
+  currentAddress?: string | null;
+  permanentAddress?: string | null;
 }
 
 export async function createCandidate(
@@ -178,7 +179,7 @@ export async function createCandidate(
 
 export async function updateCandidate(
   id: string,
-  payload: Partial<Pick<CandidatePayload, 'firstName' | 'lastName' | 'email' | 'phone'>>,
+  payload: Partial<Omit<CandidatePayload, 'clientId'>> & { clientId?: string },
   accessToken?: string | null
 ): Promise<Candidate> {
   const json = await authFetch(`/candidates/${id}`, accessToken, {
@@ -192,37 +193,7 @@ export async function deleteCandidate(id: string, accessToken?: string | null): 
   await authFetch(`/candidates/${id}`, accessToken, { method: 'DELETE' });
 }
 
-export async function startCandidate(id: string, accessToken?: string | null): Promise<Candidate> {
-  const json = await authFetch(`/candidates/${id}/start`, accessToken, { method: 'POST' });
-  return json.data.data as Candidate;
-}
-
-export async function completeCandidate(id: string, accessToken?: string | null): Promise<Candidate> {
-  const json = await authFetch(`/candidates/${id}/complete`, accessToken, { method: 'POST' });
-  return json.data.data as Candidate;
-}
-
-export async function expireCandidate(id: string, accessToken?: string | null): Promise<Candidate> {
-  const json = await authFetch(`/candidates/${id}/expire`, accessToken, { method: 'POST' });
-  return json.data.data as Candidate;
-}
-
-export async function withdrawCandidate(id: string, accessToken?: string | null): Promise<Candidate> {
-  const json = await authFetch(`/candidates/${id}/withdraw`, accessToken, { method: 'POST' });
-  return json.data.data as Candidate;
-}
-
-/**
- * Search candidates for the picker (CandidatePicker / CreateInvitationModal).
- *
- * FIXED: previously used a separate, simpler request() helper that
- * returned the raw envelope and treated `res.data` as the array. The
- * actual envelope is double-nested — `res.data` is `{ message, data, meta }`,
- * not the array itself — so the picker was getting handed an object
- * instead of a list and crashing on `.map()`. Now goes through the same
- * authFetch() as every other function here, and correctly unwraps
- * `json.data.data`.
- */
+/** Search candidates for BGV case creation and other authorized pickers. */
 export interface SearchCandidatesParams {
   search?: string;
   limit?: number;
@@ -247,11 +218,6 @@ export async function searchCandidates(
     lastName: c.lastName,
     email: c.email,
     status: c.status,
-    // The list endpoint doesn't currently join client details (see
-    // candidate.repository.js `list()` — no `include: { client: true }`),
-    // so this will be undefined until that's added. CandidatePicker
-    // already handles a missing client gracefully (optional chaining),
-    // it just won't show the company name under each result yet.
     client: (c as any).client ?? null,
   }));
 }

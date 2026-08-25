@@ -9,8 +9,8 @@ import {
   createUser,
   updateUser,
   deleteUser,
-  listRoles,
-  listCompanies,
+  listRolesForCompany,
+  listCompanyOptions,
   ApiError,
 } from '@/src/lib/api/users';
 import type { User, RoleRef, CompanyRef, UserStatus, PaginationMeta } from '@/src/types/user';
@@ -93,7 +93,7 @@ function StatusBadge({ status }: { status: UserStatus }) {
 }
 
 export default function UsersPage() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, accessToken } = useAuth();
   const isSuperAdmin = Boolean(currentUser?.role?.isSuperAdmin);
 
   const [users, setUsers] = useState<User[]>([]);
@@ -132,7 +132,7 @@ export default function UsersPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await listUsers({ page, limit: PAGE_SIZE, search, status, sortBy: 'createdAt', sortOrder: 'desc' });
+      const res = await listUsers(accessToken, { page, limit: PAGE_SIZE, search, status, sortBy: 'createdAt', sortOrder: 'desc' });
       setUsers(res.items);
       setMeta(res.meta);
     } catch (err) {
@@ -140,7 +140,7 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status]);
+  }, [accessToken, page, search, status]);
 
   useEffect(() => {
     fetchUsers();
@@ -158,7 +158,7 @@ export default function UsersPage() {
     setActiveUser(null);
     setModalMode('create');
     try {
-      const [r, c] = await Promise.all([listRoles(), isSuperAdmin ? listCompanies() : Promise.resolve([])]);
+      const [r, c] = await Promise.all([listRolesForCompany(accessToken), isSuperAdmin ? listCompanyOptions(accessToken) : Promise.resolve([])]);
       setRoles(r.filter((role) => !role.isSuperAdmin));
       setCompanies(c);
     } catch {
@@ -171,7 +171,7 @@ export default function UsersPage() {
     setActiveUser(u);
     setModalMode('edit');
     try {
-      const r = await listRoles(u.companyId ?? undefined);
+      const r = await listRolesForCompany(accessToken, u.companyId ?? undefined);
       setRoles(r.filter((role) => !role.isSuperAdmin));
     } catch {
       setFormError('Could not load roles for this form.');
@@ -199,7 +199,7 @@ export default function UsersPage() {
     setFormError(null);
     try {
       if (modalMode === 'create') {
-        const created = await createUser({
+        const created = await createUser(accessToken, {
           firstName: values.firstName.trim(),
           lastName: values.lastName.trim(),
           email: values.email.trim(),
@@ -215,7 +215,7 @@ export default function UsersPage() {
           tone: 'success',
         });
       } else if (activeUser) {
-        await updateUser(activeUser.id, {
+        await updateUser(accessToken, activeUser.id, {
           firstName: values.firstName.trim(),
           lastName: values.lastName.trim(),
           phone: values.phone.trim() || undefined,
@@ -238,7 +238,7 @@ export default function UsersPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await deleteUser(deleteTarget.id);
+      await deleteUser(accessToken, deleteTarget.id);
       setBanner({ text: `${deleteTarget.firstName} ${deleteTarget.lastName} was deleted.`, tone: 'success' });
       setDeleteTarget(null);
       fetchUsers();

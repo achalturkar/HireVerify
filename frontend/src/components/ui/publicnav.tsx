@@ -37,7 +37,7 @@ export default function PublicNav() {
             className="text-[15px] font-semibold text-[var(--foreground)] tracking-tight"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            HireAssess
+            HireVerify
           </span>
         </Link>
 
