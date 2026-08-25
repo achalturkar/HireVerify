@@ -274,7 +274,7 @@ const drawFooter = (doc, companyName) => {
 
 const drawPageChrome = (doc, logo) => {
   if (logo) doc.image(logo, 485, 35, { fit: [60, 60], align: 'right' });
-  doc.y = 88; // was 105 — tighter top gap; logo (35 + up to 60 tall) still clears this comfortably
+  doc.y = 100; // was 105 — tighter top gap; logo (35 + up to 60 tall) still clears this comfortably
 };
 
 /** Breaks to a fresh page (with logo + footer handled) only if `requiredHeight` won't fit before the footer. */
