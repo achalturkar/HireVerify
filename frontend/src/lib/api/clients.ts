@@ -7,8 +7,8 @@ import type {
 } from "@/src/types/client";
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API ||
-  "http://localhost:5000/api/";
+  process.env.NEXT_PUBLIC_API || '/api/v1' ||
+  "http://localhost:5001/api/";
 
 class ApiError extends Error {
   status: number;
