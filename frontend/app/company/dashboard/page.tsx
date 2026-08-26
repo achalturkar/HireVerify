@@ -65,6 +65,21 @@ const dangerBadge = 'bg-[#FF6B6B]/10 dark:bg-[#FF6B6B]/15 text-[#C23B3B] dark:te
 
 const CHART_COLORS = ['var(--primary)', '#F2AE55', '#FF6B6B', '#8891B8'];
 
+// Small accent set used to give section headers and quick links some
+// visual rhythm instead of everything reading as the same teal chip.
+const ACCENTS = {
+  teal: 'var(--primary)',
+  amber: '#F2AE55',
+  violet: '#B18AF2',
+  sky: '#5EA8D9',
+  slate: '#8891B8',
+  rose: '#FF6B6B',
+};
+
+function chipStyle(hex: string) {
+  return { background: `${hex}1f`, color: hex };
+}
+
 function useIsDarkMode() {
   const [isDark, setIsDark] = useState(false);
   useEffect(() => {
@@ -83,6 +98,8 @@ function useIsDarkMode() {
 ------------------------------------------------------------------- */
 
 type Period = 'morning' | 'afternoon' | 'evening' | 'night';
+
+const PERIOD_ORDER: Period[] = ['morning', 'afternoon', 'evening', 'night'];
 
 const PERIODS: Record<
   Period,
@@ -206,12 +223,12 @@ interface CompanyStats {
   recentActivity?: { id: string; label: string; actor: string; timestamp: string; kind: 'success' | 'info' | 'warning' }[];
 }
 
-const QUICK_LINKS: { label: string; href: string; description: string; icon: LucideIcon }[] = [
-  { label: 'Clients', href: '/company/clients', description: 'Manage client accounts', icon: Contact },
-  { label: 'Users', href: '/company/users', description: 'Team members & roles', icon: Users },
-  { label: 'BGV Cases', href: '/company/bgv-cases', description: 'Track verification cases', icon: FileCheck2 },
-  { label: 'Reports', href: '/company/reports', description: 'Approved client reports', icon: FileBarChart },
-  { label: 'Settings', href: '/company/settings', description: 'Workspace configuration', icon: SettingsIcon },
+const QUICK_LINKS: { label: string; href: string; description: string; icon: LucideIcon; accent: string }[] = [
+  { label: 'Clients', href: '/company/clients', description: 'Manage client accounts', icon: Contact, accent: ACCENTS.sky },
+  { label: 'Users', href: '/company/users', description: 'Team members & roles', icon: Users, accent: ACCENTS.violet },
+  { label: 'BGV Cases', href: '/company/bgv-cases', description: 'Track verification cases', icon: FileCheck2, accent: ACCENTS.teal },
+  { label: 'Reports', href: '/company/reports', description: 'Approved client reports', icon: FileBarChart, accent: ACCENTS.amber },
+  { label: 'Settings', href: '/company/settings', description: 'Workspace configuration', icon: SettingsIcon, accent: ACCENTS.slate },
 ];
 
 export default function CompanyDashboardPage() {
@@ -363,16 +380,23 @@ export default function CompanyDashboardPage() {
           >
             <Link
               href={link.href}
-              className={`group relative overflow-hidden rounded-2xl p-4 hover:border-[var(--primary)]/40 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--primary)]/5 transition-all duration-200 block ${card}`}
+              className={`group relative overflow-hidden rounded-2xl p-4 hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 block ${card}`}
+              style={{ ['--link-accent' as any]: link.accent }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = `${link.accent}55`)}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = '')}
             >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${tealChip}`}>
+              <div
+                className="absolute -right-6 -top-6 h-16 w-16 rounded-full opacity-0 group-hover:opacity-[0.14] transition-opacity pointer-events-none"
+                style={{ background: link.accent }}
+              />
+              <div className="relative w-8 h-8 rounded-lg flex items-center justify-center mb-3" style={chipStyle(link.accent)}>
                 <link.icon size={15} />
               </div>
-              <p className={`text-[13px] font-medium flex items-center gap-1 ${textPrimary}`}>
+              <p className={`relative text-[13px] font-medium flex items-center gap-1 ${textPrimary}`}>
                 {link.label}
-                <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" style={{ color: link.accent }} />
               </p>
-              <p className={`text-[11px] mt-0.5 ${textFaint}`}>{link.description}</p>
+              <p className={`relative text-[11px] mt-0.5 ${textFaint}`}>{link.description}</p>
             </Link>
           </motion.div>
         ))}
@@ -380,17 +404,20 @@ export default function CompanyDashboardPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Users" value={stats?.users} icon={Users} color="teal" loading={loading} />
-        <StatCard title="Clients" value={stats?.clients} icon={Contact} color="amber" loading={loading} />
-        <StatCard title="BGV Cases" value={stats?.bgvCases} icon={FileCheck2} color="teal" loading={loading} />
-        <StatCard title="Completed Cases" value={stats?.completedCases} icon={CheckCircle2} color="amber" loading={loading} />
+        <StatCard title="Total Users" value={stats?.users} icon={Users} accent={ACCENTS.violet} loading={loading} />
+        <StatCard title="Clients" value={stats?.clients} icon={Contact} accent={ACCENTS.sky} loading={loading} />
+        <StatCard title="BGV Cases" value={stats?.bgvCases} icon={FileCheck2} accent={ACCENTS.teal} loading={loading} />
+        <StatCard title="Completed Cases" value={stats?.completedCases} icon={CheckCircle2} accent={ACCENTS.amber} loading={loading} />
       </div>
 
       {/* Secondary metrics strip */}
       <div className={`rounded-2xl px-5 py-4 flex flex-wrap items-center gap-x-8 gap-y-3 ${card}`}>
         <MiniStat label="Candidates" value={stats?.candidates} loading={loading} />
+        <span className={`hidden sm:block h-6 w-px ${divide.includes('divide') ? 'bg-slate-100 dark:bg-white/[0.06]' : ''}`} />
         <MiniStat label="Pending Cases" value={stats?.pendingCases} loading={loading} />
+        <span className={`hidden sm:block h-6 w-px ${divide.includes('divide') ? 'bg-slate-100 dark:bg-white/[0.06]' : ''}`} />
         <MiniStat label="In progress" value={stats?.inProgressCases} loading={loading} />
+        <span className={`hidden sm:block h-6 w-px ${divide.includes('divide') ? 'bg-slate-100 dark:bg-white/[0.06]' : ''}`} />
         <MiniStat label="Reports" value={stats?.reports} loading={loading} />
       </div>
 
@@ -406,6 +433,7 @@ export default function CompanyDashboardPage() {
           loading={loading}
           emptyLabel="No workspace data yet."
           isDark={isDark}
+          accent={ACCENTS.teal}
         />
         <PieCard
           title="BGV Case Status"
@@ -414,6 +442,7 @@ export default function CompanyDashboardPage() {
           loading={loading}
           emptyLabel="No cases recorded yet."
           isDark={isDark}
+          accent={ACCENTS.amber}
         />
       </div>
 
@@ -432,7 +461,7 @@ export default function CompanyDashboardPage() {
       {/* Company snapshot */}
       <div className={`rounded-2xl overflow-hidden ${card}`}>
         <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${cardBorderB}`}>
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tealChip}`}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(ACCENTS.teal)}>
             <Building2 size={15} />
           </div>
           <h2 className={`text-[14px] font-semibold ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
@@ -450,7 +479,7 @@ export default function CompanyDashboardPage() {
       {/* Logged-in user */}
       <div className={`rounded-2xl overflow-hidden ${card}`}>
         <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${cardBorderB}`}>
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${amberChip}`}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(ACCENTS.amber)}>
             <ShieldCheck size={15} />
           </div>
           <h2 className={`text-[14px] font-semibold ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
@@ -483,6 +512,33 @@ export default function CompanyDashboardPage() {
 /* ------------------------------------------------------------------
    Hero greeting
 ------------------------------------------------------------------- */
+
+function DayCycleTrack({ period, accent }: { period: Period; accent: string }) {
+  return (
+    <div className="flex items-center">
+      {PERIOD_ORDER.map((p, i) => {
+        const P = PERIODS[p];
+        const active = p === period;
+        return (
+          <div key={p} className="flex items-center">
+            <span
+              title={P.greeting}
+              className={`flex items-center justify-center rounded-full transition-all duration-300 ${
+                active ? 'w-7 h-7' : 'w-5 h-5 opacity-50'
+              }`}
+              style={active ? { background: `${accent}22`, color: accent } : undefined}
+            >
+              <P.icon size={active ? 13 : 11} className={active ? '' : textFaint} />
+            </span>
+            {i < PERIOD_ORDER.length - 1 && (
+              <span className="h-px w-3 sm:w-4" style={{ background: `${accent}30` }} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function HeroGreeting({
   period,
@@ -529,35 +585,54 @@ function HeroGreeting({
             }}
           />
         ))}
+        {/* soft ambient glow anchored to the theme accent */}
+        <div
+          className="absolute -right-24 -top-24 h-64 w-64 rounded-full blur-3xl opacity-[0.25] pointer-events-none"
+          style={{ background: theme.accent }}
+        />
       </div>
 
       <div className="relative z-10 flex flex-col gap-5 p-6 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <motion.div
-              initial={{ rotate: -8, scale: 0.9 }}
-              animate={{ rotate: 0, scale: 1 }}
-              transition={{ type: 'spring', stiffness: 200, damping: 12 }}
-              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${tealChip}`}
-            >
-              <Icon size={18} />
-            </motion.div>
-            <p
-              className="text-[11px] uppercase tracking-[0.14em] text-[var(--primary)]"
-              style={{ fontFamily: 'var(--font-mono)' }}
-            >
-              {theme.greeting}
-            </p>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="relative w-9 h-9 shrink-0">
+              <span
+                className="absolute inset-[-4px] rounded-xl animate-[spin_7s_linear_infinite] opacity-70"
+                style={{ background: `conic-gradient(from 0deg, ${theme.accent}66, transparent 55%)`, filter: 'blur(3px)' }}
+                aria-hidden="true"
+              />
+              <motion.div
+                initial={{ rotate: -8, scale: 0.9 }}
+                animate={{ rotate: 0, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 200, damping: 12 }}
+                className="relative w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: isDark ? '#161C3A' : '#FFFFFF', color: theme.accent, border: `1px solid ${theme.accent}33` }}
+              >
+                <Icon size={18} />
+              </motion.div>
+            </div>
+            <div>
+              <p
+                className="text-[11px] uppercase tracking-[0.14em]"
+                style={{ color: theme.accent, fontFamily: 'var(--font-mono)' }}
+              >
+                {theme.greeting}
+              </p>
+              <DayCycleTrack period={period} accent={theme.accent} />
+            </div>
           </div>
           <h1
-            className={`text-[26px] font-semibold tracking-tight ${textPrimary}`}
+            className={`text-[26px] font-semibold tracking-tight `}
             style={{ fontFamily: 'var(--font-display)' }}
           >
             {theme.greeting}, {firstName} {lastName}
           </h1>
           <p className={`text-[13.5px] mt-1 ${textMuted}`}>{quote}</p>
           {role && (
-            <span className={`inline-flex items-center mt-3 rounded-full px-2.5 py-1 text-[11px] font-medium ${tealBadge}`}>
+            <span
+              className="inline-flex items-center mt-3 rounded-full px-2.5 py-1 text-[11px] font-medium"
+              style={chipStyle(theme.accent)}
+            >
               {role}
             </span>
           )}
@@ -602,29 +677,33 @@ function StatCard({
   title,
   value,
   icon: Icon,
-  color,
+  accent,
   loading,
 }: {
   title: string;
   value?: number;
   icon: LucideIcon;
-  color: 'teal' | 'amber';
+  accent: string;
   loading: boolean;
 }) {
   const animated = useCountUp(value);
   return (
-    <div className={`rounded-2xl p-5 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/[0.03] transition-all duration-200 ${card}`}>
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-4 ${color === 'teal' ? tealChip : amberChip}`}>
+    <div className={`group relative overflow-hidden rounded-2xl p-5 hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 ${card}`}>
+      <div
+        className="absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-[0.08] group-hover:opacity-[0.14] transition-opacity pointer-events-none"
+        style={{ background: accent }}
+      />
+      <div className="relative w-9 h-9 rounded-lg flex items-center justify-center mb-4" style={chipStyle(accent)}>
         <Icon size={17} />
       </div>
       {loading ? (
-        <div className={`h-[26px] w-14 ${skeleton}`} />
+        <div className={`relative h-[26px] w-14 ${skeleton}`} />
       ) : (
-        <p className={`text-[26px] font-semibold tracking-tight tabular-nums ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
+        <p className={`relative text-[26px] font-semibold tracking-tight tabular-nums ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
           {animated ?? '—'}
         </p>
       )}
-      <p className={`text-[12.5px] mt-1 ${textMuted}`}>{title}</p>
+      <p className={`relative text-[12.5px] mt-1 ${textMuted}`}>{title}</p>
     </div>
   );
 }
@@ -673,22 +752,36 @@ function AIInsightCard({ insights, loading, isDark }: { insights: string[]; load
 
   return (
     <div
-      className={`rounded-2xl p-5 border ${cardBorderB} bg-gradient-to-r ${
+      className={`relative overflow-hidden rounded-2xl p-5 border ${cardBorderB} bg-gradient-to-r ${
         isDark ? 'from-[var(--primary)]/[0.08] to-[#8891B8]/[0.05]' : 'from-[var(--primary)]/[0.06] to-slate-50'
       }`}
     >
+      {insights.length > 1 && (
+        <div className="absolute top-4 right-5 flex items-center gap-1">
+          {insights.map((_, i) => (
+            <span
+              key={i}
+              className="h-1 rounded-full transition-all duration-300"
+              style={{
+                width: i === index % insights.length ? 14 : 5,
+                background: i === index % insights.length ? 'var(--primary)' : `var(--primary)33`,
+              }}
+            />
+          ))}
+        </div>
+      )}
       <div className="flex items-start gap-3">
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tealChip}`}>
           <Sparkles size={15} />
         </div>
-        <div className="min-h-[20px] flex-1">
+        <div className="min-h-[20px] flex-1 pr-10">
           <p className={`text-[11px] uppercase tracking-[0.1em] mb-1 ${textFaint}`} style={{ fontFamily: 'var(--font-mono)' }}>
             Insight
           </p>
           {loading ? (
             <div className={`h-[16px] w-2/3 ${skeleton}`} />
           ) : (
-            <p className={`text-[13.5px] ${textPrimary}`}>
+            <p className={`text-[13.5px] `}>
               {typed}
               <span className="inline-block w-[2px] h-[14px] bg-[var(--primary)] ml-0.5 align-middle animate-pulse" />
             </p>
@@ -710,6 +803,7 @@ function PieCard({
   loading,
   emptyLabel,
   isDark,
+  accent,
 }: {
   title: string;
   description: string;
@@ -717,13 +811,14 @@ function PieCard({
   loading: boolean;
   emptyLabel: string;
   isDark: boolean;
+  accent: string;
 }) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
 
   return (
     <div className={`rounded-2xl overflow-hidden ${card}`}>
       <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${cardBorderB}`}>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tealChip}`}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(accent)}>
           <FileCheck2 size={15} />
         </div>
         <div>
@@ -830,14 +925,14 @@ function PerformanceOverview({
                   endAngle={-270}
                 >
                   <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                  <RadialBar background={{ fill: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9' }} dataKey="value" cornerRadius={8} fill={kpi.fill} />
+                  <RadialBar background={{ fill: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(55, 50, 50, 0.06)' }} dataKey="value" cornerRadius={8} fill={kpi.fill} />
                   <text
                     x="50%"
                     y="50%"
                     textAnchor="middle"
                     dominantBaseline="middle"
                     className={textPrimary}
-                    style={{ fontSize: 16, fontWeight: 600, fill: isDark ? '#F2F4FA' : '#0F172A' }}
+                    style={{ fontSize: 16, fontWeight: 600,  }}
                   >
                     {kpi.value}%
                   </text>
@@ -872,7 +967,7 @@ function ScheduleCard({
   return (
     <div className={`rounded-2xl overflow-hidden ${card}`}>
       <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${cardBorderB}`}>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tealChip}`}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(ACCENTS.sky)}>
           <CalendarClock size={15} />
         </div>
         <h2 className={`text-[14px] font-semibold ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
@@ -924,7 +1019,7 @@ function ActivityCard({
   return (
     <div className={`rounded-2xl overflow-hidden ${card}`}>
       <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${cardBorderB}`}>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${amberChip}`}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(ACCENTS.violet)}>
           <ClipboardList size={15} />
         </div>
         <h2 className={`text-[14px] font-semibold ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
@@ -942,7 +1037,7 @@ function ActivityCard({
           <div className={`py-8 text-center text-[12.5px] ${textFaint}`}>No recent activity to show yet.</div>
         ) : (
           <ul className="relative pl-4">
-            <span className={`absolute left-[5px] top-1 bottom-1 w-px ${divide.includes('divide') ? 'bg-slate-100 dark:bg-white/[0.06]' : ''}`} />
+            <span className="absolute left-[5px] top-1 bottom-1 w-px bg-slate-100 dark:bg-white/[0.06]" />
             {items.map((item) => (
               <li key={item.id} className="relative pb-4 last:pb-0">
                 <span className={`absolute -left-4 top-1 w-2 h-2 rounded-full ${dotStyle[item.kind]}`} />
@@ -1008,9 +1103,11 @@ function MilestonesCard({
                 <m.icon size={13} className={m.celebratory ? 'text-[var(--primary)]' : textFaint} />
                 {m.label}
               </span>
-              <span className={`text-[12px] tabular-nums ${textMuted}`}>{loading ? '—' : `${m.value}%`}</span>
+              <span className={`text-[12px] tabular-nums font-medium ${m.celebratory ? 'text-[var(--primary)]' : textMuted}`}>
+                {loading ? '—' : `${m.value}%`}
+              </span>
             </div>
-            <div className={`h-2 rounded-full overflow-hidden ${skeleton.includes('animate-pulse') ? 'bg-slate-100 dark:bg-white/[0.06]' : ''}`}>
+            <div className="h-2 rounded-full overflow-hidden bg-slate-100 dark:bg-white/[0.06]">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: loading ? 0 : `${m.value}%` }}
