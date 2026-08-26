@@ -43,41 +43,64 @@ import { useAuth } from '@/src/auth/AuthProvider';
 import { getCompanyStats } from '@/src/lib/api/companies';
 
 /* ------------------------------------------------------------------
-   Theme tokens — unchanged from the base dashboard so this page stays
-   visually consistent with the rest of the app (cards, borders, text
-   colors, chart palette). Time-of-day theming below only touches the
-   hero card's ambient gradient/glow, not the app's core teal/amber
-   semantic colors.
+   Theme tokens
+   ------------------------------------------------------------------
+   IMPORTANT: every neutral color (card surface, borders, dividers,
+   skeletons, body text) is resolved here from the `isDark` boolean
+   below, and applied via inline `style`, NOT via Tailwind's `dark:`
+   class variant. The `dark:` variant was silently not being applied
+   to most of this page (only the hero worked, because it happened to
+   branch in JS already) — every card was stuck on a white/light
+   background regardless of the app's theme. Driving color from JS
+   state, the same way the hero and the recharts tooltips already do,
+   sidesteps that entirely and guarantees the right color every time.
+   Semantic brand colors (teal primary, amber, violet, etc.) are fixed
+   hex/CSS-var values that don't need to invert between themes.
 ------------------------------------------------------------------- */
 
-const card = 'bg-white dark:bg-[#161C3A] border border-slate-200 dark:border-white/[0.08]';
-const cardBorderB = 'border-slate-200 dark:border-white/[0.08]';
-const textPrimary = 'text-slate-900 dark:text-[#F2F4FA]';
-const textMuted = 'text-slate-500 dark:text-[#8891B8]';
-const textFaint = 'text-slate-400 dark:text-[#565F8C]';
-const divide = 'divide-slate-100 dark:divide-white/[0.06]';
-const skeleton = 'bg-slate-200 dark:bg-white/[0.06] animate-pulse rounded';
+type Tokens = {
+  cardBg: string;
+  cardBorder: string;
+  divide: string;
+  textPrimary: string;
+  textMuted: string;
+  textFaint: string;
+  skeleton: string;
+};
 
-const tealChip = 'bg-[var(--primary)]/10 dark:bg-[var(--primary)]/15 text-[var(--primary)]';
-const amberChip = 'bg-[#F2AE55]/10 dark:bg-[#F2AE55]/15 text-[#A6650F] dark:text-[#F2AE55]';
-const tealBadge = 'bg-[var(--primary)]/10 dark:bg-[var(--primary)]/15 text-[var(--primary)]';
-const dangerBadge = 'bg-[#FF6B6B]/10 dark:bg-[#FF6B6B]/15 text-[#C23B3B] dark:text-[#FF6B6B]';
+function getTokens(isDark: boolean): Tokens {
+  return {
+    cardBg: isDark ? '#161C3A' : '#FFFFFF',
+    cardBorder: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0',
+    divide: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9',
+    textPrimary: isDark ? '#F2F4FA' : '#0F172A',
+    textMuted: isDark ? '#8891B8' : '#64748B',
+    textFaint: isDark ? '#565F8C' : '#94A3B8',
+    skeleton: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0',
+  };
+}
 
-const CHART_COLORS = ['var(--primary)', '#F2AE55', '#FF6B6B', '#8891B8'];
-
-// Small accent set used to give section headers and quick links some
-// visual rhythm instead of everything reading as the same teal chip.
+// Semantic accents — brand colors that stay the same hue in both
+// themes; only the surrounding neutrals (above) need to invert.
 const ACCENTS = {
   teal: 'var(--primary)',
   amber: '#F2AE55',
+  amberTextLight: '#A6650F',
   violet: '#B18AF2',
   sky: '#5EA8D9',
   slate: '#8891B8',
   rose: '#FF6B6B',
+  roseTextLight: '#C23B3B',
 };
 
-function chipStyle(hex: string) {
+const CHART_COLORS = [ACCENTS.teal, ACCENTS.amber, ACCENTS.rose, ACCENTS.slate];
+
+function chipStyle(hex: string): React.CSSProperties {
   return { background: `${hex}1f`, color: hex };
+}
+
+function cardStyle(t: Tokens): React.CSSProperties {
+  return { background: t.cardBg, borderColor: t.cardBorder, borderWidth: 1, borderStyle: 'solid' };
 }
 
 function useIsDarkMode() {
@@ -236,6 +259,7 @@ export default function CompanyDashboardPage() {
   const [stats, setStats] = useState<CompanyStats | null>(null);
   const [loading, setLoading] = useState(true);
   const isDark = useIsDarkMode();
+  const t = useMemo(() => getTokens(isDark), [isDark]);
   const now = useNow();
 
   useEffect(() => {
@@ -311,22 +335,22 @@ export default function CompanyDashboardPage() {
       {
         label: 'Verification Completion',
         value: pct(stats.completedCases ?? 0, stats.bgvCases ?? 0),
-        fill: 'var(--primary)',
+        fill: ACCENTS.teal,
       },
       {
         label: 'Active Workload',
         value: pct(stats.inProgressCases ?? 0, stats.bgvCases ?? 0),
-        fill: '#F2AE55',
+        fill: ACCENTS.amber,
       },
       {
         label: 'Cases per Candidate',
         value: Math.min(pct(stats.bgvCases ?? 0, stats.candidates ?? 0), 100),
-        fill: '#8891B8',
+        fill: ACCENTS.slate,
       },
       {
         label: 'Report Issuance',
         value: Math.min(pct(stats.reports ?? 0, stats.completedCases ?? 0), 100),
-        fill: '#FF6B6B',
+        fill: ACCENTS.rose,
       },
     ];
   }, [stats]);
@@ -367,6 +391,7 @@ export default function CompanyDashboardPage() {
         lastName={user?.lastName}
         role={user?.role?.name}
         isDark={isDark}
+        t={t}
       />
 
       {/* Quick action center */}
@@ -380,10 +405,10 @@ export default function CompanyDashboardPage() {
           >
             <Link
               href={link.href}
-              className={`group relative overflow-hidden rounded-2xl p-4 hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 block ${card}`}
-              style={{ ['--link-accent' as any]: link.accent }}
+              className="group relative overflow-hidden rounded-2xl p-4 hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 block"
+              style={cardStyle(t)}
               onMouseEnter={(e) => (e.currentTarget.style.borderColor = `${link.accent}55`)}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = '')}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = t.cardBorder)}
             >
               <div
                 className="absolute -right-6 -top-6 h-16 w-16 rounded-full opacity-0 group-hover:opacity-[0.14] transition-opacity pointer-events-none"
@@ -392,11 +417,11 @@ export default function CompanyDashboardPage() {
               <div className="relative w-8 h-8 rounded-lg flex items-center justify-center mb-3" style={chipStyle(link.accent)}>
                 <link.icon size={15} />
               </div>
-              <p className={`relative text-[13px] font-medium flex items-center gap-1 ${textPrimary}`}>
+              <p className="relative text-[13px] font-medium flex items-center gap-1" style={{ color: t.textPrimary }}>
                 {link.label}
                 <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" style={{ color: link.accent }} />
               </p>
-              <p className={`relative text-[11px] mt-0.5 ${textFaint}`}>{link.description}</p>
+              <p className="relative text-[11px] mt-0.5" style={{ color: t.textFaint }}>{link.description}</p>
             </Link>
           </motion.div>
         ))}
@@ -404,25 +429,25 @@ export default function CompanyDashboardPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Users" value={stats?.users} icon={Users} accent={ACCENTS.violet} loading={loading} />
-        <StatCard title="Clients" value={stats?.clients} icon={Contact} accent={ACCENTS.sky} loading={loading} />
-        <StatCard title="BGV Cases" value={stats?.bgvCases} icon={FileCheck2} accent={ACCENTS.teal} loading={loading} />
-        <StatCard title="Completed Cases" value={stats?.completedCases} icon={CheckCircle2} accent={ACCENTS.amber} loading={loading} />
+        <StatCard title="Total Users" value={stats?.users} icon={Users} accent={ACCENTS.violet} loading={loading} t={t} />
+        <StatCard title="Clients" value={stats?.clients} icon={Contact} accent={ACCENTS.sky} loading={loading} t={t} />
+        <StatCard title="BGV Cases" value={stats?.bgvCases} icon={FileCheck2} accent={ACCENTS.teal} loading={loading} t={t} />
+        <StatCard title="Completed Cases" value={stats?.completedCases} icon={CheckCircle2} accent={ACCENTS.amber} loading={loading} t={t} />
       </div>
 
       {/* Secondary metrics strip */}
-      <div className={`rounded-2xl px-5 py-4 flex flex-wrap items-center gap-x-8 gap-y-3 ${card}`}>
-        <MiniStat label="Candidates" value={stats?.candidates} loading={loading} />
-        <span className={`hidden sm:block h-6 w-px ${divide.includes('divide') ? 'bg-slate-100 dark:bg-white/[0.06]' : ''}`} />
-        <MiniStat label="Pending Cases" value={stats?.pendingCases} loading={loading} />
-        <span className={`hidden sm:block h-6 w-px ${divide.includes('divide') ? 'bg-slate-100 dark:bg-white/[0.06]' : ''}`} />
-        <MiniStat label="In progress" value={stats?.inProgressCases} loading={loading} />
-        <span className={`hidden sm:block h-6 w-px ${divide.includes('divide') ? 'bg-slate-100 dark:bg-white/[0.06]' : ''}`} />
-        <MiniStat label="Reports" value={stats?.reports} loading={loading} />
+      <div className="rounded-2xl px-5 py-4 flex flex-wrap items-center gap-x-8 gap-y-3" style={cardStyle(t)}>
+        <MiniStat label="Candidates" value={stats?.candidates} loading={loading} t={t} />
+        <span className="hidden sm:block h-6 w-px" style={{ background: t.divide }} />
+        <MiniStat label="Pending Cases" value={stats?.pendingCases} loading={loading} t={t} />
+        <span className="hidden sm:block h-6 w-px" style={{ background: t.divide }} />
+        <MiniStat label="In progress" value={stats?.inProgressCases} loading={loading} t={t} />
+        <span className="hidden sm:block h-6 w-px" style={{ background: t.divide }} />
+        <MiniStat label="Reports" value={stats?.reports} loading={loading} t={t} />
       </div>
 
       {/* AI-style insight widget (real numbers, plain-language phrasing) */}
-      <AIInsightCard insights={insights} loading={loading} isDark={isDark} />
+      <AIInsightCard insights={insights} loading={loading} isDark={isDark} t={t} />
 
       {/* Analytics */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -434,6 +459,7 @@ export default function CompanyDashboardPage() {
           emptyLabel="No workspace data yet."
           isDark={isDark}
           accent={ACCENTS.teal}
+          t={t}
         />
         <PieCard
           title="BGV Case Status"
@@ -443,66 +469,71 @@ export default function CompanyDashboardPage() {
           emptyLabel="No cases recorded yet."
           isDark={isDark}
           accent={ACCENTS.amber}
+          t={t}
         />
       </div>
 
       {/* Performance overview */}
-      <PerformanceOverview kpis={kpis} loading={loading} isDark={isDark} />
+      <PerformanceOverview kpis={kpis} loading={loading} isDark={isDark} t={t} />
 
       {/* Schedule + activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ScheduleCard items={stats?.upcomingSchedule} loading={loading} />
-        <ActivityCard items={stats?.recentActivity} loading={loading} />
+        <ScheduleCard items={stats?.upcomingSchedule} loading={loading} t={t} isDark={isDark} />
+        <ActivityCard items={stats?.recentActivity} loading={loading} t={t} />
       </div>
 
       {/* Milestones */}
-      <MilestonesCard completionRate={completionRate} kpis={kpis} loading={loading} />
+      <MilestonesCard completionRate={completionRate} kpis={kpis} loading={loading} t={t} />
 
       {/* Company snapshot */}
-      <div className={`rounded-2xl overflow-hidden ${card}`}>
-        <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${cardBorderB}`}>
+      <div className="rounded-2xl overflow-hidden" style={cardStyle(t)}>
+        <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: t.cardBorder }}>
           <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(ACCENTS.teal)}>
             <Building2 size={15} />
           </div>
-          <h2 className={`text-[14px] font-semibold ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-[14px] font-semibold" style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}>
             Company Snapshot
           </h2>
         </div>
-        <dl className={`divide-y ${divide}`}>
-          <Row label="Company" value={user?.company?.name ?? '—'} />
-          <Row label="Client accounts" value={loading ? '—' : String(stats?.clients ?? 0)} />
-          <Row label="Team members" value={loading ? '—' : String(stats?.users ?? 0)} />
-          <Row label="BGV cases" value={loading ? '—' : String(stats?.bgvCases ?? 0)} />
+        <dl>
+          <Row label="Company" value={user?.company?.name ?? '—'} t={t} first />
+          <Row label="Client accounts" value={loading ? '—' : String(stats?.clients ?? 0)} t={t} />
+          <Row label="Team members" value={loading ? '—' : String(stats?.users ?? 0)} t={t} />
+          <Row label="BGV cases" value={loading ? '—' : String(stats?.bgvCases ?? 0)} t={t} />
         </dl>
       </div>
 
       {/* Logged-in user */}
-      <div className={`rounded-2xl overflow-hidden ${card}`}>
-        <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${cardBorderB}`}>
+      <div className="rounded-2xl overflow-hidden" style={cardStyle(t)}>
+        <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: t.cardBorder }}>
           <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(ACCENTS.amber)}>
             <ShieldCheck size={15} />
           </div>
-          <h2 className={`text-[14px] font-semibold ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-[14px] font-semibold" style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}>
             Your Account
           </h2>
         </div>
-        <dl className={`divide-y ${divide}`}>
-          <Row label="Name" value={`${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim() || '—'} />
-          <Row label="Email" value={user?.email || '—'} />
-          <Row label="Role" value={user?.role?.name || '—'} />
+        <dl>
+          <Row label="Name" value={`${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim() || '—'} t={t} first />
+          <Row label="Email" value={user?.email || '—'} t={t} />
+          <Row label="Role" value={user?.role?.name || '—'} t={t} />
           <Row
             label="Status"
+            t={t}
             value={
               <span
-                className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                  user?.status === 'ACTIVE' ? tealBadge : dangerBadge
-                }`}
+                className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium"
+                style={
+                  user?.status === 'ACTIVE'
+                    ? chipStyle(ACCENTS.teal)
+                    : { background: `${ACCENTS.rose}1f`, color: isDark ? ACCENTS.rose : ACCENTS.roseTextLight }
+                }
               >
                 {user?.status || '—'}
               </span>
             }
           />
-          <Row label="Company" value={user?.company?.name ?? '—'} />
+          <Row label="Company" value={user?.company?.name ?? '—'} t={t} />
         </dl>
       </div>
     </div>
@@ -513,7 +544,7 @@ export default function CompanyDashboardPage() {
    Hero greeting
 ------------------------------------------------------------------- */
 
-function DayCycleTrack({ period, accent }: { period: Period; accent: string }) {
+function DayCycleTrack({ period, accent, t }: { period: Period; accent: string; t: Tokens }) {
   return (
     <div className="flex items-center">
       {PERIOD_ORDER.map((p, i) => {
@@ -528,7 +559,7 @@ function DayCycleTrack({ period, accent }: { period: Period; accent: string }) {
               }`}
               style={active ? { background: `${accent}22`, color: accent } : undefined}
             >
-              <P.icon size={active ? 13 : 11} className={active ? '' : textFaint} />
+              <P.icon size={active ? 13 : 11} style={active ? undefined : { color: t.textFaint }} />
             </span>
             {i < PERIOD_ORDER.length - 1 && (
               <span className="h-px w-3 sm:w-4" style={{ background: `${accent}30` }} />
@@ -550,6 +581,7 @@ function HeroGreeting({
   lastName,
   role,
   isDark,
+  t,
 }: {
   period: Period;
   theme: (typeof PERIODS)[Period];
@@ -560,13 +592,13 @@ function HeroGreeting({
   lastName?: string;
   role?: string;
   isDark: boolean;
+  t: Tokens;
 }) {
   const Icon = theme.icon;
   return (
     <div
-      className={`relative overflow-hidden rounded-3xl border ${cardBorderB} bg-gradient-to-br ${
-        isDark ? theme.heroDark : theme.heroLight
-      } ${isDark ? 'bg-[#161C3A]' : 'bg-white'}`}
+      className={`relative overflow-hidden rounded-3xl border bg-gradient-to-br ${isDark ? theme.heroDark : theme.heroLight}`}
+      style={{ borderColor: t.cardBorder, background: t.cardBg }}
     >
       {/* Floating particles — ambient, decorative, low-cost CSS animation */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -606,7 +638,7 @@ function HeroGreeting({
                 animate={{ rotate: 0, scale: 1 }}
                 transition={{ type: 'spring', stiffness: 200, damping: 12 }}
                 className="relative w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: isDark ? '#161C3A' : '#FFFFFF', color: theme.accent, border: `1px solid ${theme.accent}33` }}
+                style={{ background: t.cardBg, color: theme.accent, border: `1px solid ${theme.accent}33` }}
               >
                 <Icon size={18} />
               </motion.div>
@@ -618,16 +650,16 @@ function HeroGreeting({
               >
                 {theme.greeting}
               </p>
-              <DayCycleTrack period={period} accent={theme.accent} />
+              <DayCycleTrack period={period} accent={theme.accent} t={t} />
             </div>
           </div>
           <h1
-            className={`text-[26px] font-semibold tracking-tight `}
-            style={{ fontFamily: 'var(--font-display)' }}
+            className="text-[26px] font-semibold tracking-tight"
+            style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}
           >
             {theme.greeting}, {firstName} {lastName}
           </h1>
-          <p className={`text-[13.5px] mt-1 ${textMuted}`}>{quote}</p>
+          <p className="text-[13.5px] mt-1" style={{ color: t.textMuted }}>{quote}</p>
           {role && (
             <span
               className="inline-flex items-center mt-3 rounded-full px-2.5 py-1 text-[11px] font-medium"
@@ -639,22 +671,22 @@ function HeroGreeting({
         </div>
 
         <div className="flex gap-3">
-          <div className={`rounded-2xl px-4 py-3 text-[13px] shrink-0 ${card}`}>
-            <span className={`flex items-center gap-1.5 text-[11px] ${textMuted}`}>
+          <div className="rounded-2xl px-4 py-3 text-[13px] shrink-0" style={cardStyle(t)}>
+            <span className="flex items-center gap-1.5 text-[11px]" style={{ color: t.textMuted }}>
               <Clock size={11} /> Time
             </span>
             <span
-              className={`text-[18px] font-semibold tabular-nums ${textPrimary}`}
-              style={{ fontFamily: 'var(--font-display)' }}
+              className="text-[18px] font-semibold tabular-nums"
+              style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}
             >
               {timeLabel}
             </span>
           </div>
-          <div className={`rounded-2xl px-4 py-3 text-[13px] shrink-0 ${card}`}>
-            <span className={`flex items-center gap-1.5 text-[11px] ${textMuted}`}>
+          <div className="rounded-2xl px-4 py-3 text-[13px] shrink-0" style={cardStyle(t)}>
+            <span className="flex items-center gap-1.5 text-[11px]" style={{ color: t.textMuted }}>
               <Calendar size={11} /> Date
             </span>
-            <span className={`text-[13px] font-medium ${textPrimary}`}>{dateLabel}</span>
+            <span className="text-[13px] font-medium" style={{ color: t.textPrimary }}>{dateLabel}</span>
           </div>
         </div>
       </div>
@@ -679,16 +711,18 @@ function StatCard({
   icon: Icon,
   accent,
   loading,
+  t,
 }: {
   title: string;
   value?: number;
   icon: LucideIcon;
   accent: string;
   loading: boolean;
+  t: Tokens;
 }) {
   const animated = useCountUp(value);
   return (
-    <div className={`group relative overflow-hidden rounded-2xl p-5 hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 ${card}`}>
+    <div className="group relative overflow-hidden rounded-2xl p-5 hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200" style={cardStyle(t)}>
       <div
         className="absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-[0.08] group-hover:opacity-[0.14] transition-opacity pointer-events-none"
         style={{ background: accent }}
@@ -697,28 +731,28 @@ function StatCard({
         <Icon size={17} />
       </div>
       {loading ? (
-        <div className={`relative h-[26px] w-14 ${skeleton}`} />
+        <div className="relative h-[26px] w-14 rounded animate-pulse" style={{ background: t.skeleton }} />
       ) : (
-        <p className={`relative text-[26px] font-semibold tracking-tight tabular-nums ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
+        <p className="relative text-[26px] font-semibold tracking-tight tabular-nums" style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}>
           {animated ?? '—'}
         </p>
       )}
-      <p className={`relative text-[12.5px] mt-1 ${textMuted}`}>{title}</p>
+      <p className="relative text-[12.5px] mt-1" style={{ color: t.textMuted }}>{title}</p>
     </div>
   );
 }
 
-function MiniStat({ label, value, loading }: { label: string; value?: number; loading: boolean }) {
+function MiniStat({ label, value, loading, t }: { label: string; value?: number; loading: boolean; t: Tokens }) {
   return (
     <div className="flex items-baseline gap-2">
       {loading ? (
-        <div className={`h-[18px] w-8 ${skeleton}`} />
+        <div className="h-[18px] w-8 rounded animate-pulse" style={{ background: t.skeleton }} />
       ) : (
-        <span className={`text-[16px] font-semibold ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
+        <span className="text-[16px] font-semibold" style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}>
           {value ?? '—'}
         </span>
       )}
-      <span className={`text-[11.5px] ${textFaint}`}>{label}</span>
+      <span className="text-[11.5px]" style={{ color: t.textFaint }}>{label}</span>
     </div>
   );
 }
@@ -727,7 +761,7 @@ function MiniStat({ label, value, loading }: { label: string; value?: number; lo
    AI insight widget — typewriter over real, computed sentences
 ------------------------------------------------------------------- */
 
-function AIInsightCard({ insights, loading, isDark }: { insights: string[]; loading: boolean; isDark: boolean }) {
+function AIInsightCard({ insights, loading, isDark, t }: { insights: string[]; loading: boolean; isDark: boolean; t: Tokens }) {
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState('');
 
@@ -752,9 +786,13 @@ function AIInsightCard({ insights, loading, isDark }: { insights: string[]; load
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl p-5 border ${cardBorderB} bg-gradient-to-r ${
-        isDark ? 'from-[var(--primary)]/[0.08] to-[#8891B8]/[0.05]' : 'from-[var(--primary)]/[0.06] to-slate-50'
-      }`}
+      className="relative overflow-hidden rounded-2xl p-5 border"
+      style={{
+        borderColor: t.cardBorder,
+        background: isDark
+          ? `linear-gradient(to right, color-mix(in srgb, ${ACCENTS.teal} 8%, transparent), color-mix(in srgb, ${ACCENTS.slate} 5%, transparent))`
+          : `linear-gradient(to right, color-mix(in srgb, ${ACCENTS.teal} 6%, transparent), ${t.divide})`,
+      }}
     >
       {insights.length > 1 && (
         <div className="absolute top-4 right-5 flex items-center gap-1">
@@ -764,26 +802,26 @@ function AIInsightCard({ insights, loading, isDark }: { insights: string[]; load
               className="h-1 rounded-full transition-all duration-300"
               style={{
                 width: i === index % insights.length ? 14 : 5,
-                background: i === index % insights.length ? 'var(--primary)' : `var(--primary)33`,
+                background: i === index % insights.length ? ACCENTS.teal : `color-mix(in srgb, ${ACCENTS.teal} 30%, transparent)`,
               }}
             />
           ))}
         </div>
       )}
       <div className="flex items-start gap-3">
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tealChip}`}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(ACCENTS.teal)}>
           <Sparkles size={15} />
         </div>
         <div className="min-h-[20px] flex-1 pr-10">
-          <p className={`text-[11px] uppercase tracking-[0.1em] mb-1 ${textFaint}`} style={{ fontFamily: 'var(--font-mono)' }}>
+          <p className="text-[11px] uppercase tracking-[0.1em] mb-1" style={{ fontFamily: 'var(--font-mono)', color: t.textFaint }}>
             Insight
           </p>
           {loading ? (
-            <div className={`h-[16px] w-2/3 ${skeleton}`} />
+            <div className="h-[16px] w-2/3 rounded animate-pulse" style={{ background: t.skeleton }} />
           ) : (
-            <p className={`text-[13.5px] `}>
+            <p className="text-[13.5px]" style={{ color: t.textPrimary }}>
               {typed}
-              <span className="inline-block w-[2px] h-[14px] bg-[var(--primary)] ml-0.5 align-middle animate-pulse" />
+              <span className="inline-block w-[2px] h-[14px] ml-0.5 align-middle animate-pulse" style={{ background: ACCENTS.teal }} />
             </p>
           )}
         </div>
@@ -804,6 +842,7 @@ function PieCard({
   emptyLabel,
   isDark,
   accent,
+  t,
 }: {
   title: string;
   description: string;
@@ -812,28 +851,29 @@ function PieCard({
   emptyLabel: string;
   isDark: boolean;
   accent: string;
+  t: Tokens;
 }) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
 
   return (
-    <div className={`rounded-2xl overflow-hidden ${card}`}>
-      <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${cardBorderB}`}>
+    <div className="rounded-2xl overflow-hidden" style={cardStyle(t)}>
+      <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: t.cardBorder }}>
         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(accent)}>
           <FileCheck2 size={15} />
         </div>
         <div>
-          <h2 className={`text-[14px] font-semibold ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-[14px] font-semibold" style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}>
             {title}
           </h2>
-          <p className={`text-[11.5px] ${textFaint}`}>{description}</p>
+          <p className="text-[11.5px]" style={{ color: t.textFaint }}>{description}</p>
         </div>
       </div>
 
       <div className="p-5">
         {loading ? (
-          <div className={`h-[220px] rounded-xl ${skeleton}`} />
+          <div className="h-[220px] rounded-xl animate-pulse" style={{ background: t.skeleton }} />
         ) : total === 0 ? (
-          <div className={`h-[220px] flex items-center justify-center text-[12.5px] text-center px-6 ${textFaint}`}>
+          <div className="h-[220px] flex items-center justify-center text-[12.5px] text-center px-6" style={{ color: t.textFaint }}>
             {emptyLabel}
           </div>
         ) : (
@@ -856,13 +896,13 @@ function PieCard({
               </Pie>
               <Tooltip
                 contentStyle={{
-                  background: isDark ? 'var(--primary-foreground)' : '#FFFFFF',
-                  border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(15,23,42,0.08)',
+                  background: t.cardBg,
+                  border: `1px solid ${t.cardBorder}`,
                   borderRadius: 10,
                   fontSize: 12.5,
-                  color: isDark ? '#F2F4FA' : '#0F172A',
+                  color: t.textPrimary,
                 }}
-                itemStyle={{ color: isDark ? '#F2F4FA' : '#0F172A' }}
+                itemStyle={{ color: t.textPrimary }}
               />
               <Legend
                 verticalAlign="bottom"
@@ -870,7 +910,7 @@ function PieCard({
                 iconType="circle"
                 iconSize={8}
                 formatter={(value) => (
-                  <span style={{ color: isDark ? '#AAB2D4' : '#475569', fontSize: 12 }}>{value}</span>
+                  <span style={{ color: t.textMuted, fontSize: 12 }}>{value}</span>
                 )}
               />
             </PieChart>
@@ -889,29 +929,31 @@ function PerformanceOverview({
   kpis,
   loading,
   isDark,
+  t,
 }: {
   kpis: { label: string; value: number; fill: string }[];
   loading: boolean;
   isDark: boolean;
+  t: Tokens;
 }) {
   return (
-    <div className={`rounded-2xl overflow-hidden ${card}`}>
-      <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${cardBorderB}`}>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${amberChip}`}>
+    <div className="rounded-2xl overflow-hidden" style={cardStyle(t)}>
+      <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: t.cardBorder }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(ACCENTS.amber)}>
           <Activity size={15} />
         </div>
         <div>
-          <h2 className={`text-[14px] font-semibold ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-[14px] font-semibold" style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}>
             Performance Overview
           </h2>
-          <p className={`text-[11.5px] ${textFaint}`}>Key ratios derived from current case data</p>
+          <p className="text-[11.5px]" style={{ color: t.textFaint }}>Key ratios derived from current case data</p>
         </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-5">
         {(loading ? Array.from({ length: 4 }) : kpis).map((kpi: any, i: number) => (
           <div key={i} className="flex flex-col items-center">
             {loading ? (
-              <div className={`h-[110px] w-[110px] rounded-full ${skeleton}`} />
+              <div className="h-[110px] w-[110px] rounded-full animate-pulse" style={{ background: t.skeleton }} />
             ) : (
               <ResponsiveContainer width={110} height={110}>
                 <RadialBarChart
@@ -925,21 +967,22 @@ function PerformanceOverview({
                   endAngle={-270}
                 >
                   <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                  <RadialBar background={{ fill: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(55, 50, 50, 0.06)' }} dataKey="value" cornerRadius={8} fill={kpi.fill} />
+                  <RadialBar background={{ fill: t.divide }} dataKey="value" cornerRadius={8} fill={kpi.fill} />
                   <text
                     x="50%"
                     y="50%"
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className={textPrimary}
-                    style={{ fontSize: 16, fontWeight: 600,  }}
+                    style={{ fontSize: 16, fontWeight: 600, fill: t.textPrimary }}
                   >
                     {kpi.value}%
                   </text>
                 </RadialBarChart>
               </ResponsiveContainer>
             )}
-            <p className={`text-[11.5px] text-center mt-1 ${textMuted}`}>{loading ? <span className={`inline-block h-[12px] w-16 ${skeleton}`} /> : kpi.label}</p>
+            <p className="text-[11.5px] text-center mt-1" style={{ color: t.textMuted }}>
+              {loading ? <span className="inline-block h-[12px] w-16 rounded animate-pulse" style={{ background: t.skeleton }} /> : kpi.label}
+            </p>
           </div>
         ))}
       </div>
@@ -955,22 +998,26 @@ function PerformanceOverview({
 function ScheduleCard({
   items,
   loading,
+  t,
+  isDark,
 }: {
   items?: { time: string; title: string; subtitle: string; status: 'confirmed' | 'tentative' | 'due' }[];
   loading: boolean;
+  t: Tokens;
+  isDark: boolean;
 }) {
-  const statusStyle: Record<string, string> = {
-    confirmed: tealBadge,
-    tentative: amberChip,
-    due: dangerBadge,
+  const statusStyle = (status: string): React.CSSProperties => {
+    if (status === 'confirmed') return chipStyle(ACCENTS.teal);
+    if (status === 'tentative') return { background: `${ACCENTS.amber}1f`, color: isDark ? ACCENTS.amber : ACCENTS.amberTextLight };
+    return { background: `${ACCENTS.rose}1f`, color: isDark ? ACCENTS.rose : ACCENTS.roseTextLight };
   };
   return (
-    <div className={`rounded-2xl overflow-hidden ${card}`}>
-      <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${cardBorderB}`}>
+    <div className="rounded-2xl overflow-hidden" style={cardStyle(t)}>
+      <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: t.cardBorder }}>
         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(ACCENTS.sky)}>
           <CalendarClock size={15} />
         </div>
-        <h2 className={`text-[14px] font-semibold ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-[14px] font-semibold" style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}>
           Today's Schedule
         </h2>
       </div>
@@ -978,21 +1025,25 @@ function ScheduleCard({
         {loading ? (
           <div className="space-y-3">
             {[0, 1, 2].map((i) => (
-              <div key={i} className={`h-[44px] rounded-xl ${skeleton}`} />
+              <div key={i} className="h-[44px] rounded-xl animate-pulse" style={{ background: t.skeleton }} />
             ))}
           </div>
         ) : !items || items.length === 0 ? (
-          <div className={`py-8 text-center text-[12.5px] ${textFaint}`}>Nothing scheduled for today.</div>
+          <div className="py-8 text-center text-[12.5px]" style={{ color: t.textFaint }}>Nothing scheduled for today.</div>
         ) : (
           <ul className="space-y-1">
             {items.map((item, i) => (
-              <li key={i} className={`flex items-center gap-3 py-2.5 border-b last:border-0 ${divide}`}>
-                <span className={`text-[11.5px] w-16 shrink-0 tabular-nums ${textFaint}`}>{item.time}</span>
+              <li
+                key={i}
+                className="flex items-center gap-3 py-2.5"
+                style={i < items.length - 1 ? { borderBottom: `1px solid ${t.divide}` } : undefined}
+              >
+                <span className="text-[11.5px] w-16 shrink-0 tabular-nums" style={{ color: t.textFaint }}>{item.time}</span>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-[13px] font-medium truncate ${textPrimary}`}>{item.title}</p>
-                  <p className={`text-[11.5px] truncate ${textFaint}`}>{item.subtitle}</p>
+                  <p className="text-[13px] font-medium truncate" style={{ color: t.textPrimary }}>{item.title}</p>
+                  <p className="text-[11.5px] truncate" style={{ color: t.textFaint }}>{item.subtitle}</p>
                 </div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-medium ${statusStyle[item.status]}`}>
+                <span className="shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-medium" style={statusStyle(item.status)}>
                   {item.status}
                 </span>
               </li>
@@ -1007,22 +1058,24 @@ function ScheduleCard({
 function ActivityCard({
   items,
   loading,
+  t,
 }: {
   items?: { id: string; label: string; actor: string; timestamp: string; kind: 'success' | 'info' | 'warning' }[];
   loading: boolean;
+  t: Tokens;
 }) {
-  const dotStyle: Record<string, string> = {
-    success: 'bg-[var(--primary)]',
-    info: 'bg-[#8891B8]',
-    warning: 'bg-[#F2AE55]',
+  const dotColor: Record<string, string> = {
+    success: ACCENTS.teal,
+    info: ACCENTS.slate,
+    warning: ACCENTS.amber,
   };
   return (
-    <div className={`rounded-2xl overflow-hidden ${card}`}>
-      <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${cardBorderB}`}>
+    <div className="rounded-2xl overflow-hidden" style={cardStyle(t)}>
+      <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: t.cardBorder }}>
         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(ACCENTS.violet)}>
           <ClipboardList size={15} />
         </div>
-        <h2 className={`text-[14px] font-semibold ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-[14px] font-semibold" style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}>
           Recent Activity
         </h2>
       </div>
@@ -1030,21 +1083,21 @@ function ActivityCard({
         {loading ? (
           <div className="space-y-3">
             {[0, 1, 2].map((i) => (
-              <div key={i} className={`h-[36px] rounded-xl ${skeleton}`} />
+              <div key={i} className="h-[36px] rounded-xl animate-pulse" style={{ background: t.skeleton }} />
             ))}
           </div>
         ) : !items || items.length === 0 ? (
-          <div className={`py-8 text-center text-[12.5px] ${textFaint}`}>No recent activity to show yet.</div>
+          <div className="py-8 text-center text-[12.5px]" style={{ color: t.textFaint }}>No recent activity to show yet.</div>
         ) : (
           <ul className="relative pl-4">
-            <span className="absolute left-[5px] top-1 bottom-1 w-px bg-slate-100 dark:bg-white/[0.06]" />
+            <span className="absolute left-[5px] top-1 bottom-1 w-px" style={{ background: t.divide }} />
             {items.map((item) => (
               <li key={item.id} className="relative pb-4 last:pb-0">
-                <span className={`absolute -left-4 top-1 w-2 h-2 rounded-full ${dotStyle[item.kind]}`} />
-                <p className={`text-[13px] ${textPrimary}`}>
+                <span className="absolute -left-4 top-1 w-2 h-2 rounded-full" style={{ background: dotColor[item.kind] }} />
+                <p className="text-[13px]" style={{ color: t.textPrimary }}>
                   <span className="font-medium">{item.actor}</span> {item.label}
                 </p>
-                <p className={`text-[11px] ${textFaint}`}>{item.timestamp}</p>
+                <p className="text-[11px]" style={{ color: t.textFaint }}>{item.timestamp}</p>
               </li>
             ))}
           </ul>
@@ -1062,10 +1115,12 @@ function MilestonesCard({
   completionRate,
   kpis,
   loading,
+  t,
 }: {
   completionRate: number | null;
   kpis: { label: string; value: number; fill: string }[];
   loading: boolean;
+  t: Tokens;
 }) {
   const reportKpi = kpis.find((k) => k.label === 'Report Issuance');
   const milestones = [
@@ -1086,12 +1141,12 @@ function MilestonesCard({
   ];
 
   return (
-    <div className={`rounded-2xl overflow-hidden ${card}`}>
-      <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${cardBorderB}`}>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tealChip}`}>
+    <div className="rounded-2xl overflow-hidden" style={cardStyle(t)}>
+      <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: t.cardBorder }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={chipStyle(ACCENTS.teal)}>
           <Trophy size={15} />
         </div>
-        <h2 className={`text-[14px] font-semibold ${textPrimary}`} style={{ fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-[14px] font-semibold" style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}>
           Milestones
         </h2>
       </div>
@@ -1099,20 +1154,24 @@ function MilestonesCard({
         {milestones.map((m, i) => (
           <div key={i}>
             <div className="flex items-center justify-between mb-1.5">
-              <span className={`flex items-center gap-1.5 text-[12.5px] ${textPrimary}`}>
-                <m.icon size={13} className={m.celebratory ? 'text-[var(--primary)]' : textFaint} />
+              <span className="flex items-center gap-1.5 text-[12.5px]" style={{ color: t.textPrimary }}>
+                <m.icon size={13} style={{ color: m.celebratory ? ACCENTS.teal : t.textFaint }} />
                 {m.label}
               </span>
-              <span className={`text-[12px] tabular-nums font-medium ${m.celebratory ? 'text-[var(--primary)]' : textMuted}`}>
+              <span className="text-[12px] tabular-nums font-medium" style={{ color: m.celebratory ? ACCENTS.teal : t.textMuted }}>
                 {loading ? '—' : `${m.value}%`}
               </span>
             </div>
-            <div className="h-2 rounded-full overflow-hidden bg-slate-100 dark:bg-white/[0.06]">
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: t.divide }}>
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: loading ? 0 : `${m.value}%` }}
                 transition={{ duration: 0.8, ease: 'easeOut' }}
-                className={`h-full rounded-full ${m.celebratory ? 'bg-[var(--primary)] shadow-[0_0_10px_var(--primary)]' : 'bg-[#8891B8]'}`}
+                className="h-full rounded-full"
+                style={{
+                  background: m.celebratory ? ACCENTS.teal : ACCENTS.slate,
+                  boxShadow: m.celebratory ? `0 0 10px ${ACCENTS.teal}` : undefined,
+                }}
               />
             </div>
           </div>
@@ -1122,11 +1181,14 @@ function MilestonesCard({
   );
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({ label, value, t, first }: { label: string; value: React.ReactNode; t: Tokens; first?: boolean }) {
   return (
-    <div className="flex items-center justify-between px-5 py-3.5">
-      <dt className={`text-[13px] ${textMuted}`}>{label}</dt>
-      <dd className={`text-[13.5px] ${textPrimary}`}>{value}</dd>
+    <div
+      className="flex items-center justify-between px-5 py-3.5"
+      style={first ? undefined : { borderTop: `1px solid ${t.divide}` }}
+    >
+      <dt className="text-[13px]" style={{ color: t.textMuted }}>{label}</dt>
+      <dd className="text-[13.5px]" style={{ color: t.textPrimary }}>{value}</dd>
     </div>
   );
 }

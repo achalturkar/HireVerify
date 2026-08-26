@@ -1,4 +1,4 @@
-const API_ASSET_BASE = (process.env.NEXT_PUBLIC_API || 'http://localhost:5000/api/v1').replace(/\/api\/v1\/?$/, '');
+const API_ASSET_BASE = (process.env.NEXT_PUBLIC_API || '/api/v1'  || 'http://localhost:5000/api/v1').replace(/\/api\/v1\/?$/, '');
 
 /**
  * Normalizes whatever the API sends back for a logo (or any uploaded image)

@@ -52,11 +52,81 @@ function initialsFromName(name: string) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
+/* ------------------------------------------------------------------
+   Theme tokens
+   ------------------------------------------------------------------
+   This page was previously hardcoded to a single dark palette
+   (#161C3A, #0B0F26, #8891B8, etc.) with no light-mode branch at all.
+   Everything below is resolved from the `isDark` boolean, driven by
+   the same MutationObserver pattern used elsewhere in the app, and
+   applied via inline `style` rather than Tailwind's `dark:` variant
+   (which was found to be unreliable in this project). Brand accents
+   (teal, red, amber) keep their hue in both themes; only their text
+   shade shifts for contrast against a light background.
+------------------------------------------------------------------- */
+
+function useIsDarkMode() {
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const root = document.documentElement;
+    const update = () => setIsDark(root.classList.contains('dark'));
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+}
+
+type Tokens = ReturnType<typeof getTokens>;
+
+const ACCENT = '#3FDCC0';
+const ACCENT_LIGHT_TEXT = '#0E8C78';
+const DANGER = '#FF6B6B';
+const DANGER_LIGHT_TEXT = '#C23B3B';
+const WARNING = '#F2AE55';
+const WARNING_LIGHT_TEXT = '#A6650F';
+
+function getTokens(isDark: boolean) {
+  return {
+    cardBg: isDark ? '#161C3A' : '#FFFFFF',
+    cardBorder: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0',
+    textPrimary: isDark ? '#F2F4FA' : '#0F172A',
+    textSubtle: isDark ? '#AAB2D4' : '#475569',
+    textMuted: isDark ? '#8891B8' : '#64748B',
+    textFaint: isDark ? '#565F8C' : '#94A3B8',
+    accent: isDark ? ACCENT : ACCENT_LIGHT_TEXT,
+    accentSoftBg: 'rgba(63,220,192,0.10)',
+    accentBorder: 'rgba(63,220,192,0.25)',
+    dropzoneBg: isDark ? '#0F1330' : '#F8FAFC',
+    dropzoneBorder: isDark ? 'rgba(255,255,255,0.12)' : '#CBD5E1',
+    checkerBg: isDark ? '#0B0F26' : '#FFFFFF',
+    checkerLine: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.05)',
+    removeBtnBg: isDark ? '#161C3A' : '#FFFFFF',
+    removeBtnBorder: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0',
+    swatchRing: isDark ? 'rgba(255,255,255,0.2)' : '#E2E8F0',
+    danger: isDark ? DANGER : DANGER_LIGHT_TEXT,
+    dangerSoftBg: 'rgba(255,107,107,0.10)',
+    dangerBorder: 'rgba(255,107,107,0.25)',
+    warning: isDark ? WARNING : WARNING_LIGHT_TEXT,
+  };
+}
+
+function checkerStyle(isDark: boolean): React.CSSProperties {
+  const line = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.045)';
+  return {
+    backgroundImage: `linear-gradient(45deg, ${line} 25%, transparent 25%), linear-gradient(-45deg, ${line} 25%, transparent 25%), linear-gradient(45deg, transparent 75%, ${line} 75%), linear-gradient(-45deg, transparent 75%, ${line} 75%)`,
+    backgroundSize: '12px 12px',
+    backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0px',
+    backgroundColor: isDark ? '#0B0F26' : '#F8FAFC',
+  };
+}
+
+function FieldLabel({ children, hint, t }: { children: React.ReactNode; hint?: string; t: Tokens }) {
   return (
     <label className="mb-1.5 flex items-baseline justify-between">
-      <span className="text-[12px] font-medium text-[#AAB2D4]">{children}</span>
-      {hint && <span className="text-[11px] text-[#565F8C]">{hint}</span>}
+      <span className="text-[12px] font-medium" style={{ color: t.textSubtle }}>{children}</span>
+      {hint && <span className="text-[11px]" style={{ color: t.textFaint }}>{hint}</span>}
     </label>
   );
 }
@@ -66,25 +136,27 @@ function SectionCard({
   title,
   description,
   children,
+  t,
 }: {
   eyebrow: string;
   title: string;
   description?: string;
   children: React.ReactNode;
+  t: Tokens;
 }) {
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-[#161C3A] p-6">
+    <div className="rounded-2xl border p-6" style={{ background: t.cardBg, borderColor: t.cardBorder }}>
       <div className="mb-5">
         <p
-          className="text-[10.5px] uppercase tracking-[0.14em] text-[#3FDCC0]/80 mb-1"
-          style={{ fontFamily: 'var(--font-mono)' }}
+          className="text-[10.5px] uppercase tracking-[0.14em] mb-1"
+          style={{ fontFamily: 'var(--font-mono)', color: t.accent, opacity: 0.85 }}
         >
           {eyebrow}
         </p>
-        <h2 className="text-[16px] font-semibold text-[#F2F4FA]" style={{ fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-[16px] font-semibold" style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}>
           {title}
         </h2>
-        {description && <p className="text-[12.5px] text-[#8891B8] mt-1">{description}</p>}
+        {description && <p className="text-[12.5px] mt-1" style={{ color: t.textMuted }}>{description}</p>}
       </div>
       {children}
     </div>
@@ -123,6 +195,8 @@ function ImageDropzone({
   onRemove,
   disabled,
   shape = 'square',
+  isDark,
+  t,
 }: {
   label: string;
   description: React.ReactNode;
@@ -134,6 +208,8 @@ function ImageDropzone({
   onRemove: () => void;
   disabled?: boolean;
   shape?: 'square' | 'wide';
+  isDark: boolean;
+  t: Tokens;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -164,24 +240,20 @@ function ImageDropzone({
         }}
         onDragLeave={() => setDragActive(false)}
         onDrop={disabled ? undefined : handleDrop}
-        className={`group relative shrink-0 rounded-2xl border border-dashed p-1 transition-colors ${
-          dragActive ? 'border-[#3FDCC0] bg-[#3FDCC0]/5' : 'border-white/[0.12] bg-[#0F1330]'
-        }`}
+        className="group relative shrink-0 rounded-2xl border border-dashed p-1 transition-colors"
+        style={{
+          borderColor: dragActive ? ACCENT : t.dropzoneBorder,
+          background: dragActive ? t.accentSoftBg : t.dropzoneBg,
+        }}
       >
         <div
           className={`relative flex items-center justify-center overflow-hidden rounded-xl ${boxSizeClass}`}
-          style={{
-            backgroundImage:
-              'linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.04) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.04) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.04) 75%)',
-            backgroundSize: '12px 12px',
-            backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0px',
-            backgroundColor: '#0B0F26',
-          }}
+          style={checkerStyle(isDark)}
         >
           {displayed ? (
             <img src={displayed} alt={label} className="h-full w-full object-contain p-2" />
           ) : (
-            <div className="flex flex-col items-center gap-1 text-[#3FDCC0]">
+            <div className="flex flex-col items-center gap-1" style={{ color: t.accent }}>
               {fallbackInitials ? (
                 <span className="text-[20px] font-semibold" style={{ fontFamily: 'var(--font-display)' }}>
                   {fallbackInitials}
@@ -196,7 +268,10 @@ function ImageDropzone({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-[#0B0F26]/0 text-transparent transition-all group-hover:bg-[#0B0F26]/70 group-hover:text-[#F2F4FA] disabled:cursor-not-allowed"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-transparent transition-all group-hover:text-white disabled:cursor-not-allowed"
+            style={{ background: 'transparent' }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = isDark ? 'rgba(11,15,38,0.7)' : 'rgba(15,23,42,0.55)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             aria-label={`Upload ${label.toLowerCase()}`}
           >
             <Camera size={16} />
@@ -209,7 +284,10 @@ function ImageDropzone({
             type="button"
             onClick={onRemove}
             disabled={disabled}
-            className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-[#161C3A] text-[#8891B8] shadow-sm transition-colors hover:text-[#FF6B6B] disabled:cursor-not-allowed"
+            className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition-colors disabled:cursor-not-allowed"
+            style={{ background: t.removeBtnBg, borderColor: t.removeBtnBorder, color: t.textMuted }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = t.danger)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = t.textMuted)}
             aria-label={`Remove ${label.toLowerCase()}`}
             title={`Remove ${label.toLowerCase()}`}
           >
@@ -227,25 +305,26 @@ function ImageDropzone({
       </div>
 
       <div className="flex-1 space-y-2 pt-1">
-        <p className="text-[13px] text-[#AAB2D4]">
+        <p className="text-[13px]" style={{ color: t.textSubtle }}>
           {description}{' '}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled}
-            className="font-medium text-[#3FDCC0] hover:underline disabled:cursor-not-allowed"
+            className="font-medium hover:underline disabled:cursor-not-allowed"
+            style={{ color: t.accent }}
           >
             browse your files
           </button>
           .
         </p>
-        <p className="text-[12px] text-[#565F8C]">{hint}</p>
-        {state.error && <p className="text-[12px] text-[#FF6B6B]">{state.error}</p>}
+        <p className="text-[12px]" style={{ color: t.textFaint }}>{hint}</p>
+        {state.error && <p className="text-[12px]" style={{ color: t.danger }}>{state.error}</p>}
         {state.file && !state.error && (
-          <p className="text-[12px] text-[#3FDCC0]">"{state.file.name}" selected — save changes to upload.</p>
+          <p className="text-[12px]" style={{ color: t.accent }}>&quot;{state.file.name}&quot; selected — save changes to upload.</p>
         )}
         {state.remove && !state.file && (
-          <p className="text-[12px] text-[#F2AE55]">{label} will be removed when you save.</p>
+          <p className="text-[12px]" style={{ color: t.warning }}>{label} will be removed when you save.</p>
         )}
       </div>
     </div>
@@ -258,6 +337,8 @@ const primaryColorPalette = ['#0E8C78', '#1F417A', '#2563EB', '#7C3AED', '#C2410
 export default function CompanyProfilePage() {
   const { user, accessToken, refreshUser } = useAuth();
   const companyId = user?.company?.id;
+  const isDark = useIsDarkMode();
+  const t = getTokens(isDark);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -431,15 +512,15 @@ export default function CompanyProfilePage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p
-            className="text-[11px] uppercase tracking-[0.14em] text-[#3FDCC0] mb-1.5"
-            style={{ fontFamily: 'var(--font-mono)' }}
+            className="text-[11px] uppercase tracking-[0.14em] mb-1.5"
+            style={{ fontFamily: 'var(--font-mono)', color: t.accent }}
           >
             Company Profile
           </p>
-          <h1 className="text-[26px] font-semibold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-[26px] font-semibold tracking-tight" style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}>
             Your company details
           </h1>
-          <p className="text-[13.5px] text-[#8891B8] mt-1">
+          <p className="text-[13.5px] mt-1" style={{ color: t.textMuted }}>
             Update branding, contact info, logo, signature, and stamp.
           </p>
         </div>
@@ -447,11 +528,12 @@ export default function CompanyProfilePage() {
 
       {banner && (
         <div
-          className={`flex items-center justify-between rounded-xl border px-4 py-3 text-[13px] ${
+          className="flex items-center justify-between rounded-xl border px-4 py-3 text-[13px]"
+          style={
             banner.tone === 'success'
-              ? 'bg-[#3FDCC0]/10 border-[#3FDCC0]/25 text-[#3FDCC0]'
-              : 'bg-[#FF6B6B]/10 border-[#FF6B6B]/25 text-[#FF6B6B]'
-          }`}
+              ? { background: t.accentSoftBg, borderColor: t.accentBorder, color: t.accent }
+              : { background: t.dangerSoftBg, borderColor: t.dangerBorder, color: t.danger }
+          }
         >
           <span>{banner.text}</span>
           <button type="button" onClick={() => setBanner(null)} className="opacity-70 hover:opacity-100 ml-3">
@@ -466,6 +548,7 @@ export default function CompanyProfilePage() {
           eyebrow="Identity"
           title="Logo"
           description="Your logo appears on BGV reports, verification emails, and the HireVerify portal."
+          t={t}
         >
           <ImageDropzone
             label="Logo"
@@ -477,6 +560,8 @@ export default function CompanyProfilePage() {
             onFile={handleFile('logo')}
             onRemove={handleRemove('logo')}
             disabled={loading}
+            isDark={isDark}
+            t={t}
           />
         </SectionCard>
 
@@ -485,6 +570,7 @@ export default function CompanyProfilePage() {
           eyebrow="Authorization"
           title="Signatory signature"
           description="Appears on generated reports and certificates as the authorized signature."
+          t={t}
         >
           <ImageDropzone
             label="Signature"
@@ -496,6 +582,8 @@ export default function CompanyProfilePage() {
             onRemove={handleRemove('signature')}
             disabled={loading}
             shape="wide"
+            isDark={isDark}
+            t={t}
           />
         </SectionCard>
 
@@ -504,6 +592,7 @@ export default function CompanyProfilePage() {
           eyebrow="Authorization"
           title="Company stamp"
           description="Your official seal, shown alongside the signature on reports and certificates."
+          t={t}
         >
           <ImageDropzone
             label="Stamp"
@@ -514,14 +603,16 @@ export default function CompanyProfilePage() {
             onFile={handleFile('stamp')}
             onRemove={handleRemove('stamp')}
             disabled={loading}
+            isDark={isDark}
+            t={t}
           />
         </SectionCard>
 
         {/* Company details */}
-        <SectionCard eyebrow="Details" title="Company information">
+        <SectionCard eyebrow="Details" title="Company information" t={t}>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <FieldLabel>Company name</FieldLabel>
+              <FieldLabel t={t}>Company name</FieldLabel>
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -531,7 +622,7 @@ export default function CompanyProfilePage() {
               />
             </div>
             <div>
-              <FieldLabel hint="Used in your portal URL">Slug</FieldLabel>
+              <FieldLabel hint="Used in your portal URL" t={t}>Slug</FieldLabel>
               <input
                 value={form.slug}
                 onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
@@ -540,7 +631,7 @@ export default function CompanyProfilePage() {
               />
             </div>
             <div>
-              <FieldLabel hint="Used in BGV references">Company short code</FieldLabel>
+              <FieldLabel hint="Used in BGV references" t={t}>Company short code</FieldLabel>
               <input
                 value={form.shortCode}
                 onChange={(e) => setForm((f) => ({ ...f, shortCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) }))}
@@ -551,9 +642,9 @@ export default function CompanyProfilePage() {
               />
             </div>
             <div>
-              <FieldLabel>Contact email</FieldLabel>
+              <FieldLabel t={t}>Contact email</FieldLabel>
               <div className="relative">
-                <Mail size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#565F8C]" />
+                <Mail size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: t.textFaint }} />
                 <input
                   type="email"
                   value={form.contactEmail}
@@ -564,9 +655,9 @@ export default function CompanyProfilePage() {
               </div>
             </div>
             <div>
-              <FieldLabel>Contact phone</FieldLabel>
+              <FieldLabel t={t}>Contact phone</FieldLabel>
               <div className="relative">
-                <Phone size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#565F8C]" />
+                <Phone size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: t.textFaint }} />
                 <input
                   value={form.contactPhone}
                   onChange={(e) => setForm((f) => ({ ...f, contactPhone: e.target.value }))}
@@ -576,14 +667,15 @@ export default function CompanyProfilePage() {
               </div>
             </div>
             <div>
-              <FieldLabel hint="Used on reports & the portal">Primary color</FieldLabel>
+              <FieldLabel hint="Used on reports & the portal" t={t}>Primary color</FieldLabel>
               <div className="flex gap-2">
                 <input
                   type="color"
                   value={/^#[0-9a-f]{6}$/i.test(form.primaryColor) ? form.primaryColor : '#3FDCC0'}
                   onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value.toUpperCase() }))}
                   disabled={loading}
-                  className="h-11 w-12 cursor-pointer rounded-lg border border-white/10 bg-[#0F1330] p-1 disabled:cursor-not-allowed"
+                  className="h-11 w-12 cursor-pointer rounded-lg border p-1 disabled:cursor-not-allowed"
+                  style={{ background: t.dropzoneBg, borderColor: t.dropzoneBorder }}
                   aria-label="Choose primary color"
                 />
                 <input
@@ -596,28 +688,35 @@ export default function CompanyProfilePage() {
                 />
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                {primaryColorPalette.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, primaryColor: color }))}
-                    disabled={loading}
-                    className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50 ${form.primaryColor.toUpperCase() === color ? 'border-[#F2F4FA] ring-2 ring-[#3FDCC0]/40' : 'border-white/20'}`}
-                    style={{ backgroundColor: color }}
-                    aria-label={`Select ${color}`}
-                    title={color}
-                  />
-                ))}
-                <span className="text-[11px] text-[#8891B8]">Select a palette color or enter a hex code.</span>
+                {primaryColorPalette.map((color) => {
+                  const selected = form.primaryColor.toUpperCase() === color;
+                  return (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, primaryColor: color }))}
+                      disabled={loading}
+                      className="h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{
+                        backgroundColor: color,
+                        borderColor: selected ? t.textPrimary : t.swatchRing,
+                        boxShadow: selected ? `0 0 0 2px ${ACCENT}66` : undefined,
+                      }}
+                      aria-label={`Select ${color}`}
+                      title={color}
+                    />
+                  );
+                })}
+                <span className="text-[11px]" style={{ color: t.textMuted }}>Select a palette color or enter a hex code.</span>
               </div>
             </div>
           </div>
         </SectionCard>
 
         {/* Address */}
-        <SectionCard eyebrow="Location" title="Address">
+        <SectionCard eyebrow="Location" title="Address" t={t}>
           <div className="relative">
-            <MapPin size={14} className="pointer-events-none absolute left-3 top-3 text-[#565F8C]" />
+            <MapPin size={14} className="pointer-events-none absolute left-3 top-3" style={{ color: t.textFaint }} />
             <textarea
               value={form.address}
               onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
@@ -630,9 +729,9 @@ export default function CompanyProfilePage() {
         </SectionCard>
 
         {/* Save bar */}
-        <div className="flex items-center justify-end gap-3 rounded-2xl border border-white/[0.08] bg-[#161C3A] px-6 py-4">
+        <div className="flex items-center justify-end gap-3 rounded-2xl border px-6 py-4" style={{ background: t.cardBg, borderColor: t.cardBorder }}>
           {loading && (
-            <span className="mr-auto flex items-center gap-2 text-[12.5px] text-[#565F8C]">
+            <span className="mr-auto flex items-center gap-2 text-[12.5px]" style={{ color: t.textFaint }}>
               <Loader2 size={13} className="animate-spin" />
               Loading company profile…
             </span>
@@ -640,7 +739,8 @@ export default function CompanyProfilePage() {
           <button
             type="submit"
             disabled={saving || loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#3FDCC0] px-5 py-2.5 text-[13.5px] font-semibold text-[#0B0F26] transition-colors hover:bg-[#3FDCC0]/90 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-[13.5px] font-semibold transition-colors disabled:opacity-60"
+            style={{ background: ACCENT, color: '#0B0F26' }}
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {saving ? 'Saving…' : 'Save changes'}
