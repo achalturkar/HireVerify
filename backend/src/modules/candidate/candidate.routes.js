@@ -3,7 +3,7 @@
 const express = require('express');
 const controller = require('./candidate.controller');
 const { authenticate } = require('../../middleware/auth.middleware');
-const { authorize, requireRole } = require('../../middleware/authorize.middleware');
+const { authorize } = require('../../middleware/authorize.middleware');
 const { validate } = require('../../middleware/validate.middleware');
 const v = require('./candidate.validator');
 
@@ -17,6 +17,6 @@ router.route('/')
 router.route('/:id')
   .get(authorize('candidate.view'), validate(v.idParamValidator), controller.getCandidate)
   .put(authorize('candidate.update'), validate(v.updateValidator), controller.updateCandidate)
-  .delete(requireRole({ superAdmin: true }), validate(v.idParamValidator), controller.deleteCandidate);
+  .delete(authorize('candidate.delete'), validate(v.idParamValidator), controller.deleteCandidate);
 
 module.exports = router;

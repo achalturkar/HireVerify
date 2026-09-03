@@ -17,4 +17,5 @@ router.patch('/:id', authorize('bgv.case.update'), validate(v.updateMetaValidato
 router.patch('/:id/checks', authorize('bgv.case.update'), validate(v.updateChecksValidator), controller.updateChecks);
 router.delete('/:id', authorize('bgv.case.update'), validate(v.idParamValidator), controller.deleteCase);
 router.get('/:id/report', authorize('bgv.report.download'), validate(v.idParamValidator), controller.downloadReport);
+router.post('/reports/email', authorize('bgv.report.send'), validate(v.emailReportsValidator), controller.sendReportsByEmail);
 module.exports = router;

@@ -8,7 +8,7 @@ const findById = (id, companyId) => prisma.bGVCase.findFirst({
   where: { id, companyId },
   include: {
     candidate: { select: { id: true, candidateCode: true, firstName: true, lastName: true, email: true, phone: true, gender: true, dateOfBirth: true, currentAddress: true, permanentAddress: true } },
-    client: { select: { id: true, name: true, clientCode: true, company: { select: { name: true, shortCode: true, primaryColor: true, logoUrl: true, address: true } } } },
+    client: { select: { id: true, name: true, clientCode: true, contactEmail: true, company: { select: { name: true, contactEmail: true, shortCode: true, primaryColor: true, logoUrl: true, address: true } } } },
     checks: { include: { documents: true } },
     events: { orderBy: { createdAt: 'desc' }, take: 50 },
     report: { select: { id: true, reportNumber: true, status: true, overallResult: true } },
@@ -18,7 +18,7 @@ const findById = (id, companyId) => prisma.bGVCase.findFirst({
 const findByCaseNumber = (caseNumber) => prisma.bGVCase.findUnique({ where: { caseNumber } });
 const countByCompany = (companyId) => prisma.bGVCase.count({ where: { companyId } });
 
-const list = async ({ companyId, clientId, candidateId, status, overallResult, search, initiatedFrom, initiatedTo, skip, limit, sortBy, sortOrder }) => {
+const list = async ({ companyId, clientId, candidateId, status, overallResult, search, initiatedFrom, initiatedTo, completedFrom, completedTo, skip, limit, sortBy, sortOrder }) => {
   const where = {
     companyId,
     ...(clientId ? { clientId } : {}),
@@ -26,6 +26,7 @@ const list = async ({ companyId, clientId, candidateId, status, overallResult, s
     ...(status ? { status } : {}),
     ...(overallResult ? { overallResult } : {}),
     ...((initiatedFrom || initiatedTo) ? { initiatedAt: { ...(initiatedFrom ? { gte: new Date(initiatedFrom) } : {}), ...(initiatedTo ? { lt: new Date(new Date(initiatedTo).getTime() + 24 * 60 * 60 * 1000) } : {}) } } : {}),
+    ...((completedFrom || completedTo) ? { completedAt: { ...(completedFrom ? { gte: new Date(completedFrom) } : {}), ...(completedTo ? { lt: new Date(new Date(completedTo).getTime() + 24 * 60 * 60 * 1000) } : {}) } } : {}),
     ...(search ? { OR: [
       { caseNumber: { contains: search, mode: 'insensitive' } },
       { clientReference: { contains: search, mode: 'insensitive' } },
@@ -36,7 +37,7 @@ const list = async ({ companyId, clientId, candidateId, status, overallResult, s
   const [items, total] = await Promise.all([
     prisma.bGVCase.findMany({
       where, skip, take: limit, orderBy: { [sortBy]: sortOrder },
-      include: { candidate: { select: { id: true, candidateCode: true, firstName: true, lastName: true, email: true } }, client: { select: { id: true, name: true, clientCode: true } }, _count: { select: { checks: true } } },
+      include: { candidate: { select: { id: true, candidateCode: true, firstName: true, lastName: true, email: true } }, client: { select: { id: true, name: true, clientCode: true, contactEmail: true } }, _count: { select: { checks: true } } },
     }),
     prisma.bGVCase.count({ where }),
   ]);

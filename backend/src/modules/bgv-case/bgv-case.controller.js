@@ -7,6 +7,8 @@ const { writeAudit } = require('../../utils/audit');
 const XLSX = require('xlsx');
 const service = require('./bgv-case.service');
 const { buildReport } = require('./bgv-report.generator');
+const { sendMail, buildBgvReportsEmail } = require('../../utils/mailer');
+const { BadRequestError } = require('../../utils/errors');
 
 const fileNamePart = (value, fallback) => String(value || fallback).trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '') || fallback;
 
@@ -20,7 +22,7 @@ const getCase = asyncHandler(async (req, res) => success(res, { message: 'BGV ca
 
 const listCases = asyncHandler(async (req, res) => {
   const pagination = parsePagination(req.query);
-  const { items, total } = await service.list({ companyId: req.user.companyId, query: { ...pagination, search: req.query.search, clientId: req.query.clientId, candidateId: req.query.candidateId, status: req.query.status, overallResult: req.query.overallResult, initiatedFrom: req.query.initiatedFrom, initiatedTo: req.query.initiatedTo, sortBy: req.query.sortBy, sortOrder: req.query.sortOrder } });
+  const { items, total } = await service.list({ companyId: req.user.companyId, query: { ...pagination, search: req.query.search, clientId: req.query.clientId, candidateId: req.query.candidateId, status: req.query.status, overallResult: req.query.overallResult, initiatedFrom: req.query.initiatedFrom, initiatedTo: req.query.initiatedTo, completedFrom: req.query.completedFrom, completedTo: req.query.completedTo, sortBy: req.query.sortBy, sortOrder: req.query.sortOrder } });
   return success(res, { message: 'BGV cases', data: items, meta: buildMeta({ page: pagination.page, limit: pagination.limit, total }) });
 });
 
@@ -87,5 +89,25 @@ const downloadReport = asyncHandler(async (req, res) => {
   doc.pipe(res);
   doc.end();
 });
+
+const sendReportsByEmail = asyncHandler(async (req, res) => {
+  const items = await Promise.all(req.body.caseIds.map((id) => service.getById({ id, companyId: req.user.companyId })));
+  if (items.some((item) => item.status !== 'COMPLETED')) throw new BadRequestError('Only completed BGV cases can be emailed.');
+  const clientIds = new Set(items.map((item) => item.clientId));
+  if (clientIds.size !== 1) throw new BadRequestError('Select reports for one client only.');
+  const recipient = items[0].client?.contactEmail;
+  if (!recipient) throw new BadRequestError('The selected client does not have a contact email.');
+  const attachments = await Promise.all(items.map(async (item) => {
+    const doc = await buildReport(item);
+    const chunks = [];
+    const pdf = new Promise((resolve, reject) => { doc.on('data', (chunk) => chunks.push(chunk)); doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject); });
+    doc.end();
+    return { filename: `${item.caseNumber}_BGV_FinalReport.pdf`, content: await pdf, contentType: 'application/pdf' };
+  }));
+  const companyName = items[0].client?.company?.name || 'HireAssess';
+  const mail = buildBgvReportsEmail({ clientName: items[0].client?.name || 'Client', companyName, reports: items.map((item) => ({ candidateName: `${item.candidate?.firstName || ''} ${item.candidate?.lastName || ''}`.trim() || 'Candidate', caseNumber: item.caseNumber, completedDate: item.completedAt ? new Date(item.completedAt).toLocaleDateString('en-GB') : 'Completed' })) });
+  await sendMail({ to: recipient, ...mail, attachments, replyTo: items[0].client?.company?.contactEmail || undefined });
+  return success(res, { message: `${items.length} report${items.length === 1 ? '' : 's'} sent to ${recipient}.` });
+});
  
-module.exports = { createCase, getCase, listCases, exportCases, transitionCase, updateCaseMeta, updateChecks, deleteCase, downloadReport };
+module.exports = { createCase, getCase, listCases, exportCases, transitionCase, updateCaseMeta, updateChecks, deleteCase, downloadReport, sendReportsByEmail };

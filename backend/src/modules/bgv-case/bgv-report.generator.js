@@ -686,6 +686,7 @@ async function buildReport(item) {
   drawPageChrome(doc, logo);
   doc.y = 120;
   drawBand(doc, 'DISCLAIMER');
+  doc.y += 12;
   doc
     .fillColor(colorsFor(doc).muted)
     .font('Helvetica')

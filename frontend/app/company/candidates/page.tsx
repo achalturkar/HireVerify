@@ -50,7 +50,7 @@ export default function CandidatesPage() {
     } finally { setSubmitting(false); }
   };
 
-  const remove = async () => { if (!deleteTarget) return; setSubmitting(true); try { await deleteCandidate(deleteTarget.id, accessToken); setDeleteTarget(null); await load(); } finally { setSubmitting(false); } };
+  const remove = async () => { if (!deleteTarget) return; setSubmitting(true); setError(null); try { await deleteCandidate(deleteTarget.id, accessToken); setDeleteTarget(null); await load(); } catch (err) { setError(err instanceof ApiError ? err.message : 'Could not delete candidate.'); } finally { setSubmitting(false); } };
   const clientMap = new Map(clients.map((client) => [client.id, client.name]));
 
   return <div className="max-w-6xl mx-auto space-y-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[11px] uppercase tracking-[0.14em] text-[var(--primary)]">Verification subjects</p><h1 className="text-[26px] font-semibold">Candidates</h1><p className="text-[13px] text-[var(--muted)] mt-1">People linked to background verification cases.</p></div><button onClick={() => { setActive(null); setModal('create'); }} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[13px] font-semibold text-[var(--primary-foreground)]"><Plus size={15} /> Add candidate</button></div>

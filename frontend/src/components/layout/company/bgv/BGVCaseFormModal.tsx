@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { FileCheck2, Loader2, X } from 'lucide-react';
-import { listClients } from '@/src/lib/api/clients';
+import { createClient, listClients } from '@/src/lib/api/clients';
 import { listCandidates } from '@/src/lib/api/candidates';
+import { useAuth } from '@/src/auth/AuthProvider';
 import type { Client } from '@/src/types/client';
 import type { Candidate } from '@/src/types/candidate';
 import type { CreateBGVCasePayload, VerificationProvider, VerificationType } from '@/src/types/bgv';
@@ -33,6 +34,7 @@ const checkTypes: { type: VerificationType; label: string; provider: Verificatio
 const inputClass = 'w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[#3FDCC0]/50';
 
 export default function BGVCaseFormModal({ token, submitting, error, onClose, onSubmit }: Props) {
+  const { user } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [clientId, setClientId] = useState('');
@@ -51,9 +53,17 @@ export default function BGVCaseFormModal({ token, submitting, error, onClose, on
       listCandidates({ page: 1, limit: 200, status: 'PENDING', sortBy: 'createdAt', sortOrder: 'desc' }, token),
     ]).then(([clientResult, candidateResult]) => {
       if (!cancelled) { setClients(clientResult.items); setCandidates(candidateResult.items); }
+      const individual = clientResult.items.find((client) => client.name === 'Individual / Direct Candidate');
+      if (!individual && user?.companyId) {
+        const clientCode = `IND-${user.companyId.replaceAll('-', '').slice(0, 12).toUpperCase()}`;
+        return createClient({ companyId: user.companyId, clientCode, name: 'Individual / Direct Candidate', industry: 'Individual' }, token)
+          .then((created) => { if (!cancelled) setClients((current) => [...current, created]); })
+          .catch(() => undefined);
+      }
+      return undefined;
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, user?.companyId]);
 
   const availableCandidates = clientId ? candidates.filter((candidate) => candidate.clientId === clientId) : candidates;
   const toggleCheck = (type: VerificationType) => setSelectedChecks((current) => current.includes(type) ? current.filter((item) => item !== type) : [...current, type]);

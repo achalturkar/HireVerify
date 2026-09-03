@@ -26,8 +26,22 @@ const toDto = (candidate) => ({
   bgvCaseCount: candidate._count?.bgvCases,
 });
 
-const createCandidateCode = () =>
-  `CAN-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+const createCandidateCode = async (clientId, companyId) => {
+  const client = await prisma.client.findFirst({
+    where: { id: clientId, companyId, isDeleted: false },
+    select: { clientCode: true },
+  });
+  if (!client) throw new NotFoundError('Client not found');
+
+  const year = new Date().getFullYear();
+  const startOfYear = new Date(Date.UTC(year, 0, 1));
+  const startOfNextYear = new Date(Date.UTC(year + 1, 0, 1));
+  const count = await prisma.candidate.count({
+    where: { companyId, clientId, createdAt: { gte: startOfYear, lt: startOfNextYear } },
+  });
+
+  return `${client.clientCode}-${year}-${String(count + 1).padStart(4, '0')}`;
+};
 
 const normalizeDateOfBirth = (value) => {
   if (value === undefined) return undefined;
@@ -62,7 +76,7 @@ const create = async ({ payload, companyId, currentUser }) => {
   const candidate = await repo.create({
     companyId,
     clientId,
-    candidateCode: createCandidateCode(),
+    candidateCode: await createCandidateCode(clientId, companyId),
     firstName,
     lastName,
     email: email.toLowerCase(),

@@ -84,7 +84,7 @@ const fromHeader = () => `"${smtpConfig.fromName}" <${smtpConfig.fromEmail}>`;
  * (services) are expected to wrap this in try/catch if the email is
  * best-effort (e.g. don't block invitation creation if mail fails).
  */
-const sendMail = async ({ to, subject, html, text }) => {
+const sendMail = async ({ to, subject, html, text, attachments, replyTo }) => {
   if (!to) {
     throw new Error('No recipient email provided');
   }
@@ -98,9 +98,11 @@ const sendMail = async ({ to, subject, html, text }) => {
     const info = await transporter.sendMail({
       from: fromHeader(),
       to,
+      ...(replyTo ? { replyTo } : {}),
       subject,
       html,
       text: mailText,
+      ...(attachments ? { attachments } : {}),
     });
     logger.info(`Mailer: sent "${subject}" to ${to} (messageId: ${info.messageId})`);
     return info;
@@ -125,12 +127,12 @@ const BRAND_MUTED = '#5B6280';
 const BRAND_BORDER = '#E4E7F0';
 const BRAND_WARNING = '#B45309';
 
-const PLATFORM_LOGO_URL = `${config.frontendUrl.replace(/\/$/, '')}/hireassess-logo.svg`;
+const PLATFORM_LOGO_URL = `${config.frontendUrl.replace(/\/$/, '')}/hireverify-logo.svg`;
 
 /**
  * `logoUrl` should be a fully-resolved absolute URL (e.g. a company's
  * uploaded logo already run through whatever asset-URL resolver you use
- * elsewhere in the app). Falls back to the HireAssess mark when no company
+ * elsewhere in the app). Falls back to the HireVerify mark when no company
  * logo is available, so emails always render with *some* logo.
  */
 const emailShell = ({ logoUrl, bodyHtml, signOffName, footerNote }) => `
@@ -151,7 +153,8 @@ const emailShell = ({ logoUrl, bodyHtml, signOffName, footerNote }) => `
         : ''
     }
     <p style="text-align:center; color:${BRAND_MUTED}; font-size: 11px; margin: 6px 8px 0;">
-      Powered by <span style="color:${BRAND_INK}; font-weight:600;">Hire</span><span style="color:#0E7C6B; font-weight:600;">Assess</span>
+      Powered by <span style="color:${BRAND_INK}; font-weight:600;">Hire</span><span style="color:#0E7C6B; font-weight:600;">Verify</span><br />
+      <span style="color:${BRAND_MUTED};">BrainHunt Ventures</span>
     </p>
   </div>
 `;
@@ -161,6 +164,34 @@ const ctaButton = (href, label) => `
     ${label}
   </a>
 `;
+
+const escapeHtml = (value) => String(value || '')
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#39;');
+
+const buildBgvReportsEmail = ({ clientName, companyName, reports }) => {
+  const reportRows = reports.map((report) => `
+    <tr>
+      <td style="padding:10px 12px;border-top:1px solid ${BRAND_BORDER};font-size:13px;">${escapeHtml(report.candidateName)}</td>
+      <td style="padding:10px 12px;border-top:1px solid ${BRAND_BORDER};font-size:13px;">${escapeHtml(report.caseNumber)}</td>
+      <td style="padding:10px 12px;border-top:1px solid ${BRAND_BORDER};font-size:13px;">${escapeHtml(report.completedDate)}</td>
+    </tr>`).join('');
+  const countLabel = `${reports.length} completed background verification ${reports.length === 1 ? 'report is' : 'reports are'}`;
+  return {
+    subject: `${companyName} | ${countLabel} ready for review`,
+    html: emailShell({
+      bodyHtml: `<h2 style="margin:0 0 12px;font-size:20px;">Dear ${escapeHtml(clientName)} Team,</h2>
+        <p style="margin:0 0 16px;font-size:14px;color:${BRAND_MUTED};">Please find attached ${countLabel} for your review. The reports contain the verified findings for the candidates listed below.</p>
+        <table style="width:100%;border-collapse:collapse;margin:8px 0 18px;"><thead><tr style="background:#F5F7FA;"><th style="padding:10px 12px;text-align:left;font-size:12px;color:${BRAND_MUTED};">Candidate</th><th style="padding:10px 12px;text-align:left;font-size:12px;color:${BRAND_MUTED};">Case number</th><th style="padding:10px 12px;text-align:left;font-size:12px;color:${BRAND_MUTED};">Completed</th></tr></thead><tbody>${reportRows}</tbody></table>
+        <p style="margin:0;font-size:14px;color:${BRAND_MUTED};">Please contact us if you need any clarification regarding these reports.</p>`,
+      signOffName: companyName,
+      footerNote: 'This email and its attachments are confidential and intended only for the recipient.',
+    }),
+  };
+};
 
 const infoRow = (label, value) => `
   <tr>
@@ -173,18 +204,18 @@ const infoRow = (label, value) => `
  * Company admin welcome email (referenced by user.service.js). Sent by the
  * platform when a new company admin account is created — accepts an
  * optional `companyLogoUrl` so the header shows the company's own branding
- * once they have a logo, rather than always the HireAssess mark.
+ * once they have a logo, rather than always the HireVerify mark.
  */
 const buildCompanyAdminWelcomeEmail = ({ companyName, adminName, email, password, loginUrl, companyLogoUrl }) => ({
-  subject: `Welcome to ${companyName} on HireAssess — your account is ready`,
+  subject: `Welcome to ${companyName} on HireVerify — your account is ready`,
   html: emailShell({
     logoUrl: companyLogoUrl,
-    signOffName: 'The HireAssess Team',
-    footerNote: `This account was created for you as an administrator of ${companyName} on the HireAssess platform.`,
+    signOffName: 'The HireVerify Team',
+    footerNote: `This account was created for you as an administrator of ${companyName} on the HireVerify platform.`,
     bodyHtml: `
       <h2 style="margin:0 0 6px; font-size:20px;">Welcome, ${adminName} 👋</h2>
       <p style="margin:0 0 16px; font-size:14px; color:${BRAND_MUTED};">
-        Your administrator account for <strong>${companyName}</strong> has been created on HireAssess — the
+        Your administrator account for <strong>${companyName}</strong> has been created on HireVerify — the
         platform your team will use to manage background verification cases, verification checks, and
         authorized client reports.
       </p>
@@ -205,4 +236,5 @@ const buildCompanyAdminWelcomeEmail = ({ companyName, adminName, email, password
 module.exports = {
   sendMail,
   buildCompanyAdminWelcomeEmail,
+  buildBgvReportsEmail,
 };
