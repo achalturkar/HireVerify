@@ -300,7 +300,13 @@ const orderedChecks = (checks) => checks
       - (rightOrder === -1 ? REPORT_CHECK_ORDER.length : rightOrder) || left.index - right.index;
   })
   .map(({ check }) => check)
-  .filter((check) => REPORT_CHECK_ORDER.includes(check.type));
+  .filter((check) => REPORT_CHECK_ORDER.includes(check.type))
+  .filter((check) => !(check.type === 'EMPLOYMENT'
+    && check.status === 'PENDING'
+    && check.result === 'PENDING'
+    && !check.resultData
+    && !check.remarks
+    && !check.documents?.length));
 
 const overallVerificationStatus = (checks, fallback) => {
   const statuses = checks.map((check) => reportStatus(checkStatus(check)));
@@ -363,7 +369,7 @@ const summaryDetail = (check) => {
 const summaryCheckLabel = (type) => ({
   IDENTITY: 'Identity Verification (Aadhar Card)',
   ADDRESS: 'Address Verification (Digital)',
-  UAN: 'Employment History Verification (UAN)',
+  UAN: 'UAN Verification',
   EDUCATION: 'Education Verification',
   COURT: 'Criminal Record Verification (Court Check - PAN Address)',
   CIBIL: 'CIBIL Verification',
