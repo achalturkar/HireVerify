@@ -41,7 +41,7 @@ const portals = [
   {
     name: 'TDS Services',
     description: 'Access official TDS information and services through the tax portal.',
-    href: 'https://www.incometax.gov.in/iec/foportal/help/all-topics/tds',
+    href: 'https://eportal.incometax.gov.in/iec/foservices/#/login',
     icon: ReceiptText,
     label: 'Open service',
   },
@@ -55,7 +55,7 @@ const portals = [
   {
     name: 'Form 16',
     description: 'Access official TRACES information for Form 16 services.',
-    href: 'https://contents.tdscpc.gov.in/en/form-16.html',
+    href: 'https://traces.tdscpc.gov.in/',
     icon: FileCheck2,
     label: 'Open service',
   },
@@ -116,16 +116,16 @@ export default function GovernmentPortalsPage() {
         {portals.map((portal) => {
           const Icon = portal.icon;
           return (
-            <a key={portal.name} href={portal.href} target="_blank" rel="noopener noreferrer" className="group flex min-h-[226px] flex-col rounded-xl border border-[#D8D8D8] bg-white p-5 text-[#111827] shadow-[0_2px_5px_rgba(0,0,0,0.14)] transition hover:-translate-y-0.5 hover:border-[var(--primary)] hover:shadow-md">
+            <a key={portal.name} href={portal.href} target="_blank" rel="noopener noreferrer" className="group flex min-h-[226px] flex-col rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-[var(--foreground)] shadow-[0_2px_5px_rgba(0,0,0,0.14)] transition hover:-translate-y-0.5 hover:border-[var(--primary)] hover:shadow-md">
               <div className="flex items-start justify-between gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg border-2 border-[#17276B] bg-[#F8FBFF] text-[#087BB8]">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg border-2 border-[var(--primary)] bg-[var(--surface-muted)] text-[var(--primary)]">
                   <Icon size={28} strokeWidth={1.8} />
                 </div>
-                <ExternalLink size={16} className="mt-1 text-[#17276B] opacity-0 transition group-hover:opacity-100" />
+                <ExternalLink size={16} className="mt-1 text-[var(--primary)] opacity-0 transition group-hover:opacity-100" />
               </div>
               <h2 className="mt-5 text-[17px] font-bold leading-tight group-hover:text-[#087BB8]">{portal.name}</h2>
-              <p className="mt-2 text-[14px] leading-snug text-[#111827]">{portal.description}</p>
-              <span className="mt-auto pt-4 text-[12px] font-semibold text-[#087BB8]">{portal.label} <span aria-hidden="true">-&gt;</span></span>
+              <p className="mt-2 text-[14px] leading-snug text-[var(--foreground)]">{portal.description}</p>
+              <span className="mt-auto pt-4 text-[12px] font-semibold text-[var(--primary)]">{portal.label} <span aria-hidden="true">-&gt;</span></span>
             </a>
           );
         })}

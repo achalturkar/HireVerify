@@ -87,6 +87,44 @@ body {
   color: #94a3b8 !important;
 }
 
+:root:not(.dark) .super-admin-dashboard [class*="bg-[#161C3A]"],
+:root:not(.dark) .super-admin-dashboard [class*="bg-[#1B2145]"],
+:root:not(.dark) .super-admin-dashboard [class*="bg-[#141A38]"] {
+  background-color: var(--surface) !important;
+}
+
+:root:not(.dark) .super-admin-dashboard [class*="bg-[#0F1430]"],
+:root:not(.dark) .super-admin-dashboard [class*="bg-[#0B0F26]"] {
+  background-color: var(--surface-muted) !important;
+}
+
+:root:not(.dark) .super-admin-dashboard [class*="border-white/[0.08]"],
+:root:not(.dark) .super-admin-dashboard [class*="border-white/[0.1]"],
+:root:not(.dark) .super-admin-dashboard [class*="border-white/[0.12]"],
+:root:not(.dark) .super-admin-dashboard [class*="border-white/[0.14]"] {
+  border-color: var(--border) !important;
+}
+
+:root:not(.dark) .super-admin-dashboard [class*="border-white/[0.06]"],
+:root:not(.dark) .super-admin-dashboard [class*="border-white/[0.04]"] {
+  border-color: var(--border) !important;
+}
+
+:root:not(.dark) .super-admin-dashboard [class*="text-[#F2F4FA]"],
+:root:not(.dark) .super-admin-dashboard [class*="text-white"] {
+  color: var(--foreground) !important;
+}
+
+:root:not(.dark) .super-admin-dashboard [class*="text-[#AAB2D4]"],
+:root:not(.dark) .super-admin-dashboard [class*="text-[#8891B8]"],
+:root:not(.dark) .super-admin-dashboard [class*="text-[#C7CBE0]"] {
+  color: #475569 !important;
+}
+
+:root:not(.dark) .super-admin-dashboard [class*="text-[#565F8C]"] {
+  color: #64748b !important;
+}
+
 button,
 input,
 textarea,

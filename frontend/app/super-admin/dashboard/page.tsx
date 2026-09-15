@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Activity, Building, ClipboardList, RefreshCw, Users } from 'lucide-react';
+import { Activity, ArrowUpRight, Building, CheckCircle2, ClipboardList, Clock3, RefreshCw, ShieldCheck, Users, Zap } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getPlatformDashboard, type PlatformDashboardData } from '@/src/lib/api/platform-dashboard';
 
@@ -35,6 +35,12 @@ export default function DashboardHome() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const loadDashboard = useCallback(async () => {
     if (!accessToken) return;
@@ -61,7 +67,9 @@ export default function DashboardHome() {
     { label: 'Candidates', value: stats.candidates, detail: `${stats.clients} client accounts`, icon: Activity, color: 'teal' },
     { label: 'BGV cases', value: stats.bgvCases, detail: `${stats.auditEvents24h} audit events in 24h`, icon: ClipboardList, color: 'amber' },
   ] : [];
-  const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const today = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const currentTime = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone.replaceAll('_', ' ');
   const companyTotal = stats?.companies || 1;
   const activeAngle = ((stats?.activeCompanies || 0) / companyTotal) * 360;
   const suspendedAngle = activeAngle + ((stats?.suspendedCompanies || 0) / companyTotal) * 360;
@@ -74,22 +82,44 @@ export default function DashboardHome() {
   ], []);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-7">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="mb-1.5 text-[11px] uppercase tracking-[0.14em] text-[#3FDCC0]" style={{ fontFamily: 'var(--font-mono)' }}>Super Admin Overview</p>
-          <h1 className="text-[26px] font-semibold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>{greeting()}, {user?.firstName ?? '—'}</h1>
-          <p className="mt-1 text-[13.5px] text-[#8891B8]">{today} · live platform-wide operating view</p>
+    <div className="super-admin-dashboard mx-auto max-w-7xl space-y-7">
+      <div className="relative overflow-hidden rounded-2xl border border-[var(--primary)]/20 bg-[var(--surface)] p-6 shadow-[0_18px_45px_rgba(4,8,25,0.18)] sm:p-7">
+        <div className="absolute right-0 top-0 h-40 w-40 translate-x-10 -translate-y-16 rounded-full border border-[#3FDCC0]/15" />
+        <div className="absolute right-8 top-8 h-24 w-24 rounded-full border border-[#F2AE55]/10" />
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-[#3FDCC0]" style={{ fontFamily: 'var(--font-mono)' }}><span className="h-1.5 w-1.5 rounded-full bg-[#3FDCC0] shadow-[0_0_12px_#3FDCC0]" />Control room / platform overview</div>
+            <h1 className="text-[30px] font-semibold tracking-tight text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>{greeting()}, {user?.firstName ?? '—'}</h1>
+            <p className="mt-2 max-w-2xl text-[13.5px] text-[var(--muted)]">Monitor tenant health, verification throughput, and access activity from one operating view.</p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:items-end">
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-left backdrop-blur-sm">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]" style={{ fontFamily: 'var(--font-mono)' }}>Local time</p>
+              <div className="mt-1 flex items-baseline gap-2"><p className="text-[24px] font-semibold leading-none text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>{currentTime}</p><span className="text-[10px] text-[var(--muted)]">{timezone}</span></div>
+              <p className="mt-2 text-[11px] text-[var(--muted)]">{today}</p>
+            </div>
+            <button onClick={loadDashboard} disabled={loading} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-[#3FDCC0]/30 bg-[#3FDCC0]/10 px-3.5 py-2.5 text-[12px] font-medium text-[#3FDCC0] transition hover:bg-[#3FDCC0]/20 disabled:opacity-50" aria-label="Refresh dashboard">
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh data
+            </button>
+          </div>
         </div>
-        <button onClick={loadDashboard} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-white/[0.12] px-3 py-2 text-[12px] text-[#C7CBE0] hover:bg-white/[0.06] disabled:opacity-50" aria-label="Refresh dashboard">
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
+        <div className="relative mt-6 grid grid-cols-1 gap-2 border-t border-white/[0.1] pt-4 sm:grid-cols-3">
+          <div className="flex items-center gap-2 text-[11px] text-[#AAB2D4]"><CheckCircle2 size={14} className="text-[#3FDCC0]" /> Platform services operational</div>
+          <div className="flex items-center gap-2 text-[11px] text-[#AAB2D4]"><ShieldCheck size={14} className="text-[#7C9CFF]" /> Cross-company oversight enabled</div>
+          <div className="flex items-center gap-2 text-[11px] text-[#AAB2D4]"><Clock3 size={14} className="text-[#F2AE55]" /> Updated {loading ? 'now' : 'just now'}</div>
+        </div>
       </div>
 
       {error && <div className="flex items-center justify-between rounded-xl border border-[#FF6B6B]/25 bg-[#FF6B6B]/10 px-4 py-3 text-[13px] text-[#FF8B8B]"><span>{error}</span><button onClick={loadDashboard} className="font-semibold underline">Retry</button></div>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {loading && !data ? Array.from({ length: 4 }, (_, index) => <div key={index} className="h-36 animate-pulse rounded-2xl border border-white/[0.08] bg-[#161C3A]" />) : cards.map((card) => <div key={card.label} className="rounded-2xl border border-white/[0.08] bg-[#161C3A] p-5"><div className="mb-4 flex items-center justify-between"><div className={`flex h-9 w-9 items-center justify-center rounded-lg ${card.color === 'teal' ? 'bg-[#3FDCC0]/15 text-[#3FDCC0]' : 'bg-[#F2AE55]/15 text-[#F2AE55]'}`}><card.icon size={17} /></div><span className="text-[10px] uppercase tracking-wide text-[#565F8C]">Live</span></div><p className="text-[26px] font-semibold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>{card.value.toLocaleString()}</p><p className="mt-1 text-[12.5px] text-[#8891B8]">{card.label}</p><p className="mt-2 text-[11px] text-[#565F8C]" style={{ fontFamily: 'var(--font-mono)' }}>{card.detail}</p></div>)}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#0F1430]/70 px-4 py-3"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#3FDCC0]/12 text-[#3FDCC0]"><Zap size={15} /></span><div><p className="text-[10px] uppercase tracking-wide text-[#565F8C]">Active user ratio</p><p className="mt-0.5 text-[14px] font-semibold text-[#F2F4FA]">{stats?.users ? Math.round((stats.activeUsers / stats.users) * 100) : 0}% <span className="text-[10px] font-normal text-[#8891B8]">of platform users</span></p></div></div>
+        <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#0F1430]/70 px-4 py-3"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F2AE55]/12 text-[#F2AE55]"><Activity size={15} /></span><div><p className="text-[10px] uppercase tracking-wide text-[#565F8C]">Audit pulse</p><p className="mt-0.5 text-[14px] font-semibold text-[#F2F4FA]">{stats?.auditEvents24h || 0} <span className="text-[10px] font-normal text-[#8891B8]">events in 24 hours</span></p></div></div>
+        <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#0F1430]/70 px-4 py-3"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#7C9CFF]/12 text-[#7C9CFF]"><ClipboardList size={15} /></span><div><p className="text-[10px] uppercase tracking-wide text-[#565F8C]">Verification queue</p><p className="mt-0.5 text-[14px] font-semibold text-[#F2F4FA]">{stats?.bgvCases || 0} <span className="text-[10px] font-normal text-[#8891B8]">total cases tracked</span></p></div><ArrowUpRight size={14} className="ml-auto text-[#565F8C]" /></div>
       </div>
 
       <section className="rounded-2xl border border-white/[0.08] bg-[#161C3A] p-5">

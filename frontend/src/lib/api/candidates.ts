@@ -158,7 +158,7 @@ export interface CandidatePayload {
   clientId: string;
   firstName: string;
   lastName: string;
-  email: string;
+  email?: string;
   phone?: string;
   dateOfBirth?: string | null;
   gender?: string | null;

@@ -9,7 +9,7 @@ const createValidator = {
     clientId: Joi.string().uuid().required(),
     firstName: Joi.string().max(100).required(),
     lastName: Joi.string().max(100).required(),
-    email: Joi.string().email().required(),
+    email: Joi.string().email().allow(null, ''),
     phone: Joi.string().max(50).allow(null, ''),
     dateOfBirth: Joi.date().iso().allow(null),
     gender: Joi.string().max(30).allow(null, ''),

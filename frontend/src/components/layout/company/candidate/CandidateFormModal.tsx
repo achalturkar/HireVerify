@@ -55,7 +55,6 @@ export default function CandidateFormModal({ mode, candidate, submitting, error,
     setValidationError(null);
     if (mode === 'create' && !values.clientId) return setValidationError('Select a client.');
     if (!values.firstName.trim() || !values.lastName.trim()) return setValidationError('First and last name are required.');
-    if (!values.email.trim()) return setValidationError('Email is required.');
     onSubmit(values);
   };
 

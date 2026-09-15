@@ -66,12 +66,14 @@ const create = async ({ payload, companyId, currentUser }) => {
 
   if (!clientId) throw new BadRequestError('Client is required');
   if (!firstName || !lastName) throw new BadRequestError('First name and last name are required');
-  if (!email) throw new BadRequestError('Email is required');
+  const normalizedEmail = email?.trim().toLowerCase() || null;
 
   await assertClientBelongsToCompany(clientId, companyId);
 
-  const existing = await repo.findByEmail(companyId, clientId, email);
-  if (existing) throw new ConflictError('A candidate with this email already exists for this client.');
+  if (normalizedEmail) {
+    const existing = await repo.findByEmail(companyId, clientId, normalizedEmail);
+    if (existing) throw new ConflictError('A candidate with this email already exists for this client.');
+  }
 
   const candidate = await repo.create({
     companyId,
@@ -79,7 +81,7 @@ const create = async ({ payload, companyId, currentUser }) => {
     candidateCode: await createCandidateCode(clientId, companyId),
     firstName,
     lastName,
-    email: email.toLowerCase(),
+    email: normalizedEmail,
     phone: phone || null,
     dateOfBirth: normalizeDateOfBirth(payload.dateOfBirth) ?? null,
     gender: payload.gender || null,
@@ -124,8 +126,9 @@ const update = async ({ id, companyId, payload, currentUser }) => {
     await assertClientBelongsToCompany(payload.clientId, companyId);
   }
 
-  if (payload.email && payload.email.toLowerCase() !== existing.email.toLowerCase()) {
-    const duplicate = await repo.findByEmail(companyId, payload.clientId || existing.clientId, payload.email);
+  const normalizedEmail = payload.email?.trim().toLowerCase() || null;
+  if (normalizedEmail && normalizedEmail !== existing.email?.toLowerCase()) {
+    const duplicate = await repo.findByEmail(companyId, payload.clientId || existing.clientId, normalizedEmail);
     if (duplicate && duplicate.id !== id) {
       throw new ConflictError('A candidate with this email already exists for this client.');
     }
@@ -136,7 +139,7 @@ const update = async ({ id, companyId, payload, currentUser }) => {
     .forEach((field) => {
       if (payload[field] !== undefined) {
         data[field] = field === 'email'
-          ? payload[field].toLowerCase()
+          ? (payload[field]?.trim().toLowerCase() || null)
           : field === 'dateOfBirth'
             ? normalizeDateOfBirth(payload[field])
             : payload[field];
