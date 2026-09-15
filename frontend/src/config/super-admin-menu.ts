@@ -35,6 +35,14 @@ export const superAdminMenu = [
     },
 
     {
+        key: "candidates",
+        label: "Candidates",
+        path: "/super-admin/candidates",
+        icon: Users,
+        permission: "candidate.view"
+    },
+
+    {
         key: "roles",
         label: "Roles",
         path: "/super-admin/roles",

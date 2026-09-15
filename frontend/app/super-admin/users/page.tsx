@@ -105,6 +105,7 @@ export default function UsersPage() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<UserStatus | ''>('');
+  const [companyId, setCompanyId] = useState('');
 
   const [roles, setRoles] = useState<RoleRef[]>([]);
   const [companies, setCompanies] = useState<CompanyRef[]>([]);
@@ -132,7 +133,7 @@ export default function UsersPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await listUsers(accessToken, { page, limit: PAGE_SIZE, search, status, sortBy: 'createdAt', sortOrder: 'desc' });
+      const res = await listUsers(accessToken, { page, limit: PAGE_SIZE, search, status, companyId, sortBy: 'createdAt', sortOrder: 'desc' });
       setUsers(res.items);
       setMeta(res.meta);
     } catch (err) {
@@ -140,11 +141,19 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, page, search, status]);
+  }, [accessToken, page, search, status, companyId]);
 
   useEffect(() => {
-    fetchUsers();
+    const task = Promise.resolve().then(fetchUsers);
+    return () => { void task; };
   }, [fetchUsers]);
+
+  useEffect(() => {
+    if (!isSuperAdmin || !accessToken) return;
+    listCompanyOptions(accessToken)
+      .then(setCompanies)
+      .catch(() => setCompanies([]));
+  }, [isSuperAdmin, accessToken]);
 
   useEffect(() => {
     if (banner) {
@@ -330,6 +339,23 @@ export default function UsersPage() {
           <option value="SUSPENDED">Suspended</option>
           <option value="INACTIVE">Inactive</option>
         </select>
+        {isSuperAdmin && (
+          <select
+            value={companyId}
+            onChange={(e) => {
+              setCompanyId(e.target.value);
+              setPage(1);
+            }}
+            className="max-w-[260px] rounded-lg bg-[#161C3A] border border-white/[0.08] px-3 py-2.5 text-[13px] text-[#AAB2D4] outline-none focus:border-[#3FDCC0]/50 transition-colors"
+          >
+            <option value="">All companies</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Table */}

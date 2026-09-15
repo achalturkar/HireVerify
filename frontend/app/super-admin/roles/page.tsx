@@ -50,7 +50,7 @@ export default function RolesPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await listRoles({ page, limit: PAGE_SIZE, search, sortBy: 'createdAt', sortOrder: 'desc' });
+      const res = await listRoles(accessToken, { page, limit: PAGE_SIZE, search, sortBy: 'createdAt', sortOrder: 'desc' });
       setRoles(res.items);
       setMeta(res.meta);
     } catch (err) {
@@ -58,10 +58,11 @@ export default function RolesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [accessToken, page, search]);
 
   useEffect(() => {
-    fetchRoles();
+    const task = Promise.resolve().then(fetchRoles);
+    return () => { void task; };
   }, [fetchRoles]);
 
   useEffect(() => {
@@ -108,10 +109,10 @@ export default function RolesPage() {
           description: values.description || undefined,
           companyId: isSuperAdmin ? values.companyId : undefined,
           permissionIds: values.permissionIds,
-        });
+        }, accessToken);
         setBanner({ text: `Role "${created.name}" was created.`, tone: 'success' });
       } else if (activeRole) {
-        const updated = await updateRole(activeRole.id, {
+        const updated = await updateRole(accessToken, activeRole.id, {
           name: values.name,
           description: values.description || undefined,
           permissionIds: values.permissionIds,
@@ -132,7 +133,7 @@ export default function RolesPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await deleteRole(deleteTarget.id);
+      await deleteRole(accessToken, deleteTarget.id);
       setBanner({ text: `Role "${deleteTarget.name}" was deleted.`, tone: 'success' });
       setDeleteTarget(null);
       fetchRoles();

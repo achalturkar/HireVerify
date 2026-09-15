@@ -55,6 +55,7 @@ export default function RoleFormModal({
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const isProtected = mode === 'edit' && (role?.isSuperAdmin || role?.isCompanyAdmin);
+  const permissionsLocked = Boolean(role?.isSuperAdmin || (role?.isCompanyAdmin && !isSuperAdmin));
 
   useEffect(() => {
     let cancelled = false;
@@ -139,7 +140,11 @@ export default function RoleFormModal({
                 {mode === 'create' ? 'Create role' : 'Edit role'}
               </h2>
               {isProtected && (
-                <p className="text-[11.5px] text-[#565F8C]">System role — name and permissions are locked</p>
+                <p className="text-[11.5px] text-[#565F8C]">
+                  {role?.isCompanyAdmin && isSuperAdmin
+                    ? 'Company Admin role — permissions can be edited; identity is locked'
+                    : 'System role — name and permissions are locked'}
+                </p>
               )}
             </div>
           </div>
@@ -260,7 +265,7 @@ export default function RoleFormModal({
                             ref={(el) => {
                               if (el) el.indeterminate = someSelected;
                             }}
-                            disabled={isProtected}
+                            disabled={permissionsLocked}
                             onChange={() => toggleModule(items)}
                             className="w-3.5 h-3.5 rounded accent-[#3FDCC0]"
                           />
@@ -275,7 +280,7 @@ export default function RoleFormModal({
                               <input
                                 type="checkbox"
                                 checked={permissionIds.includes(p.id)}
-                                disabled={isProtected}
+                                disabled={permissionsLocked}
                                 onChange={() => togglePermission(p.id)}
                                 className="w-3.5 h-3.5 rounded accent-[#3FDCC0]"
                               />

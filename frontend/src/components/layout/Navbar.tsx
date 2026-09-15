@@ -1,7 +1,7 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthProvider';
 import {
   Menu,
@@ -20,16 +20,57 @@ function titleFromPath(pathname: string): string {
 }
 
 export default function Navbar({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
-  const { user, logout } = useAuth();
+  const { user, logout, accessToken } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [readIds, setReadIds] = useState<string[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
+
+  const loadNotifications = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API || '/api/v1'}/audit-logs?page=1&limit=6`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) return;
+      setNotifications((body?.data?.data || []).map((item: AuditResponse): NotificationItem => ({
+        id: item.id,
+        action: item.action,
+        entity: item.entity,
+        companyName: item.company?.name || 'Platform',
+        actorName: item.user ? `${item.user.firstName} ${item.user.lastName}` : 'System',
+        createdAt: item.createdAt,
+      })));
+    } catch {
+      setNotifications([]);
+    }
+  }, [accessToken]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
       }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('hireverify-read-notifications') : null;
+    const task = Promise.resolve().then(() => {
+      if (stored) setReadIds(JSON.parse(stored));
+      return loadNotifications();
+    });
+    return () => { void task; };
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target as Node)) setNotificationsOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -59,13 +100,13 @@ export default function Navbar({ onOpenMobileMenu }: { onOpenMobileMenu: () => v
 
       <div className="ml-auto flex items-center gap-3">
         <ThemeToggle />
-        <button
-          className="relative w-9 h-9 flex items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)] transition-colors"
-          aria-label="Notifications"
-        >
-          <Bell width={18} height={18} />
-          <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-[#F2AE55]" />
-        </button>
+        <div className="relative" ref={notificationsRef}>
+          <button onClick={() => { setNotificationsOpen((value) => !value); setMenuOpen(false); }} className="relative flex h-9 w-9 items-center justify-center rounded-lg text-[var(--muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]" aria-label="Notifications" title="Notifications">
+            <Bell width={18} height={18} />
+            {unreadCount(notifications, readIds) > 0 && <span className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-[#F2AE55] px-1 text-[9px] font-bold text-[#0B0F26]">{unreadCount(notifications, readIds) > 9 ? '9+' : unreadCount(notifications, readIds)}</span>}
+          </button>
+          {notificationsOpen && <div className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl"><div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3"><div><p className="text-[13px] font-semibold text-[var(--foreground)]">Notifications</p><p className="text-[11px] text-[var(--muted)]">Recent platform activity</p></div><button onClick={() => markAllRead(notifications, setReadIds)} className="text-[11px] text-[var(--primary)] hover:underline">Mark all read</button></div><div className="max-h-80 overflow-y-auto">{notifications.length === 0 ? <p className="px-4 py-8 text-center text-[12px] text-[var(--muted)]">No recent notifications</p> : notifications.map((notification) => { const isRead = readIds.includes(notification.id); return <button key={notification.id} onClick={() => { markRead(notification.id, readIds, setReadIds); setNotificationsOpen(false); router.push('/super-admin/audit'); }} className={`flex w-full gap-3 border-b border-[var(--border)] px-4 py-3 text-left transition hover:bg-[var(--surface-muted)] ${isRead ? 'opacity-60' : ''}`}><span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${isRead ? 'bg-[var(--muted)]' : 'bg-[var(--primary)]'}`} /><span className="min-w-0"><span className="block truncate text-[12px] font-medium text-[var(--foreground)]">{formatNotificationAction(notification.action)}</span><span className="mt-0.5 block truncate text-[11px] text-[var(--muted)]">{notification.companyName} · {notification.actorName}</span><span className="mt-1 block text-[10px] text-[var(--muted)]">{relativeTime(notification.createdAt)}</span></span></button>; })}</div><button onClick={() => { setNotificationsOpen(false); router.push('/super-admin/audit'); }} className="w-full px-4 py-3 text-center text-[12px] font-medium text-[var(--primary)] hover:bg-[var(--surface-muted)]">View full audit log</button></div>}
+        </div>
 
         <div className="relative" ref={menuRef}>
           <button
@@ -89,7 +130,7 @@ export default function Navbar({ onOpenMobileMenu }: { onOpenMobileMenu: () => v
                 </p>
                 <p className="text-[12px] text-[var(--muted)] truncate">{user?.email}</p>
               </div>
-              <button className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)] transition-colors">
+              <button onClick={() => { setMenuOpen(false); router.push('/super-admin/settings'); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)] transition-colors">
                 <Settings width={16} height={16} />
                 Account settings
               </button>
@@ -106,4 +147,50 @@ export default function Navbar({ onOpenMobileMenu }: { onOpenMobileMenu: () => v
       </div>
     </header>
   );
+}
+
+interface AuditResponse {
+  id: string;
+  action: string;
+  entity: string;
+  createdAt: string;
+  company: { name: string } | null;
+  user: { firstName: string; lastName: string } | null;
+}
+
+interface NotificationItem {
+  id: string;
+  action: string;
+  entity: string;
+  createdAt: string;
+  companyName: string;
+  actorName: string;
+}
+
+function unreadCount(items: NotificationItem[], readIds: string[]) {
+  return items.filter((item) => !readIds.includes(item.id)).length;
+}
+
+function markRead(id: string, readIds: string[], setReadIds: (ids: string[]) => void) {
+  const next = Array.from(new Set([...readIds, id]));
+  setReadIds(next);
+  localStorage.setItem('hireverify-read-notifications', JSON.stringify(next));
+}
+
+function markAllRead(items: NotificationItem[], setReadIds: (ids: string[]) => void) {
+  const next = items.map((item) => item.id);
+  setReadIds(next);
+  localStorage.setItem('hireverify-read-notifications', JSON.stringify(next));
+}
+
+function formatNotificationAction(action: string) {
+  return action.replaceAll('_', ' ').replaceAll('.', ' ').replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+}
+
+function relativeTime(value: string) {
+  const minutes = Math.max(1, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }

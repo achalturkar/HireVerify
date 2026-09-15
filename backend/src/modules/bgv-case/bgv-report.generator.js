@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const sharp = require('sharp');
 
 /* ================================================================== */
 /*  Layout constants                                                    */
@@ -83,13 +84,42 @@ const readAsset = (assetUrl) =>
     });
   });
 
+const isWebp = (asset) => {
+  if (typeof asset === 'string') return path.extname(asset).toLowerCase() === '.webp';
+  return Buffer.isBuffer(asset) && asset.length >= 12 && asset.subarray(0, 4).toString() === 'RIFF' && asset.subarray(8, 12).toString() === 'WEBP';
+};
+
+const normalizeLogo = async (asset) => {
+  if (!asset || !isWebp(asset)) return asset;
+  try {
+    return await sharp(asset)
+      .resize({ width: 600, height: 600, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82, mozjpeg: true })
+      .toBuffer();
+  } catch (_error) {
+    return asset;
+  }
+};
+
+const normalizeImage = async (asset) => {
+  if (!asset) return null;
+  try {
+    return await sharp(asset)
+      .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82, mozjpeg: true })
+      .toBuffer();
+  } catch (_error) {
+    return asset;
+  }
+};
+
 const renderPdfPages = async (asset) => {
   const { PDFDocument, Matrix, ColorSpace } = await import('mupdf');
   const pdf = PDFDocument.openDocument(Buffer.isBuffer(asset) ? asset : fs.readFileSync(asset));
   const pages = [];
   for (let pageNumber = 1; pageNumber <= pdf.countPages(); pageNumber += 1) {
     const page = pdf.loadPage(pageNumber - 1);
-    pages.push(Buffer.from(page.toPixmap(Matrix.scale(1.5, 1.5), ColorSpace.DeviceRGB).asJPEG(90)));
+    pages.push(await normalizeImage(Buffer.from(page.toPixmap(Matrix.scale(1.5, 1.5), ColorSpace.DeviceRGB).asJPEG(90))));
   }
   return pages;
 };
@@ -273,7 +303,12 @@ const drawFooter = (doc, companyName) => {
 };
 
 const drawPageChrome = (doc, logo) => {
-  if (logo) doc.image(logo, 485, 35, { fit: [60, 60], align: 'right' });
+  if (logo) {
+    try {
+      doc.image(logo, 485, 35, { fit: [60, 60], align: 'right' });
+    } catch (_error) {
+    }
+  }
   doc.y = 100; // was 105 — tighter top gap; logo (35 + up to 60 tall) still clears this comfortably
 };
 
@@ -482,7 +517,7 @@ const drawAttachmentsInline = async (doc, check, companyName, logo) => {
       continue;
     }
     const asset = await readAsset(attachment.fileUrl);
-    if (asset) imageAssets.push(asset);
+    if (asset) imageAssets.push(await normalizeImage(asset));
     else nonImageNames.push(attachment.fileName);
   }
 
@@ -560,7 +595,7 @@ async function buildReport(item) {
   const candidate = item.candidate || {};
   const doc = new PDFDocument({ size: 'A4', margin: 48, autoFirstPage: false });
   doc.reportColors = reportColors(item.client?.company?.primaryColor);
-  const logo = await readAsset(item.client?.company?.logoUrl);
+  const logo = await normalizeLogo(await readAsset(item.client?.company?.logoUrl));
   const checks = orderedChecks(item.checks || []);
   const verificationStatus = overallVerificationStatus(checks, item.overallResult);
 
@@ -680,38 +715,81 @@ async function buildReport(item) {
     drawFooter(doc, companyName);
   }
 
-  /* ---------------------------- Disclaimer (final page) ---------------------------- */
 
+  /* ---------------------------- Final declaration (last page) ---------------------------- */
+ 
   doc.addPage();
   drawPageChrome(doc, logo);
-  doc.y = 120;
-  drawBand(doc, 'DISCLAIMER');
+  doc.y = 100;
+  drawBand(doc, 'FINAL DECLARATION');
   doc.y += 12;
-  doc
-    .fillColor(colorsFor(doc).muted)
-    .font('Helvetica')
-    .fontSize(10)
-    .text(
-      `This report has been prepared solely for the purpose set out pursuant to terms and conditions agreed with ${companyName}. The report and information provided herein are strictly confidential and contain personal and sensitive information. It may be used only for internal, non-commercial assessment of the subject and in accordance with applicable data protection laws.`,
-      PAGE_LEFT,
-      doc.y,
-      { width: PAGE_WIDTH, lineGap: 4 }
-    );
-  doc.y += 16;
-  doc.text(
-    'Copyright: All rights reserved. No part of this publication may be reproduced, photocopied, transmitted or used for any other purpose without prior written consent.',
-    PAGE_LEFT,
-    doc.y,
-    { width: PAGE_WIDTH, lineGap: 4 }
-  );
-  doc.y += 40;
-  doc.fillColor(colorsFor(doc).navy).font('Helvetica-Bold').fontSize(14).text('--- End of Report ---', PAGE_LEFT, doc.y, {
+ 
+  // Green "verification complete" box with a checkmark, mirroring the
+  // sample report's closing confirmation banner.
+  const declColors = colorsFor(doc);
+  const boxTop = doc.y;
+  const boxHeight = 118;
+  doc.fillColor('#F0FDF5').roundedRect(PAGE_LEFT, boxTop, PAGE_WIDTH, boxHeight, 6).fill();
+  doc.strokeColor('#BBF0CE').lineWidth(1).roundedRect(PAGE_LEFT, boxTop, PAGE_WIDTH, boxHeight, 6).stroke();
+  doc.fillColor(COLORS.green).font('Helvetica-Bold').fontSize(24).text('\u2713', PAGE_LEFT, boxTop + 20, {
     width: PAGE_WIDTH,
     align: 'center',
   });
+  doc.font('Helvetica-Bold').fontSize(15).text('VERIFICATION COMPLETE', PAGE_LEFT, boxTop + 54, {
+    width: PAGE_WIDTH,
+    align: 'center',
+  });
+  doc.fillColor(colorsFor(doc).body).font('Helvetica').fontSize(9).text(
+    `All checks have been successfully completed  \u00B7  Report Date: ${reportDate(item.completedAt) || reportDate(new Date())}`,
+    PAGE_LEFT,
+    boxTop + 78,
+    { width: PAGE_WIDTH, align: 'center' }
+  );
+  doc.y = boxTop + boxHeight + 20;
+ 
+  // "IMPORTANT DISCLAIMER" heading + amber disclaimer box.
+  doc.fillColor(declColors.navy).font('Helvetica-Bold').fontSize(12).text('IMPORTANT DISCLAIMER', PAGE_LEFT, doc.y);
+  doc.y += 18;
+ 
+  const disclaimerParagraphs = [
+    `This report has been prepared based on the information and documents provided by the candidate and verified through available official sources, third-party databases, and field verification wherever applicable. ${companyName} has exercised due diligence in conducting these verifications; however, the information is subject to limitations in accuracy, completeness, and availability of records at the time of verification.`,
+    `This report is intended to serve as a supporting document to assist the client in making hiring or engagement decisions regarding the candidate. ${companyName} does not guarantee or certify the character, integrity, or future conduct of the individual. Where the report indicates \u201CNo Record Found,\u201D it signifies that no adverse information was available in the databases accessed during the verification process and should not be construed as confirmation of a clean background.`,
+    `The verification has been conducted strictly within the defined scope and lawful data sources. Any checks not included within the agreed scope have not been performed. The information contained in this report is confidential and intended solely for the use of the client who requested the verification. Any reproduction, distribution, or unauthorized use of this report is strictly prohibited. ${companyName} shall not be held liable for any direct or indirect losses, damages, or consequences arising from decisions made based on this report. All decisions, including hiring or engagement, remain solely at the discretion and responsibility of the client.`,
+  ];
+ 
+  doc.font('Helvetica').fontSize(8.5);
+  const paragraphHeights = disclaimerParagraphs.map((p) => doc.heightOfString(p, { width: PAGE_WIDTH - 28, lineGap: 3 }));
+  const disclaimerBoxHeight = paragraphHeights.reduce((sum, h) => sum + h + 12, 0) + 12;
+ 
+  ensureSpace(doc, disclaimerBoxHeight + 20, companyName, logo);
+  const dBoxTop = doc.y;
+  doc.fillColor('#FEF9EC').roundedRect(PAGE_LEFT, dBoxTop, PAGE_WIDTH, disclaimerBoxHeight, 6).fill();
+  doc.strokeColor('#F2D9A0').lineWidth(1).roundedRect(PAGE_LEFT, dBoxTop, PAGE_WIDTH, disclaimerBoxHeight, 6).stroke();
+  let ty = dBoxTop + 12;
+  doc.font('Helvetica').fontSize(8.5).fillColor('#8A6210');
+  disclaimerParagraphs.forEach((paragraph, i) => {
+    doc.text(paragraph, PAGE_LEFT + 14, ty, { width: PAGE_WIDTH - 28, lineGap: 3 });
+    ty += paragraphHeights[i] + 12;
+  });
+  doc.y = dBoxTop + disclaimerBoxHeight + 30;
+ 
+  ensureSpace(doc, 110, companyName, logo);
+  doc.fillColor(colorsFor(doc).muted).font('Helvetica-Bold').fontSize(9).text('\u00B7 YOUR DIGITAL PARTNER', PAGE_LEFT, doc.y, {
+    width: PAGE_WIDTH,
+    align: 'center',
+    characterSpacing: 1,
+  });
+  doc.y += 18;
+  doc.fillColor(declColors.navy).font('Helvetica-Bold').fontSize(32).text('THANK YOU', PAGE_LEFT, doc.y, {
+    width: PAGE_WIDTH,
+    align: 'center',
+    characterSpacing: 3,
+  });
+ 
   drawFooter(doc, companyName);
-
+ 
   return doc;
 }
-
+ 
 module.exports = { buildReport };
+ 

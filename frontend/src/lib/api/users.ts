@@ -36,7 +36,7 @@ export async function listUsers(
     sortOrder: params.sortOrder,
   });
   const json = await authFetch(`/users${query}`, token, { method: 'GET' });
-  return { items: json.data as User[], meta: json.meta as PaginationMeta };
+  return { items: json.data.data as User[], meta: json.data.meta as PaginationMeta };
 }
 
 export async function getUser(token: string | null, id: string): Promise<User> {
@@ -104,11 +104,11 @@ export async function changePassword(
 export async function listRolesForCompany(token: string | null, companyId?: string): Promise<RoleRef[]> {
   const query = buildQuery({ companyId, limit: 100 });
   const json = await authFetch(`/roles${query}`, token, { method: 'GET' });
-  return (json.data as RoleRef[]).filter((r) => !r.isSuperAdmin);
+  return (json.data.data as RoleRef[]).filter((r) => !r.isSuperAdmin);
 }
 
 export async function listCompanyOptions(token: string | null, search?: string): Promise<CompanyRef[]> {
   const query = buildQuery({ search, limit: 50 });
   const json = await authFetch(`/companies${query}`, token, { method: 'GET' });
-  return json.data as CompanyRef[];
+  return json.data.data as CompanyRef[];
 }

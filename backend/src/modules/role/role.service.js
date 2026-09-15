@@ -86,15 +86,17 @@ const update = async ({ currentUser, id, payload }) => {
   const existing = await repo.findById(id, { companyId: scope });
   if (!existing) throw new NotFoundError('Role not found');
   if (existing.isSuperAdmin) throw new ForbiddenError('Super Admin role is protected');
-  if (existing.isCompanyAdmin) throw new ForbiddenError('Company Admin role is protected');
+  if (existing.isCompanyAdmin && !currentUser.role.isSuperAdmin) {
+    throw new ForbiddenError('Only Super Admins can edit Company Admin permissions');
+  }
 
   const data = {};
-  if (payload.name !== undefined && payload.name !== existing.name) {
+  if (!existing.isCompanyAdmin && payload.name !== undefined && payload.name !== existing.name) {
     const conflict = await repo.findByNameInCompany(payload.name, existing.companyId);
     if (conflict && conflict.id !== id) throw new ConflictError('Role name already exists');
     data.name = payload.name;
   }
-  if (payload.description !== undefined) data.description = payload.description;
+  if (!existing.isCompanyAdmin && payload.description !== undefined) data.description = payload.description;
 
   let permissionIds;
   if (Array.isArray(payload.permissionIds)) {

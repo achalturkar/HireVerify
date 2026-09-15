@@ -1,6 +1,8 @@
 import type { ComponentType, SVGProps } from 'react';
 import {
   Building,
+  BriefcaseBusiness,
+  ContactRound,
   Users,
   Shield,
   Key,
@@ -26,15 +28,17 @@ export interface MenuItem {
 const MODULE_REGISTRY: Record<string, { label: string; path: string; icon: MenuItem['icon'] }> = {
   company: { label: 'Companies', path: '/super-admin/companies', icon: Building },
   user: { label: 'Users', path: '/super-admin/users', icon: Users },
+  client: { label: 'Clients', path: '/super-admin/client', icon: BriefcaseBusiness },
+  candidate: { label: 'Candidates', path: '/super-admin/candidate', icon: ContactRound },
   role: { label: 'Roles', path: '/super-admin/roles', icon: Shield },
   permission: { label: 'Permissions', path: '/super-admin/permissions', icon: Key },
-  auditlog: { label: 'Audit Logs', path: '/super-admin/audit-logs', icon: ClipboardList },
+  auditlog: { label: 'Audit Logs', path: '/super-admin/audit', icon: ClipboardList },
 };
 
 // Modules listed here (if present) are pinned to the top of the
 // Administration section, in this order. Anything else found in the user's
 // permissions is appended afterwards, alphabetically.
-const PRIORITY_ORDER = ['company', 'user', 'role', 'permission', 'auditlog'];
+const PRIORITY_ORDER = ['company', 'client', 'candidate', 'user', 'role', 'permission', 'auditlog'];
 
 function normalizeModule(rawModule: string): string {
   return rawModule.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -58,7 +62,9 @@ export function extractModules(permissions: string[]): string[] {
 
 /** Builds the Administration section of the sidebar purely from the user's permission set. */
 export function buildAdminMenu(permissions: string[]): MenuItem[] {
-  const modules = extractModules(permissions);
+  // Dashboard is the primary navigation item rendered by Sidebar. Excluding
+  // it here prevents a second permission-derived Dashboard entry.
+  const modules = extractModules(permissions).filter((module) => module !== 'dashboard');
 
   const ordered = [
     ...PRIORITY_ORDER.filter((m) => modules.includes(m)),

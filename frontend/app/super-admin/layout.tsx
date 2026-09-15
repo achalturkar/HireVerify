@@ -8,9 +8,11 @@ export default function Layout({
 }) {
   return (
     <ProtectedRoute>
-      <DashboardShell>
-        {children}
-      </DashboardShell>
+      <div className="super-admin-surface">
+        <DashboardShell>
+          {children}
+        </DashboardShell>
+      </div>
     </ProtectedRoute>
   );
 }

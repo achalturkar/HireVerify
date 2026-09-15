@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useMemo } from 'react';
+import { useMemo, type SVGProps } from 'react';
 import { useAuth } from '../../auth/AuthProvider';
 import { buildAdminMenu } from '@/src/lib/permissions';
-import { LayoutDashboard, ChevronLeft, X } from 'lucide-react';
+import { FileCheck2, LayoutDashboard, ChevronLeft, Settings, X } from 'lucide-react';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -24,7 +24,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
   const content = (
     <div className="flex h-full flex-col bg-[var(--surface)] text-[var(--foreground)]">
       {/* Logo row */}
-      <div className={`flex items-center gap-2.5 px-5 h-16 shrink-0 border-b border-[var(--border)] ${collapsed ? 'justify-center px-0' : ''}`}>
+      <div className={`flex items-center gap-2.5 h-16 shrink-0 border-b border-[var(--border)] bg-[var(--surface)] ${collapsed ? 'justify-between px-3' : 'px-5'}`}>
         <svg width="26" height="26" viewBox="0 0 30 30" fill="none" className="shrink-0">
           <rect x="3" y="12" width="7" height="15" rx="2" fill="#3FDCC0" />
           <rect x="12.5" y="4" width="7" height="23" rx="2" fill="#F2AE55" />
@@ -35,6 +35,14 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
             HireVerify
           </span>
         )}
+        <button
+          onClick={onToggleCollapse}
+          className={`hidden md:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--muted)] transition-all hover:border-[var(--primary)] hover:bg-[var(--primary)]/[0.08] hover:text-[var(--primary)] ${collapsed ? '' : 'ml-auto'}`}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <ChevronLeft width={16} height={16} className={`transition-transform duration-200 ${collapsed ? 'rotate-180' : ''}`} />
+        </button>
         <button
           onClick={onCloseMobile}
           className="ml-auto md:hidden text-[var(--muted)] hover:text-[var(--foreground)]"
@@ -75,7 +83,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                   key={item.key}
                   href={item.path}
                   label={item.label}
-                  icon={LayoutDashboard}
+                  icon={item.icon}
                   active={pathname.startsWith(item.path)}
                   collapsed={collapsed}
                   onClick={onCloseMobile}
@@ -84,6 +92,14 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
             </div>
           </div>
         )}
+
+        <div>
+          {!collapsed && <p className="mb-2 px-3 text-[10.5px] font-medium uppercase tracking-[0.12em] text-[var(--muted)]" style={{ fontFamily: 'var(--font-mono)' }}>Operations</p>}
+          <div className="space-y-1">
+            <SidebarLink href="/super-admin/bgv" label="BGV Operations" icon={FileCheck2} active={pathname.startsWith('/super-admin/bgv')} collapsed={collapsed} onClick={onCloseMobile} />
+            <SidebarLink href="/super-admin/settings" label="Settings" icon={Settings} active={pathname.startsWith('/super-admin/settings')} collapsed={collapsed} onClick={onCloseMobile} />
+          </div>
+        </div>
       </nav>
 
       {/* User + collapse toggle */}
@@ -94,21 +110,14 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="text-[13px] font-medium text-[var(--foreground)] truncate">
+              <Link href="/super-admin/profile" onClick={onCloseMobile} className="block truncate text-[13px] font-medium text-[var(--foreground)] hover:text-[var(--primary)]">
                 {user ? `${user.firstName} ${user.lastName}` : 'Loading…'}
-              </p>
+              </Link>
               <p className="text-[11px] text-[var(--muted)] truncate">{user?.role.name ?? ''}</p>
             </div>
           )}
         </div>
 
-        <button
-          onClick={onToggleCollapse}
-          className="hidden md:flex items-center gap-2 w-full mt-2 px-2 py-2 rounded-lg text-[12px] text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)] transition-colors"
-        >
-          <ChevronLeft width={16} height={16} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
-          {!collapsed && 'Collapse'}
-        </button>
       </div>
     </div>
   );
@@ -145,7 +154,7 @@ function SidebarLink({
 }: {
   href: string;
   label: string;
-  icon: React.ComponentType<{ width?: number; height?: number; className?: string }>;
+  icon: React.ComponentType<SVGProps<SVGSVGElement>>;
   active: boolean;
   collapsed: boolean;
   onClick?: () => void;
@@ -155,11 +164,11 @@ function SidebarLink({
       href={href}
       onClick={onClick}
       title={collapsed ? label : undefined}
-      className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13.5px] transition-colors ${
+      className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] transition-all ${
         collapsed ? 'justify-center' : ''
       } ${
         active
-          ? 'bg-[var(--primary)]/[0.12] text-[var(--primary)]'
+          ? 'bg-[var(--primary)]/[0.12] text-[var(--primary)] shadow-sm shadow-[var(--primary)]/[0.08]'
           : 'text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]'
       }`}
     >
