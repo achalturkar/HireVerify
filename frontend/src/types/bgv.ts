@@ -22,6 +22,7 @@ export interface VerificationCheck {
   isLocked?: boolean;
   lockedAt?: string | null;
   documents?: { id: string; fileName: string; fileUrl: string; documentType: string; mimeType?: string | null; uploadedAt: string }[];
+  case?: { id: string; candidateId: string; caseNumber?: string; companyId?: string };
 }
 
 export interface BGVCase {

@@ -127,7 +127,7 @@ export default function ClientDetailPage() {
     return (
       <div className="max-w-6xl mx-auto py-16 text-center">
         <p className="text-[13px] text-[#FF6B6B] mb-3">{error || 'Client not found.'}</p>
-        <button onClick={() => router.push('/clients')} className="text-[13px] text-[var(--primary)] underline">
+        <button onClick={() => router.push('/company/clients')} className="text-[13px] text-[var(--primary)] underline">
           Back to clients
         </button>
       </div>
@@ -136,7 +136,7 @@ export default function ClientDetailPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <button onClick={() => router.push('/clients')} className="inline-flex items-center gap-1.5 text-[13px] text-[var(--muted)] hover:text-[var(--foreground)]">
+      <button onClick={() => router.push('/company/clients')} className="inline-flex items-center gap-1.5 text-[13px] text-[var(--muted)] hover:text-[var(--foreground)]">
         <ArrowLeft size={14} /> Back to clients
       </button>
 

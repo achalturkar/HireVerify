@@ -10,6 +10,7 @@ import {
   FileCheck2,
   FilePlus2,
   FileText,
+  Landmark,
   Settings,
   ChevronLeft,
   X,
@@ -18,16 +19,6 @@ import {
 import { useAuth } from '@/src/auth/AuthProvider';
 import { resolveLogoUrl } from '@/src/lib/logo';
 import BrandMark from '@/src/components/ui/BrandMark';
-
-function initials(name: string) {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
-}
 
 // Menu items grouped by what they're used for, rather than one flat list —
 // each group gets its own small uppercase label (hidden when collapsed).
@@ -47,9 +38,16 @@ const menuGroups: { label: string; items: { name: string; href: string; icon: ty
     label: 'Verification',
     items: [
       { name: 'BGV Cases', href: '/company/bgv-cases', icon: FileCheck2 },
+      { name: 'Reports', href: '/company/reports', icon: FileText },
       { name: 'Manual BGV', href: '/company/manual-bgv', icon: FilePlus2 },
       { name: 'Verifications', href: '/company/verifications', icon: ShieldCheck },
-      { name: 'Reports', href: '/company/reports', icon: FileText },
+    ],
+  },
+  {
+    label: 'Actions',
+    items: [
+          { name: 'Government Portals', href: '/company/government-portals', icon: Landmark },
+
     ],
   },
   {
@@ -123,7 +121,7 @@ export default function CompanySidebar({ collapsed, onToggleCollapse, mobileOpen
             )}
             <div className="space-y-1">
               {group.items.map((menu) => {
-                const active = pathname === menu.href;
+                const active = pathname === menu.href.split('?')[0];
                 const Icon = menu.icon;
                 return (
                   <Link

@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Camera,
   Lock,
+  LogOut,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { ApiError } from '@/src/lib/api';
@@ -65,10 +66,11 @@ function strengthMeta(score: number) {
 }
 
 export default function AccountSettingsPage() {
-  const { user, accessToken, setUser } = useAuth() as {
+  const { user, accessToken, setUser, logout } = useAuth() as {
     user: User | null;
     accessToken: string | null;
     setUser?: (u: User) => void;
+    logout: () => Promise<void>;
   };
 
   const [tab, setTab] = useState<Tab>('profile');
@@ -118,6 +120,19 @@ export default function AccountSettingsPage() {
           )}
         </div>
       </div>
+
+      <section className="rounded-2xl border border-[#FF6B6B]/25 bg-[#FF6B6B]/[0.06] p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-[14px] font-semibold text-[var(--foreground)]">Sign out</h2>
+            <p className="mt-1 text-[12px] text-[var(--muted)]">End your current company admin session on this device.</p>
+          </div>
+          <button type="button" onClick={() => void logout()} className="inline-flex items-center gap-2 rounded-lg bg-[#FF6B6B] px-3.5 py-2.5 text-[12.5px] font-semibold text-white hover:bg-[#e85b5b]">
+            <LogOut size={15} />
+            Sign out
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useMemo, type SVGProps } from 'react';
 import { useAuth } from '../../auth/AuthProvider';
@@ -25,16 +26,15 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
     <div className="flex h-full flex-col bg-[var(--surface)] text-[var(--foreground)]">
       {/* Logo row */}
       <div className={`flex items-center gap-2.5 h-16 shrink-0 border-b border-[var(--border)] bg-[var(--surface)] ${collapsed ? 'justify-between px-3' : 'px-5'}`}>
-        <svg width="26" height="26" viewBox="0 0 30 30" fill="none" className="shrink-0">
-          <rect x="3" y="12" width="7" height="15" rx="2" fill="#3FDCC0" />
-          <rect x="12.5" y="4" width="7" height="23" rx="2" fill="#F2AE55" />
-          <rect x="22" y="9" width="5" height="18" rx="2" fill="#3FDCC0" opacity="0.55" />
-        </svg>
-        {!collapsed && (
-          <span className="text-[16px] font-semibold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
-            HireVerify
-          </span>
-        )}
+        <div className={`relative shrink-0 overflow-hidden ${collapsed ? 'h-9 w-9' : 'h-9 w-[142px]'}`}>
+          <Image
+            src="/hireverify-logo.svg"
+            alt="HireVerify"
+            width={760}
+            height={210}
+            className="absolute left-0 top-0 h-9 w-[130px] max-w-none object-contain object-left"
+          />
+        </div>
         <button
           onClick={onToggleCollapse}
           className={`hidden md:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--muted)] transition-all hover:border-[var(--primary)] hover:bg-[var(--primary)]/[0.08] hover:text-[var(--primary)] ${collapsed ? '' : 'ml-auto'}`}

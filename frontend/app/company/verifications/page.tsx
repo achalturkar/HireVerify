@@ -62,11 +62,12 @@ export default function VerificationsPage() {
   }, [accessToken]);
 
   useEffect(() => {
-    setLoading(true);
+    const loadingTask = Promise.resolve().then(() => setLoading(true));
     listVerifications(caseId || undefined, accessToken)
       .then(setChecks)
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load verification checks.'))
       .finally(() => setLoading(false));
+    return () => { void loadingTask; };
   }, [accessToken, caseId]);
 
   const counts = useMemo(() => checks.reduce<Record<string, number>>((result, check) => { result[check.type] = (result[check.type] || 0) + 1; return result; }, {}), [checks]);

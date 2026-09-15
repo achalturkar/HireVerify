@@ -1,4 +1,17 @@
-const API_ASSET_BASE = (process.env.NEXT_PUBLIC_API || '/api/v1'  || 'http://localhost:5000/api/v1').replace(/\/api\/v1\/?$/, '');
+const configuredApi = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API || '';
+
+function assetOrigin() {
+  const browserOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const configuredOrigin = configuredApi.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+  const configuredIsLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(configuredOrigin);
+
+  // A localhost value can remain in a build-time env file after deployment.
+  // In that case uploaded assets must use the deployed site's proxy origin.
+  if (browserOrigin && configuredIsLocal && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(browserOrigin)) {
+    return browserOrigin;
+  }
+  return configuredOrigin || browserOrigin;
+}
 
 /**
  * Normalizes whatever the API sends back for a logo (or any uploaded image)
@@ -14,7 +27,7 @@ export function resolveLogoUrl(value: unknown): string | null {
 
   if (typeof value === 'string') {
     if (/^(https?:|blob:|data:)/.test(value)) return value;
-    return `${API_ASSET_BASE}${value.startsWith('/') ? '' : '/'}${value}`;
+    return `${assetOrigin()}${value.startsWith('/') ? '' : '/'}${value}`;
   }
 
   if (typeof value === 'object') {

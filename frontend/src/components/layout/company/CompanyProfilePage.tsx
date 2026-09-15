@@ -4,33 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Building2, Camera, Mail, MapPin, Phone, Save, X, Loader2, PenTool, Stamp as StampIcon } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getCompany, updateCompany } from '@/src/lib/api/companies';
+import { resolveLogoUrl } from '@/src/lib/logo';
 
 const MAX_IMAGE_SIZE_BYTES = 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API ||
-  'http://localhost:5000/api/v1';
-
-// The API base includes a path suffix like "/api/v1" — uploaded files are
-// served from the origin, not under that path, so it has to be stripped
-// before a relative url ("uploads/companies/xyz.png") is joined to it.
-const FILE_ORIGIN = API_BASE.replace(/\/api(\/v\d+)?\/?$/, '');
-
-/**
- * Resolves whatever shape a stored image url comes back from the API in —
- * a bare relative path, a path with a leading slash, or a full URL — into
- * something an <img> tag can actually load. Shared by logo, signature, and
- * stamp since all three are stored the same way.
- */
-function resolveFileUrl(url?: string | null): string | null {
-  if (!url) return null;
-  if (/^https?:\/\//i.test(url) || url.startsWith('blob:') || url.startsWith('data:')) {
-    return url;
-  }
-  return `${FILE_ORIGIN}/${url.replace(/^\/+/, '')}`;
-}
 
 function getImageValidationError(file: File) {
   const extension = file.name.split('.').pop()?.toLowerCase();
@@ -361,8 +338,8 @@ export default function CompanyProfilePage() {
 
   useEffect(() => {
     if (!companyId || !accessToken) {
-      setLoading(false);
-      return;
+      const task = Promise.resolve().then(() => setLoading(false));
+      return () => { void task; };
     }
 
     const loadCompany = async () => {
@@ -379,9 +356,9 @@ export default function CompanyProfilePage() {
           primaryColor: data.primaryColor ?? '',
         });
         setImages({
-          logo: { ...emptyImageState, savedUrl: resolveFileUrl(data.logoUrl) },
-          signature: { ...emptyImageState, savedUrl: resolveFileUrl(data.signatureUrl) },
-          stamp: { ...emptyImageState, savedUrl: resolveFileUrl(data.stampUrl) },
+          logo: { ...emptyImageState, savedUrl: resolveLogoUrl(data.logoUrl) },
+          signature: { ...emptyImageState, savedUrl: resolveLogoUrl(data.signatureUrl) },
+          stamp: { ...emptyImageState, savedUrl: resolveLogoUrl(data.stampUrl) },
         });
       } catch (err) {
         setBanner({
@@ -486,9 +463,9 @@ export default function CompanyProfilePage() {
           if (img.previewUrl) URL.revokeObjectURL(img.previewUrl);
         });
         return {
-          logo: { ...emptyImageState, savedUrl: resolveFileUrl(updated.logoUrl) },
-          signature: { ...emptyImageState, savedUrl: resolveFileUrl(updated.signatureUrl) },
-          stamp: { ...emptyImageState, savedUrl: resolveFileUrl(updated.stampUrl) },
+          logo: { ...emptyImageState, savedUrl: resolveLogoUrl(updated.logoUrl) },
+          signature: { ...emptyImageState, savedUrl: resolveLogoUrl(updated.signatureUrl) },
+          stamp: { ...emptyImageState, savedUrl: resolveLogoUrl(updated.stampUrl) },
         };
       });
       setBanner({ tone: 'success', text: 'Company profile updated successfully.' });
@@ -501,10 +478,6 @@ export default function CompanyProfilePage() {
       setSaving(false);
     }
   };
-
-  const swatch = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(form.primaryColor.trim())
-    ? form.primaryColor.trim()
-    : null;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-10">

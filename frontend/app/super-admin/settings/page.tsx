@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Bell, Check, ChevronRight, KeyRound, Monitor, Palette, RotateCcw, ShieldCheck, UserRound } from 'lucide-react';
+import { Bell, Check, ChevronRight, KeyRound, LogOut, Monitor, Palette, RotateCcw, ShieldCheck, UserRound } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { useTheme } from '@/src/lib/theme-context';
 
@@ -28,7 +28,7 @@ const labels: Array<{ key: keyof Preferences; title: string; description: string
 ];
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [preferences, setPreferences] = useState(defaults);
   const [saved, setSaved] = useState(false);
@@ -78,6 +78,19 @@ export default function SettingsPage() {
 
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm"><div className="mb-5 flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400"><UserRound size={17} /></span><div><h2 className="text-[15px] font-semibold">Session information</h2><p className="text-[11px] text-[var(--muted)]">Current account context</p></div></div><dl className="space-y-3 text-[12px]"><div className="flex justify-between gap-4"><dt className="text-[var(--muted)]">Account</dt><dd className="truncate text-right text-[var(--foreground)]">{user?.firstName} {user?.lastName}</dd></div><div className="flex justify-between gap-4"><dt className="text-[var(--muted)]">Role</dt><dd className="text-right text-[var(--foreground)]">{user?.role?.name || 'Super Admin'}</dd></div><div className="flex justify-between gap-4"><dt className="text-[var(--muted)]">Status</dt><dd className="font-medium text-emerald-600 dark:text-emerald-400">{user?.status || 'ACTIVE'}</dd></div></dl></section>
       </div>
+
+      <section className="rounded-2xl border border-rose-500/25 bg-rose-500/[0.06] p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-[15px] font-semibold text-[var(--foreground)]">Sign out</h2>
+            <p className="mt-1 text-[11px] text-[var(--muted)]">End your current Super Admin session on this device.</p>
+          </div>
+          <button type="button" onClick={() => void logout()} className="inline-flex items-center gap-2 rounded-lg bg-rose-500 px-3.5 py-2.5 text-[12px] font-semibold text-white hover:bg-rose-600">
+            <LogOut size={15} />
+            Sign out
+          </button>
+        </div>
+      </section>
 
       <div className="flex justify-end"><button onClick={() => save(defaults)} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3.5 py-2.5 text-[12px] text-[var(--muted)] hover:border-[var(--primary)] hover:text-[var(--foreground)]"><RotateCcw size={14} /> Reset preferences</button></div>
     </div>
