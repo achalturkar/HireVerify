@@ -57,7 +57,7 @@ const reportColors = (primaryColor) => {
 
 const colorsFor = (doc) => doc.reportColors || COLORS;
 
-const REPORT_CHECK_ORDER = ['IDENTITY', 'ADDRESS', 'UAN', 'EDUCATION', 'COURT', 'CIBIL', 'TWENTY_SIX_AS', 'POLICE', 'PAN', 'EMPLOYMENT', 'DOCUMENT', 'DOCUMENT_FORGERY'];
+const REPORT_CHECK_ORDER = ['IDENTITY', 'ADDRESS', 'ADDRESS_PHYSICAL', 'UAN', 'EDUCATION', 'EMPLOYMENT', 'GAP', 'REFERENCE', 'CV', 'SOCIAL_MEDIA', 'COURT', 'CIBIL', 'TWENTY_SIX_AS', 'POLICE', 'POLICE_RECORD', 'PAN', 'DOCUMENT', 'DOCUMENT_FORGERY'];
 
 /* ================================================================== */
 /*  Asset loading                                                       */
@@ -385,10 +385,16 @@ const summaryDetail = (check) => {
   const detailFields = {
     IDENTITY: [{ key: 'aadhaarNumber', label: 'Aadhar Card Verified' }],
     ADDRESS: [{ key: 'permanentAddress', label: 'Pan Card Address Verified' }, { key: 'currentAddress', label: 'Address Verified' }],
+    ADDRESS_PHYSICAL: [{ key: 'currentAddress', label: 'Physical Address Visited' }, { key: 'permanentAddress', label: 'Visit Findings' }],
     UAN: [{ key: 'uanNumber', label: 'UAN Verified' }, { key: 'uan', label: 'UAN Verified' }],
+    GAP: [{ key: 'gapReason', label: 'Gap Reason Recorded' }, { key: 'gapFrom', label: 'Gap Period Recorded' }],
+    REFERENCE: [{ key: 'refereeName', label: 'Reference Contact Verified' }, { key: 'contact', label: 'Reference Contact Recorded' }],
+    CV: [{ key: 'candidateName', label: 'CV Candidate Name Validated' }, { key: 'cvReference', label: 'CV Reference Recorded' }],
+    SOCIAL_MEDIA: [{ key: 'platform', label: 'Social Media Platform Reviewed' }, { key: 'profileUrl', label: 'Social Profile Reviewed' }],
     CIBIL: [{ key: 'creditScore', label: 'CIBIL Score Verified' }, { key: 'score', label: 'CIBIL Score Verified' }],
     TWENTY_SIX_AS: [{ key: 'assessmentYear', label: '26AS Verified' }, { key: 'taxStatus', label: '26AS Verified' }],
     POLICE: [{ key: 'policeStation', label: 'Police Verification Completed' }, { key: 'verificationStatus', label: 'Police Verification Completed' }],
+    POLICE_RECORD: [{ key: 'policeStation', label: 'Police Record Checked' }, { key: 'policeReportNumber', label: 'Police Report Recorded' }],
     EDUCATION: [{ key: 'documentName', label: 'Document Verified' }, { key: 'educationType', label: 'Document Verified' }],
     COURT: [{ key: 'remarks', label: null }],
   };
@@ -404,12 +410,18 @@ const summaryDetail = (check) => {
 const summaryCheckLabel = (type) => ({
   IDENTITY: 'Identity Verification (Aadhar Card)',
   ADDRESS: 'Address Verification (Digital)',
+  ADDRESS_PHYSICAL: 'Address Verification (Physical)',
   UAN: 'UAN Verification',
   EDUCATION: 'Education Verification',
+  GAP: 'Gap Verification',
+  REFERENCE: 'Reference Verification',
+  CV: 'CV Validation',
+  SOCIAL_MEDIA: 'Social Media Verification',
   COURT: 'Criminal Record Verification (Court Check - PAN Address)',
   CIBIL: 'CIBIL Verification',
   TWENTY_SIX_AS: '26AS Verification',
   POLICE: 'Police Verification',
+  POLICE_RECORD: 'Police Record Verification',
   PAN: 'PAN Verification',
   EMPLOYMENT: 'Employment Verification',
   DOCUMENT: 'Document Verification',
@@ -424,11 +436,20 @@ const resultRows = (check) => {
       { key: 'currentAddress', label: 'Current Address' },
       { key: 'permanentAddress', label: 'Permanent Address (PAN Card)' },
     ],
+    ADDRESS_PHYSICAL: [
+      { key: 'currentAddress', label: 'Physical Address Visited' },
+      { key: 'permanentAddress', label: 'Visit Findings' },
+    ],
     UAN: [{ key: 'uanNumber', label: 'UAN Number' }, { key: 'uan', label: 'UAN Number' }],
     PAN: [{ key: 'panNumber', label: 'PAN Number' }, { key: 'pan', label: 'PAN Number' }],
+    GAP: [{ key: 'gapFrom', label: 'Gap From' }, { key: 'gapTo', label: 'Gap To' }, { key: 'gapReason', label: 'Gap Reason' }],
+    REFERENCE: [{ key: 'refereeName', label: 'Referee Name' }, { key: 'relationship', label: 'Relationship' }, { key: 'contact', label: 'Reference Contact' }],
+    CV: [{ key: 'candidateName', label: 'Candidate Name on CV' }, { key: 'cvReference', label: 'CV Reference' }],
+    SOCIAL_MEDIA: [{ key: 'platform', label: 'Social Media Platform' }, { key: 'profileUrl', label: 'Profile URL' }],
     CIBIL: [{ key: 'creditScore', label: 'CIBIL Score' }, { key: 'score', label: 'CIBIL Score' }, { key: 'reportDate', label: 'Report Date' }],
     TWENTY_SIX_AS: [{ key: 'assessmentYear', label: 'Assessment Year' }, { key: 'taxStatus', label: 'Tax Status' }, { key: 'totalIncome', label: 'Total Income' }],
     POLICE: [{ key: 'policeStation', label: 'Police Station' }, { key: 'policeReportNumber', label: 'Police Report Number' }, { key: 'verificationStatus', label: 'Police Verification Status' }, { key: 'remarks', label: 'Police Remarks' }],
+    POLICE_RECORD: [{ key: 'policeStation', label: 'Police Station' }, { key: 'policeReportNumber', label: 'Police Report Number' }, { key: 'verificationStatus', label: 'Police Record Status' }],
     DOCUMENT: [
       { key: 'documentName', label: 'Document Name' }, { key: 'documentType', label: 'Document Type' },
       { key: 'documentNumber', label: 'Document Number' },
@@ -533,7 +554,6 @@ const drawAttachmentsInline = async (doc, check, companyName, logo) => {
   if (!imageAssets.length) return;
 
   const MIN_USABLE = 180;
-
   const freshPageIfCramped = () => {
     let remaining = CONTENT_BOTTOM - doc.y - 6;
     if (remaining < MIN_USABLE) {
@@ -591,6 +611,7 @@ const drawAttachmentsInline = async (doc, check, companyName, logo) => {
 
 async function buildReport(item) {
   const companyName = item.client?.company?.name || item.client?.name || 'Background Verification Provider';
+  const portalName = 'Hireverify Brainhunt Ventures';
   const companyCode = item.client?.company?.shortCode || 'BGV';
   const candidate = item.candidate || {};
   const doc = new PDFDocument({ size: 'A4', margin: 48, autoFirstPage: false });
@@ -652,17 +673,27 @@ async function buildReport(item) {
   drawBand(doc, 'EXECUTIVE SUMMARY');
   const summaryWidths = [195, 205, 99]; // sums to 499; balanced for long names and concise details
   drawHeaderRow(doc, ['TYPE OF CHECK', 'BRIEF DETAILS', 'STATUS'], summaryWidths);
+  let summaryPages = 1;
   checks.forEach((check) => {
     const detail = summaryDetail(check);
     const status = checkStatus(check);
     const label = summaryCheckLabel(check.type);
-    const y = doc.y;
     doc.font('Helvetica-Bold').fontSize(8.5);
     const labelHeight = doc.heightOfString(String(label), { width: summaryWidths[0] - 12 });
     doc.font('Helvetica').fontSize(8.5);
     const detailHeight = doc.heightOfString(String(detail), { width: summaryWidths[1] - 16 });
     const height = Math.max(25, labelHeight + 8, detailHeight + 8);
 
+    if (doc.y + height > CONTENT_BOTTOM && summaryPages < 2) {
+      drawFooter(doc, companyName);
+      doc.addPage();
+      drawPageChrome(doc, logo);
+      drawBand(doc, 'EXECUTIVE SUMMARY (CONTINUED)');
+      drawHeaderRow(doc, ['TYPE OF CHECK', 'BRIEF DETAILS', 'STATUS'], summaryWidths);
+      summaryPages += 1;
+    }
+
+    const y = doc.y;
     let x = PAGE_LEFT;
     doc.fillColor(colorsFor(doc).labelBg).rect(x, y, summaryWidths[0], height).fill();
     doc.fillColor(colorsFor(doc).valueBg).rect(x + summaryWidths[0], y, summaryWidths[1], height).fill();
@@ -682,110 +713,79 @@ async function buildReport(item) {
 
   drawFooter(doc, companyName);
 
-  /* ---------------------------- One page per check ---------------------------- */
+  /* ---------------------------- One page per selected check ---------------------------- */
 
   for (const check of checks) {
     doc.addPage();
     drawPageChrome(doc, logo);
-    drawBand(doc, `${check.type.replaceAll('_', ' ')} VERIFICATION`);
+    drawBand(doc, `${summaryCheckLabel(check.type).toUpperCase()}`);
 
-    const renderedStructured =
-      check.type === 'EMPLOYMENT' || check.type === 'EDUCATION' ? drawStructuredEntries(doc, check, companyName, logo) : false;
-
+    const renderedStructured = check.type === 'EMPLOYMENT' || check.type === 'EDUCATION'
+      ? drawStructuredEntries(doc, check, companyName, logo)
+      : false;
     if (!renderedStructured) {
       const rows = resultRows(check);
-      const status = checkStatus(check);
       ensureSpace(doc, 24 + Math.min(400, 30 + rows.length * 27), companyName, logo);
       drawHeaderRow(doc, ['DETAILS', 'FINDINGS'], [245, 254]);
-      if (rows.length) {
-        rows.forEach(([label, value]) => drawRow(doc, label, value, {
-          labelWidth: 245,
-          ...(label === 'Status' ? { status: value } : {}),
-        }));
-      } else {
-        drawRow(doc, 'Details', 'No details entered', { labelWidth: 245 });
-      }
+      rows.forEach(([label, value]) => drawRow(doc, label, value, {
+        labelWidth: 245,
+        ...(label === 'Status' ? { status: value } : {}),
+      }));
     }
-
-    // Images go directly under the table on this same page, not on a
-    // separate page — this is the main structural fix versus the old
-    // addAttachmentPages behavior.
     await drawAttachmentsInline(doc, check, companyName, logo);
-
     drawFooter(doc, companyName);
   }
 
+  /* ---------------------------- Final completion page ---------------------------- */
 
-  /* ---------------------------- Final declaration (last page) ---------------------------- */
- 
+  const stamp = await normalizeImage(await readAsset(item.client?.company?.stampUrl));
   doc.addPage();
-  drawPageChrome(doc, logo);
-  doc.y = 100;
+  drawPageChrome(doc, stamp ? null : logo);
+  if (stamp) {
+    try { doc.image(stamp, 475, 35, { fit: [72, 72], align: 'right' }); } catch (_error) { /* keep text completion mark */ }
+  }
   drawBand(doc, 'FINAL DECLARATION');
   doc.y += 12;
- 
-  // Green "verification complete" box with a checkmark, mirroring the
-  // sample report's closing confirmation banner.
   const declColors = colorsFor(doc);
   const boxTop = doc.y;
-  const boxHeight = 118;
+  const boxHeight = 102;
   doc.fillColor('#F0FDF5').roundedRect(PAGE_LEFT, boxTop, PAGE_WIDTH, boxHeight, 6).fill();
   doc.strokeColor('#BBF0CE').lineWidth(1).roundedRect(PAGE_LEFT, boxTop, PAGE_WIDTH, boxHeight, 6).stroke();
-  doc.fillColor(COLORS.green).font('Helvetica-Bold').fontSize(24).text('\u2713', PAGE_LEFT, boxTop + 20, {
-    width: PAGE_WIDTH,
-    align: 'center',
-  });
-  doc.font('Helvetica-Bold').fontSize(15).text('VERIFICATION COMPLETE', PAGE_LEFT, boxTop + 54, {
-    width: PAGE_WIDTH,
-    align: 'center',
-  });
-  doc.fillColor(colorsFor(doc).body).font('Helvetica').fontSize(9).text(
+  doc.save().strokeColor(COLORS.green).lineWidth(5).lineCap('round').lineJoin('round');
+  doc.moveTo(PAGE_LEFT + 232, boxTop + 39).lineTo(PAGE_LEFT + 242, boxTop + 49).lineTo(PAGE_LEFT + 268, boxTop + 23).stroke();
+  doc.restore();
+  doc.fillColor(COLORS.green).font('Helvetica-Bold').fontSize(15).text('VERIFICATION COMPLETE', PAGE_LEFT, boxTop + 67, { width: PAGE_WIDTH, align: 'center', lineBreak: false });
+  doc.fillColor(declColors.body).font('Helvetica').fontSize(9).text(
     `All checks have been successfully completed  \u00B7  Report Date: ${reportDate(item.completedAt) || reportDate(new Date())}`,
     PAGE_LEFT,
-    boxTop + 78,
+    boxTop + 91,
     { width: PAGE_WIDTH, align: 'center' }
   );
   doc.y = boxTop + boxHeight + 20;
- 
-  // "IMPORTANT DISCLAIMER" heading + amber disclaimer box.
+
   doc.fillColor(declColors.navy).font('Helvetica-Bold').fontSize(12).text('IMPORTANT DISCLAIMER', PAGE_LEFT, doc.y);
   doc.y += 18;
- 
   const disclaimerParagraphs = [
-    `This report has been prepared based on the information and documents provided by the candidate and verified through available official sources, third-party databases, and field verification wherever applicable. ${companyName} has exercised due diligence in conducting these verifications; however, the information is subject to limitations in accuracy, completeness, and availability of records at the time of verification.`,
-    `This report is intended to serve as a supporting document to assist the client in making hiring or engagement decisions regarding the candidate. ${companyName} does not guarantee or certify the character, integrity, or future conduct of the individual. Where the report indicates \u201CNo Record Found,\u201D it signifies that no adverse information was available in the databases accessed during the verification process and should not be construed as confirmation of a clean background.`,
-    `The verification has been conducted strictly within the defined scope and lawful data sources. Any checks not included within the agreed scope have not been performed. The information contained in this report is confidential and intended solely for the use of the client who requested the verification. Any reproduction, distribution, or unauthorized use of this report is strictly prohibited. ${companyName} shall not be held liable for any direct or indirect losses, damages, or consequences arising from decisions made based on this report. All decisions, including hiring or engagement, remain solely at the discretion and responsibility of the client.`,
+    `This report has been prepared by ${portalName} based on the information and documents provided by the candidate and verified through available official sources, third-party databases, and field verification wherever applicable. ${companyName} has exercised due diligence in conducting these verifications; however, the information is subject to limitations in accuracy, completeness, and availability of records at the time of verification.`,
+    `This report is intended to serve as a supporting document from ${portalName} to assist the client in making hiring or engagement decisions regarding the candidate. ${companyName} does not guarantee or certify the character, integrity, or future conduct of the individual. Where the report indicates \u201CNo Record Found,\u201D it signifies that no adverse information was available in the databases accessed during the verification process and should not be construed as confirmation of a clean background.`,
+    `The verification has been conducted by ${portalName} strictly within the defined scope and lawful data sources. Any checks not included within the agreed scope have not been performed. The information contained in this report is confidential and intended solely for the use of the client who requested the verification. Any reproduction, distribution, or unauthorized use of this report is strictly prohibited. ${companyName} and ${portalName} shall not be held liable for any direct or indirect losses, damages, or consequences arising from decisions made based on this report. All decisions, including hiring or engagement, remain solely at the discretion and responsibility of the client.`,
   ];
- 
   doc.font('Helvetica').fontSize(8.5);
-  const paragraphHeights = disclaimerParagraphs.map((p) => doc.heightOfString(p, { width: PAGE_WIDTH - 28, lineGap: 3 }));
-  const disclaimerBoxHeight = paragraphHeights.reduce((sum, h) => sum + h + 12, 0) + 12;
- 
-  ensureSpace(doc, disclaimerBoxHeight + 20, companyName, logo);
-  const dBoxTop = doc.y;
-  doc.fillColor('#FEF9EC').roundedRect(PAGE_LEFT, dBoxTop, PAGE_WIDTH, disclaimerBoxHeight, 6).fill();
-  doc.strokeColor('#F2D9A0').lineWidth(1).roundedRect(PAGE_LEFT, dBoxTop, PAGE_WIDTH, disclaimerBoxHeight, 6).stroke();
-  let ty = dBoxTop + 12;
+  const paragraphHeights = disclaimerParagraphs.map((paragraph) => doc.heightOfString(paragraph, { width: PAGE_WIDTH - 28, lineGap: 3 }));
+  const disclaimerBoxHeight = paragraphHeights.reduce((sum, height) => sum + height + 12, 0) + 12;
+  const disclaimerTop = doc.y;
+  doc.fillColor('#FEF9EC').roundedRect(PAGE_LEFT, disclaimerTop, PAGE_WIDTH, disclaimerBoxHeight, 6).fill();
+  doc.strokeColor('#F2D9A0').lineWidth(1).roundedRect(PAGE_LEFT, disclaimerTop, PAGE_WIDTH, disclaimerBoxHeight, 6).stroke();
+  let textY = disclaimerTop + 12;
   doc.font('Helvetica').fontSize(8.5).fillColor('#8A6210');
-  disclaimerParagraphs.forEach((paragraph, i) => {
-    doc.text(paragraph, PAGE_LEFT + 14, ty, { width: PAGE_WIDTH - 28, lineGap: 3 });
-    ty += paragraphHeights[i] + 12;
+  disclaimerParagraphs.forEach((paragraph, index) => {
+    doc.text(paragraph, PAGE_LEFT + 14, textY, { width: PAGE_WIDTH - 28, lineGap: 3 });
+    textY += paragraphHeights[index] + 12;
   });
-  doc.y = dBoxTop + disclaimerBoxHeight + 30;
- 
-  ensureSpace(doc, 110, companyName, logo);
-  doc.fillColor(colorsFor(doc).muted).font('Helvetica-Bold').fontSize(9).text('\u00B7 YOUR DIGITAL PARTNER', PAGE_LEFT, doc.y, {
-    width: PAGE_WIDTH,
-    align: 'center',
-    characterSpacing: 1,
-  });
+  doc.y = disclaimerTop + disclaimerBoxHeight + 30;
+  doc.fillColor(declColors.muted).font('Helvetica-Bold').fontSize(9).text('\u00B7 YOUR DIGITAL PARTNER', PAGE_LEFT, doc.y, { width: PAGE_WIDTH, align: 'center', characterSpacing: 1 });
   doc.y += 18;
-  doc.fillColor(declColors.navy).font('Helvetica-Bold').fontSize(32).text('THANK YOU', PAGE_LEFT, doc.y, {
-    width: PAGE_WIDTH,
-    align: 'center',
-    characterSpacing: 3,
-  });
- 
+  doc.fillColor(declColors.navy).font('Helvetica-Bold').fontSize(32).text('THANK YOU', PAGE_LEFT, doc.y, { width: PAGE_WIDTH, align: 'center', characterSpacing: 3 });
   drawFooter(doc, companyName);
  
   return doc;

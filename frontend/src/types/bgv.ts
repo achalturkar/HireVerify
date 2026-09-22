@@ -1,6 +1,6 @@
 export type BGVCaseStatus = 'DRAFT' | 'INITIATED' | 'CONSENT_PENDING' | 'IN_PROGRESS' | 'UNDER_REVIEW' | 'COMPLETED' | 'ON_HOLD' | 'CANCELLED';
 export type BGVOverallResult = 'PENDING' | 'CLEAR' | 'MINOR_DISCREPANCY' | 'MAJOR_DISCREPANCY' | 'UNABLE_TO_VERIFY' | 'REQUIRES_REVIEW';
-export type VerificationType = 'PAN' | 'UAN' | 'COURT' | 'IDENTITY' | 'ADDRESS' | 'EDUCATION' | 'EMPLOYMENT' | 'DOCUMENT' | 'DOCUMENT_FORGERY' | 'CIBIL' | 'TWENTY_SIX_AS' | 'POLICE';
+export type VerificationType = 'PAN' | 'UAN' | 'COURT' | 'IDENTITY' | 'ADDRESS' | 'ADDRESS_PHYSICAL' | 'EDUCATION' | 'EMPLOYMENT' | 'GAP' | 'REFERENCE' | 'CV' | 'SOCIAL_MEDIA' | 'DOCUMENT' | 'DOCUMENT_FORGERY' | 'CIBIL' | 'TWENTY_SIX_AS' | 'POLICE' | 'POLICE_RECORD';
 export type VerificationProvider = 'SUREPASS' | 'MANUAL' | 'INTERNAL';
 export type VerificationStatus = 'PENDING' | 'QUEUED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'RETRYING' | 'CANCELLED';
 export type VerificationResult = 'PENDING' | 'VERIFIED' | 'NOT_VERIFIED' | 'MATCH' | 'MISMATCH' | 'NO_RECORD_FOUND' | 'RECORD_FOUND' | 'REQUIRES_REVIEW' | 'UNABLE_TO_VERIFY';
@@ -13,7 +13,9 @@ export interface VerificationCheck {
   status: VerificationStatus;
   result: VerificationResult;
   priority: number;
+  inputData?: unknown;
   resultData?: unknown;
+  rawResponse?: unknown;
   failureReason?: string | null;
   remarks?: string | null;
   startedAt?: string | null;

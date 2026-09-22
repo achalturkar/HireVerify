@@ -12,6 +12,7 @@ import {
   FileText,
   Landmark,
   Settings,
+  CircleHelp,
   ChevronLeft,
   X,
   UserCircle,
@@ -40,7 +41,7 @@ const menuGroups: { label: string; items: { name: string; href: string; icon: ty
       { name: 'BGV Cases', href: '/company/bgv-cases', icon: FileCheck2 },
       { name: 'Reports', href: '/company/reports', icon: FileText },
       { name: 'Manual BGV', href: '/company/manual-bgv', icon: FilePlus2 },
-      { name: 'Verifications', href: '/company/verifications', icon: ShieldCheck },
+      { name: 'Verification Checks', href: '/company/verifications', icon: ShieldCheck },
     ],
   },
   {
@@ -57,6 +58,7 @@ const menuGroups: { label: string; items: { name: string; href: string; icon: ty
       { name: 'Users', href: '/company/users', icon: Users },
       { name: 'Roles', href: '/company/roles', icon: ShieldCheck },
       { name: 'Settings', href: '/company/settings', icon: Settings },
+      { name: 'Help', href: '/company/help', icon: CircleHelp },
     ],
   },
 ];

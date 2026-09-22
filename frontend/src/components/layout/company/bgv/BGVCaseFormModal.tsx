@@ -23,12 +23,18 @@ const checkTypes: { type: VerificationType; label: string; provider: Verificatio
   { type: 'COURT', label: 'Court', provider: 'SUREPASS' },
   { type: 'IDENTITY', label: 'Identity', provider: 'MANUAL' },
   { type: 'ADDRESS', label: 'Address', provider: 'MANUAL' },
+  { type: 'ADDRESS_PHYSICAL', label: 'Address (Physical)', provider: 'MANUAL' },
   { type: 'EDUCATION', label: 'Education', provider: 'MANUAL' },
   { type: 'EMPLOYMENT', label: 'Employment', provider: 'MANUAL' },
+  { type: 'GAP', label: 'Gap Check', provider: 'MANUAL' },
+  { type: 'REFERENCE', label: 'Reference Check', provider: 'MANUAL' },
+  { type: 'CV', label: 'CV Validation', provider: 'MANUAL' },
+  { type: 'SOCIAL_MEDIA', label: 'Social Media', provider: 'MANUAL' },
   { type: 'DOCUMENT', label: 'Document', provider: 'MANUAL' },
   { type: 'CIBIL', label: 'CIBIL', provider: 'MANUAL' },
   { type: 'TWENTY_SIX_AS', label: '26AS', provider: 'MANUAL' },
   { type: 'POLICE', label: 'Police Verification', provider: 'MANUAL' },
+  { type: 'POLICE_RECORD', label: 'Police Record', provider: 'MANUAL' },
 ];
 
 const inputClass = 'w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[#3FDCC0]/50';

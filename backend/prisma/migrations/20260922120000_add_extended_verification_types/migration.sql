@@ -1,0 +1,6 @@
+ALTER TYPE "VerificationType" ADD VALUE 'ADDRESS_PHYSICAL';
+ALTER TYPE "VerificationType" ADD VALUE 'GAP';
+ALTER TYPE "VerificationType" ADD VALUE 'REFERENCE';
+ALTER TYPE "VerificationType" ADD VALUE 'CV';
+ALTER TYPE "VerificationType" ADD VALUE 'SOCIAL_MEDIA';
+ALTER TYPE "VerificationType" ADD VALUE 'POLICE_RECORD';

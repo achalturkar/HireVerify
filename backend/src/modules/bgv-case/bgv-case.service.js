@@ -5,16 +5,11 @@ const repo = require('./bgv-case.repository');
 const { NotFoundError, BadRequestError, ConflictError } = require('../../utils/errors');
 const { buildReport } = require('./bgv-report.generator');
 
-const TRANSITIONS = {
-  DRAFT: ['INITIATED', 'COMPLETED', 'CANCELLED'],
-  INITIATED: ['CONSENT_PENDING', 'IN_PROGRESS', 'ON_HOLD', 'CANCELLED'],
-  CONSENT_PENDING: ['IN_PROGRESS', 'ON_HOLD', 'CANCELLED'],
-  IN_PROGRESS: ['UNDER_REVIEW', 'ON_HOLD', 'CANCELLED'],
-  UNDER_REVIEW: ['COMPLETED', 'IN_PROGRESS', 'ON_HOLD'],
-  ON_HOLD: ['INITIATED', 'CONSENT_PENDING', 'IN_PROGRESS', 'CANCELLED'],
-  COMPLETED: [],
-  CANCELLED: [],
-};
+const CASE_STATUSES = ['DRAFT', 'INITIATED', 'CONSENT_PENDING', 'IN_PROGRESS', 'UNDER_REVIEW', 'COMPLETED', 'ON_HOLD', 'CANCELLED'];
+const TRANSITIONS = Object.fromEntries(CASE_STATUSES.map((status) => [
+  status,
+  CASE_STATUSES.filter((targetStatus) => targetStatus !== status),
+]));
 
 const toDto = (item) => item;
 

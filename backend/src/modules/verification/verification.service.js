@@ -9,7 +9,7 @@ const toDto = (check) => ({
   id: check.id, caseId: check.caseId, type: check.type, provider: check.provider,
   status: check.status, result: check.result, priority: check.priority,
   providerRequestId: check.providerRequestId, providerReferenceId: check.providerReferenceId,
-  inputData: check.inputData, resultData: check.resultData, failureReason: check.failureReason,
+  inputData: check.inputData, resultData: check.resultData, rawResponse: check.rawResponse, failureReason: check.failureReason,
   remarks: check.remarks, startedAt: check.startedAt, completedAt: check.completedAt,
   retryCount: check.retryCount, createdAt: check.createdAt, updatedAt: check.updatedAt,
   isLocked: check.isLocked, lockedAt: check.lockedAt, documents: check.documents || [],
