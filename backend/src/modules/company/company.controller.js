@@ -67,6 +67,10 @@ const getCompanyStats = asyncHandler(async (req, res) => {
   const data = await service.getStats({ id: req.params.id });
   return success(res, { message: 'Company stats', data });
 });
+const getCompanyAnalytics = asyncHandler(async (req, res) => {
+  const data = await service.getAnalytics({ id: req.user.companyId, period: req.query.period, year: req.query.year });
+  return success(res, { message: 'Company analytics', data });
+});
 
 const getCompanyDetails = asyncHandler(async (req, res) => {
   const data = await service.getDetails({ id: req.params.id });
@@ -81,6 +85,6 @@ module.exports = {
   deleteCompany,
   suspendCompany,
   activateCompany,
-  getCompanyStats,
+  getCompanyStats, getCompanyAnalytics,
   getCompanyDetails,
 };

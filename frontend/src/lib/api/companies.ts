@@ -152,4 +152,25 @@ export async function getCompanyStats(companyId: string, accessToken: string | n
   return (body?.data && body.data.data) ? body.data.data : body.data;
 }
 
+export interface CompanyAnalytics {
+  period: 'monthly' | 'yearly';
+  year: number | null;
+  generatedAt: string;
+  summary: { users: number; clients: number; candidates: number; cases: number; checks: number; completedChecks: number; failedChecks: number; pendingChecks: number; completedCases: number; reports: number; auditEvents: number; completionRate: number; averageTurnaroundDays: number };
+  trends: { cases: Array<Record<string, string | number>>; clients: Array<Record<string, string | number>>; candidates: Array<Record<string, string | number>>; checks: Array<Record<string, string | number>>; reports: Array<Record<string, string | number>>; auditEvents: Array<Record<string, string | number>> };
+  statusMix: { status: string; value: number }[];
+  checkTypes: { type: string; total: number; completed: number; failed: number }[];
+  clients: { name: string; cases: number; completed: number }[];
+  growth: { clients: number; users: number; candidates: number };
+}
+
+export async function getCompanyAnalytics(period: 'monthly' | 'yearly', accessToken: string | null, year?: number): Promise<CompanyAnalytics> {
+  if (!accessToken) throw new ApiError('You must be signed in to do this.', 401);
+  const yearQuery = year ? `&year=${year}` : '';
+  const res = await fetch(`${API_BASE}/companies/analytics?period=${period}${yearQuery}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const body = await res.json().catch(() => null);
+  if (!res.ok || body?.success === false) throw new ApiError(body?.message || `Request failed (${res.status})`, res.status);
+  return (body?.data && body.data.data) ? body.data.data : body.data;
+}
+
 export default { getCompanyStats, getCompanyDetails };

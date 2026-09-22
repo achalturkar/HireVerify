@@ -16,6 +16,8 @@ import {
   ChevronLeft,
   X,
   UserCircle,
+  ClipboardList,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { resolveLogoUrl } from '@/src/lib/logo';
@@ -26,7 +28,9 @@ import BrandMark from '@/src/components/ui/BrandMark';
 const menuGroups: { label: string; items: { name: string; href: string; icon: typeof LayoutDashboard }[] }[] = [
   {
     label: 'Workspace',
-    items: [{ name: 'Dashboard', href: '/company/dashboard', icon: LayoutDashboard }],
+    items: [{ name: 'Dashboard', href: '/company/dashboard', icon: LayoutDashboard },
+          { name: 'Analytics', href: '/company/analytics', icon: BarChart3 }],
+
   },
   {
     label: 'Engagement',
@@ -57,6 +61,7 @@ const menuGroups: { label: string; items: { name: string; href: string; icon: ty
       { name: 'Company Profile', href: '/company/profile', icon: UserCircle },
       { name: 'Users', href: '/company/users', icon: Users },
       { name: 'Roles', href: '/company/roles', icon: ShieldCheck },
+      { name: 'Audit activity', href: '/company/audit', icon: ClipboardList },
       { name: 'Settings', href: '/company/settings', icon: Settings },
       { name: 'Help', href: '/company/help', icon: CircleHelp },
     ],

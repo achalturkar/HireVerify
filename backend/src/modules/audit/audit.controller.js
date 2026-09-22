@@ -11,7 +11,7 @@ const listAuditLogs = asyncHandler(async (req, res) => {
   const result = await service.list({
     ...pagination,
     search: String(req.query.search || '').trim(),
-    companyId: req.query.companyId,
+    companyId: req.user?.role?.isSuperAdmin ? req.query.companyId : req.user.companyId,
     action: String(req.query.action || '').trim(),
     entity: String(req.query.entity || '').trim(),
     from: req.query.from,

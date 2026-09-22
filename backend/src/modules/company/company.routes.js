@@ -129,6 +129,8 @@ const uploadCompanyFiles = (req, res, next) => {
  *     responses:
  *       201: { description: Company created }
  */
+router.get('/analytics', authorize('company.view'), controller.getCompanyAnalytics);
+
 router
   .route('/')
   .get(authorize('company.view'), validate(v.listValidator), controller.listCompanies)

@@ -56,3 +56,8 @@ export async function listAuditLogs(params: AuditLogParams, accessToken: string 
 
   return { items: body.data.data, meta: body.data.meta };
 }
+
+export async function listRecentAuditLogs(accessToken: string | null): Promise<AuditLog[]> {
+  const result = await listAuditLogs({ page: 1, limit: 5 }, accessToken);
+  return result.items;
+}

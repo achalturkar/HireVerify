@@ -19,6 +19,9 @@ import {
   Shield,
   Settings as SettingsIcon,
   LayoutList,
+  Network,
+  Mail,
+  Phone,
 } from 'lucide-react';
 
 const steps = [
@@ -59,7 +62,9 @@ const otherSections = [
 const tabs = [
   { id: 'steps', label: 'Steps' },
   { id: 'flowchart', label: 'Flowchart' },
+  { id: 'navigation', label: 'Full navigation' },
   { id: 'other', label: 'Other sections' },
+  { id: 'support', label: 'Support contact' },
 ] as const;
 
 type TabId = (typeof tabs)[number]['id'];
@@ -90,7 +95,9 @@ export default function CompanyHelpPage() {
             }`}
           >
             {tab.id === 'flowchart' && <GitBranch size={14} />}
+            {tab.id === 'navigation' && <Network size={14} />}
             {tab.id === 'other' && <LayoutList size={14} />}
+            {tab.id === 'support' && <HelpCircle size={14} />}
             {tab.label}
           </button>
         ))}
@@ -157,6 +164,27 @@ export default function CompanyHelpPage() {
         </section>
       )}
 
+      {activeTab === 'navigation' && (
+        <section className="space-y-5">
+          <div className="rounded-2xl border border-[var(--primary)]/30 bg-[var(--primary)]/10 p-5">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)]"><Network size={19} /></span>
+              <div><h2 className="text-[16px] font-semibold">Complete portal map</h2><p className="mt-1 text-[12.5px] leading-5 text-[var(--muted)]">Use this map to understand every company navigation area, what it is for, and how the main tabs connect to the work.</p></div>
+            </div>
+          </div>
+          <div className="relative space-y-4 pl-5 before:absolute before:bottom-5 before:left-[19px] before:top-5 before:w-px before:bg-[var(--primary)]/30">
+            {[
+              { group: 'Workspace', color: '#3FDCC0', items: [{ name: 'Dashboard', href: '/company/dashboard', description: 'At-a-glance workload, status, reports, and operational summary.' }, { name: 'Analytics', href: '/company/analytics', description: 'Monthly/yearly trends, growth, completion, checks, clients, candidates, and reports.' }] },
+              { group: 'Engagement', color: '#5EA8D9', items: [{ name: 'Clients', href: '/company/clients', description: 'Create and manage client organizations.' }, { name: 'Candidates', href: '/company/candidates', description: 'Create candidates and associate them with clients.' }] },
+              { group: 'Verification', color: '#F2AE55', items: [{ name: 'BGV Cases', href: '/company/bgv-cases', description: 'Create cases, select checks, update status, and open candidate verification tabs.' }, { name: 'Reports', href: '/company/reports', description: 'Review, download, and send completed reports.' }, { name: 'Manual BGV', href: '/company/manual-bgv', description: 'Record verification completed outside the portal.' }, { name: 'Verification Checks', href: '/company/verifications', description: 'Review verification check records and outcomes.' }] },
+              { group: 'Actions', color: '#B18AF2', items: [{ name: 'Government Portals', href: '/company/government-portals', description: 'Open external portals used during verification work.' }] },
+              { group: 'Organization', color: '#FF6B6B', items: [{ name: 'Company Profile', href: '/company/profile', description: 'Maintain company identity, logo, contact, and report branding.' }, { name: 'Users', href: '/company/users', description: 'Invite teammates and manage user access.' }, { name: 'Roles', href: '/company/roles', description: 'Configure role capabilities and permissions.' }, { name: 'Audit activity', href: '/company/audit', description: 'Review all recorded company activity.' }, { name: 'Settings', href: '/company/settings', description: 'Manage workspace preferences.' }, { name: 'Help', href: '/company/help', description: 'Use this guide and contact support.' }] },
+            ].map((group) => <div key={group.group} className="relative"><span className="absolute -left-5 top-5 h-3 w-3 rounded-full border-2 border-[var(--surface)]" style={{ backgroundColor: group.color }} /><div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4"><div className="mb-3 flex items-center justify-between"><h2 className="text-[14px] font-semibold" style={{ color: group.color }}>{group.group}</h2><span className="text-[11px] text-[var(--muted)]">{group.items.length} sections</span></div><div className="grid gap-2 md:grid-cols-2">{group.items.map((item) => <Link key={item.href} href={item.href} className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 transition-colors hover:border-[var(--primary)]/50"><div className="flex items-center justify-between gap-2"><p className="text-[12.5px] font-semibold">{item.name}</p><ArrowRight size={13} className="text-[var(--muted)]" /></div><p className="mt-1 text-[11.5px] leading-5 text-[var(--muted)]">{item.description}</p></Link>)}</div></div></div>)}
+          </div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><h2 className="text-[15px] font-semibold">BGV case tabs</h2><p className="mt-1 text-[12px] text-[var(--muted)]">Inside a case, the visible tabs depend on the checks included in that case.</p><div className="mt-4 flex flex-wrap gap-2">{['Candidate', 'PAN', 'Identity', 'Address', 'Address (Physical)', 'UAN', 'Education', 'Employment', 'Gap Check', 'Reference Check', 'CV Validation', 'Social Media', 'Criminal Record', 'CIBIL', '26AS', 'Police Verification', 'Police Record'].map((item) => <span key={item} className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-[11px] text-[var(--muted)]">{item}</span>)}</div></div>
+        </section>
+      )}
+
       {activeTab === 'other' && (
         <section className="space-y-6">
           {otherSections.map((group) => (
@@ -186,6 +214,13 @@ export default function CompanyHelpPage() {
               </div>
             </div>
           ))}
+        </section>
+      )}
+
+      {activeTab === 'support' && (
+        <section className="grid gap-5 md:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-2xl border border-[var(--primary)]/30 bg-[var(--primary)]/10 p-6"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">Need assistance?</p><h2 className="mt-2 text-[24px] font-semibold">Contact Brainhunt Ventures</h2><p className="mt-2 max-w-xl text-[13px] leading-6 text-[var(--muted)]">For portal access, verification workflow, report generation, account, or technical support questions, contact the support team directly.</p><div className="mt-6 grid gap-3 sm:grid-cols-2"><a href="mailto:contact@brainhuntventures.com" className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors hover:border-[var(--primary)]"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><Mail size={17} /></span><span><span className="block text-[11px] text-[var(--muted)]">Email support</span><span className="mt-1 block break-all text-[12.5px] font-semibold">contact@brainhuntventures.com</span></span></a><a href="tel:9359647748" className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors hover:border-[var(--primary)]"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><Phone size={17} /></span><span><span className="block text-[11px] text-[var(--muted)]">Phone support</span><span className="mt-1 block text-[12.5px] font-semibold">9359647748</span></span></a></div></div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6"><h2 className="text-[15px] font-semibold">What to include</h2><div className="mt-4 space-y-3 text-[12.5px] leading-5 text-[var(--muted)]"><p>• Your company name and registered email.</p><p>• The page, case number, or candidate reference involved.</p><p>• A short description of what happened and the expected result.</p><p>• A screenshot or error message when reporting a technical issue.</p></div></div>
         </section>
       )}
 
