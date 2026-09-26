@@ -428,11 +428,12 @@ export default function CompanyDashboardPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard title="Total Users" value={stats?.users} icon={Users} accent={ACCENTS.violet} loading={loading} t={t} />
         <StatCard title="Clients" value={stats?.clients} icon={Contact} accent={ACCENTS.sky} loading={loading} t={t} />
         <StatCard title="BGV Cases" value={stats?.bgvCases} icon={FileCheck2} accent={ACCENTS.teal} loading={loading} t={t} />
         <StatCard title="Completed Cases" value={stats?.completedCases} icon={CheckCircle2} accent={ACCENTS.amber} loading={loading} t={t} />
+        <StatCard title="Reports Generated" value={stats?.reports} icon={FileBarChart} accent={ACCENTS.rose} loading={loading} t={t} />
       </div>
 
       {/* Secondary metrics strip */}
@@ -442,8 +443,6 @@ export default function CompanyDashboardPage() {
         <MiniStat label="Pending Cases" value={stats?.pendingCases} loading={loading} t={t} />
         <span className="hidden sm:block h-6 w-px" style={{ background: t.divide }} />
         <MiniStat label="In progress" value={stats?.inProgressCases} loading={loading} t={t} />
-        <span className="hidden sm:block h-6 w-px" style={{ background: t.divide }} />
-        <MiniStat label="Reports" value={stats?.reports} loading={loading} t={t} />
       </div>
 
       {/* AI-style insight widget (real numbers, plain-language phrasing) */}

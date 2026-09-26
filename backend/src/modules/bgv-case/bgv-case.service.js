@@ -118,4 +118,23 @@ const generateReport = async ({ id, companyId }) => {
   return buildReport(item);
 };
 
-module.exports = { create, getById, list, transition, updateMeta, updateChecks, remove, buildReport: generateReport, TRANSITIONS };
+const recordReportGenerated = async (item) => {
+  const generatedAt = new Date();
+  return prisma.bGVReport.upsert({
+    where: { caseId: item.id },
+    create: {
+      companyId: item.companyId,
+      clientId: item.clientId,
+      candidateId: item.candidateId,
+      caseId: item.id,
+      reportNumber: item.report?.reportNumber || `${item.caseNumber}-RPT`,
+      status: 'GENERATED',
+      overallResult: item.overallResult,
+      reportData: { generatedAt: generatedAt.toISOString() },
+      generatedAt,
+    },
+    update: { status: 'GENERATED', overallResult: item.overallResult, generatedAt },
+  });
+};
+
+module.exports = { create, getById, list, transition, updateMeta, updateChecks, remove, buildReport: generateReport, recordReportGenerated, TRANSITIONS };

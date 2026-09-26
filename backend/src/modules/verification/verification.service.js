@@ -5,6 +5,24 @@ const { NotFoundError, BadRequestError } = require('../../utils/errors');
 const PDFDocument = require('pdfkit');
 const surepass = require('./providers/surepass.provider');
 
+const providerImages = (value) => {
+  if (!value || typeof value !== 'object') return [];
+  return Object.values(value).filter((item) => typeof item === 'string' && /^(https?:|data:image\/)/i.test(item));
+};
+
+const fetchImage = async (url) => {
+  if (/^data:image\//i.test(url)) {
+    const encoded = url.split(',')[1];
+    return encoded ? Buffer.from(encoded, 'base64') : null;
+  }
+  try {
+    const response = await fetch(url);
+    return response.ok ? Buffer.from(await response.arrayBuffer()) : null;
+  } catch {
+    return null;
+  }
+};
+
 const toDto = (check) => ({
   id: check.id, caseId: check.caseId, type: check.type, provider: check.provider,
   status: check.status, result: check.result, priority: check.priority,
@@ -91,6 +109,24 @@ const executePan = async ({ id, companyId, pan: submittedPan }) => {
   }
 };
 
+const executeCheck = async ({ id, companyId, inputData, apiVersion }) => {
+  const current = await repo.findById(id, companyId);
+  if (!current) throw new NotFoundError('Verification check not found');
+  if (!['UAN', 'ADDRESS', 'ADDRESS_PHYSICAL', 'COURT', 'POLICE_RECORD'].includes(current.type)) throw new BadRequestError('This check is not configured for Surepass execution');
+  await repo.update(id, { status: 'IN_PROGRESS', startedAt: new Date(), inputData });
+  await repo.event({ caseId: current.caseId, verificationId: id, eventType: 'API_REQUEST', message: `${current.type} verification request sent` });
+  try {
+    const result = await surepass.verifyCheck({ type: current.type, inputData, apiVersion });
+    const updated = await repo.update(id, { status: 'COMPLETED', result: result.result, resultData: result.resultData, providerRequestId: result.providerRequestId, providerReferenceId: result.providerReferenceId, rawResponse: result.rawResponse, completedAt: new Date(), failureReason: null });
+    await repo.event({ caseId: current.caseId, verificationId: id, eventType: 'COMPLETED', status: 'COMPLETED', message: `${current.type} verification completed` });
+    return toDto(updated);
+  } catch (error) {
+    await repo.update(id, { status: 'FAILED', result: 'UNABLE_TO_VERIFY', failureReason: error.message, completedAt: new Date() });
+    await repo.event({ caseId: current.caseId, verificationId: id, eventType: 'FAILED', status: 'FAILED', message: `${current.type} verification failed` });
+    throw error;
+  }
+};
+
 const buildPdf = async ({ id, companyId }) => {
   const check = await repo.findById(id, companyId);
   if (!check) throw new NotFoundError('Verification check not found');
@@ -105,9 +141,35 @@ const buildPdf = async ({ id, companyId }) => {
   doc.moveDown().fillColor('#101828').fontSize(13).font('Helvetica-Bold').text('Normalized findings');
   doc.moveDown(0.4).fontSize(10).font('Helvetica');
   const findings = check.resultData || {};
-  Object.entries(findings).forEach(([key, value]) => doc.fillColor('#344054').text(`${key}: ${value === null || value === undefined ? 'Not available' : String(value)}`));
+  Object.entries(findings).filter(([, value]) => !providerImages(findings).includes(value)).forEach(([key, value]) => doc.fillColor('#344054').text(`${key}: ${value === null || value === undefined ? 'Not available' : typeof value === 'object' ? JSON.stringify(value) : String(value)}`));
+  const images = providerImages(findings);
+  if (images.length) {
+    doc.moveDown().fillColor('#101828').fontSize(13).font('Helvetica-Bold').text('Provider images');
+    for (const imageUrl of images) {
+      const image = await fetchImage(imageUrl);
+      if (image) doc.moveDown(0.5).image(image, { fit: [499, 260], align: 'center' });
+    }
+  }
   doc.moveDown(2).fillColor('#667085').fontSize(9).text('Confidential verification document. This report contains normalized findings for authorized users only.');
   return doc;
 };
 
-module.exports = { get, list, create, update, retry, executePan, lock, addDocument, removeDocument, buildPdf };
+const executeStandalone = async ({ type, inputData, apiVersion }) => {
+  if (type === 'PAN' && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(String(inputData.pan || '').toUpperCase())) throw new BadRequestError('A valid PAN number is required');
+  if (type === 'UAN' && !/^\d{12}$/.test(String(inputData.uan || ''))) throw new BadRequestError('A valid 12 digit UAN number is required');
+  return surepass.verifyStandalone({ type, inputData: { ...inputData, ...(inputData.pan ? { pan: String(inputData.pan).toUpperCase() } : {}) }, apiVersion });
+};
+
+const buildStandalonePdf = async ({ type, inputData, apiVersion }) => {
+  const response = await executeStandalone({ type, inputData, apiVersion });
+  const doc = new PDFDocument({ size: 'A4', margin: 48 });
+  doc.fillColor('#0B3B66').fontSize(22).font('Helvetica-Bold').text('HireVerify Verification Report');
+  doc.moveDown(0.5).fillColor('#667085').fontSize(10).font('Helvetica').text(`Type: ${type} | API: ${apiVersion} | Generated ${new Date().toLocaleString()}`);
+  doc.moveDown().strokeColor('#D0D5DD').moveTo(48, doc.y).lineTo(547, doc.y).stroke();
+  doc.moveDown().fillColor('#101828').fontSize(15).font('Helvetica-Bold').text(`${type} provider response`);
+  doc.moveDown(0.5).fontSize(9).font('Courier').text(JSON.stringify({ result: response.result, providerRequestId: response.providerRequestId, providerReferenceId: response.providerReferenceId, data: response.resultData }, null, 2), { width: 499 });
+  doc.moveDown(2).fillColor('#667085').fontSize(9).font('Helvetica').text('This document contains the response returned by the configured verification provider.');
+  return doc;
+};
+
+module.exports = { get, list, create, update, retry, executePan, executeCheck, executeStandalone, buildStandalonePdf, lock, addDocument, removeDocument, buildPdf };

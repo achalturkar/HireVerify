@@ -78,6 +78,7 @@ const deleteCase = asyncHandler(async (req, res) => {
 const downloadReport = asyncHandler(async (req, res) => {
   const item = await service.getById({ id: req.params.id, companyId: req.user.companyId });
   const doc = await buildReport(item);
+  await service.recordReportGenerated(item);
   const candidateName = [item.candidate?.firstName, item.candidate?.lastName]
     .filter(Boolean)
     .map((name) => fileNamePart(name, ''))
@@ -99,6 +100,7 @@ const sendReportsByEmail = asyncHandler(async (req, res) => {
   if (!recipient) throw new BadRequestError('The selected client does not have a contact email.');
   const attachments = await Promise.all(items.map(async (item) => {
     const doc = await buildReport(item);
+    await service.recordReportGenerated(item);
     const chunks = [];
     const pdf = new Promise((resolve, reject) => { doc.on('data', (chunk) => chunks.push(chunk)); doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject); });
     doc.end();

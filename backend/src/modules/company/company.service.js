@@ -272,7 +272,7 @@ const getStats = async ({ id }) => {
   const company = await repo.findById(id);
   if (!company) throw new NotFoundError('Company not found');
 
-  const [users, clients, candidates, bgvCases, pendingCases, inProgressCases, completedCases, reports] = await Promise.all([
+  const [users, clients, candidates, bgvCases, pendingCases, inProgressCases, completedCases] = await Promise.all([
     prisma.user.count({ where: { companyId: id, isDeleted: false } }),
     prisma.client.count({ where: { companyId: id, isDeleted: false } }),
     prisma.candidate.count({ where: { companyId: id, isDeleted: false } }),
@@ -280,7 +280,6 @@ const getStats = async ({ id }) => {
     prisma.bGVCase.count({ where: { companyId: id, status: { in: ['DRAFT', 'INITIATED', 'CONSENT_PENDING'] } } }),
     prisma.bGVCase.count({ where: { companyId: id, status: { in: ['IN_PROGRESS', 'UNDER_REVIEW', 'ON_HOLD'] } } }),
     prisma.bGVCase.count({ where: { companyId: id, status: 'COMPLETED' } }),
-    prisma.bGVReport.count({ where: { companyId: id } }),
   ]);
 
   return {
@@ -291,7 +290,7 @@ const getStats = async ({ id }) => {
     pendingCases,
     inProgressCases,
     completedCases,
-    reports,
+    reports: completedCases,
   };
 };
 
@@ -317,11 +316,10 @@ const getAnalytics = async ({ id, period = 'monthly', year }) => {
     return yearly ? String(value.getUTCFullYear()) : `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}`;
   };
   const trend = () => buckets.map((bucket) => ({ ...bucket, cases: 0, clients: 0, candidates: 0, checks: 0, completed: 0, reports: 0, auditEvents: 0 }));
-  const [cases, candidates, checks, reports, auditEvents, clients, users] = await Promise.all([
+  const [cases, candidates, checks, auditEvents, clients, users] = await Promise.all([
     prisma.bGVCase.findMany({ where: { companyId: id }, select: { id: true, status: true, overallResult: true, createdAt: true, completedAt: true, initiatedAt: true, clientId: true, candidateId: true, client: { select: { name: true } } } }),
     prisma.candidate.findMany({ where: { companyId: id, isDeleted: false }, select: { id: true, createdAt: true } }),
     prisma.verificationCheck.findMany({ where: { case: { companyId: id } }, select: { type: true, status: true, result: true, createdAt: true, completedAt: true } }),
-    prisma.bGVReport.findMany({ where: { companyId: id }, select: { createdAt: true, generatedAt: true, status: true } }),
     prisma.auditLog.findMany({ where: { companyId: id, createdAt: { gte: start } }, select: { createdAt: true } }),
     prisma.client.findMany({ where: { companyId: id, isDeleted: false }, select: { id: true, name: true, createdAt: true } }),
     prisma.user.findMany({ where: { companyId: id, isDeleted: false }, select: { id: true, createdAt: true } }),
@@ -332,7 +330,7 @@ const getAnalytics = async ({ id, period = 'monthly', year }) => {
   clients.forEach((item) => increment(clientTrend, item.createdAt, 'clients'));
   candidates.forEach((item) => increment(candidateTrend, item.createdAt, 'candidates'));
   checks.forEach((item) => { increment(checkTrend, item.createdAt, 'checks'); if (item.completedAt) increment(checkTrend, item.completedAt, 'completed'); });
-  reports.forEach((item) => increment(reportTrend, item.generatedAt || item.createdAt, 'reports'));
+  cases.filter((item) => item.status === 'COMPLETED').forEach((item) => increment(reportTrend, item.completedAt || item.createdAt, 'reports'));
   auditEvents.forEach((item) => increment(auditTrend, item.createdAt, 'auditEvents'));
   const statusMix = cases.reduce((result, item) => { result[item.status] = (result[item.status] || 0) + 1; return result; }, {});
   const checkTypes = checks.reduce((result, item) => { const current = result[item.type] || { type: item.type, total: 0, completed: 0, failed: 0 }; current.total += 1; if (item.status === 'COMPLETED') current.completed += 1; if (item.status === 'FAILED') current.failed += 1; result[item.type] = current; return result; }, {});
@@ -342,7 +340,7 @@ const getAnalytics = async ({ id, period = 'monthly', year }) => {
   const totalChecks = checks.length;
   const completedChecks = checks.filter((item) => item.completedAt || item.status === 'COMPLETED').length;
   const failedChecks = checks.filter((item) => item.status === 'FAILED').length;
-  return { period: yearly ? 'yearly' : 'monthly', year: yearly ? null : selectedYear, generatedAt: new Date().toISOString(), summary: { users: users.length, clients: clients.length, candidates: candidates.length, cases: cases.length, checks: totalChecks, completedChecks, failedChecks, pendingChecks: Math.max(totalChecks - completedChecks - failedChecks, 0), completedCases: completedCases.length, reports: reports.length, auditEvents: auditEvents.length, completionRate: cases.length ? Math.round((completedCases.length / cases.length) * 100) : 0, averageTurnaroundDays: turnaround.length ? Math.round((turnaround.reduce((sum, value) => sum + value, 0) / turnaround.length) * 10) / 10 : 0 }, trends: { cases: caseTrend, clients: clientTrend, candidates: candidateTrend, checks: checkTrend, reports: reportTrend, auditEvents: auditTrend }, statusMix: Object.entries(statusMix).map(([status, value]) => ({ status, value })), checkTypes: Object.values(checkTypes).sort((a, b) => b.total - a.total), clients: Object.values(clientMix).sort((a, b) => b.cases - a.cases).slice(0, 10), growth: { clients: clients.filter((item) => item.createdAt >= start).length, users: users.filter((item) => item.createdAt >= start).length, candidates: candidates.filter((item) => item.createdAt >= start).length } };
+  return { period: yearly ? 'yearly' : 'monthly', year: yearly ? null : selectedYear, generatedAt: new Date().toISOString(), summary: { users: users.length, clients: clients.length, candidates: candidates.length, cases: cases.length, checks: totalChecks, completedChecks, failedChecks, pendingChecks: Math.max(totalChecks - completedChecks - failedChecks, 0), completedCases: completedCases.length, reports: completedCases.length, auditEvents: auditEvents.length, completionRate: cases.length ? Math.round((completedCases.length / cases.length) * 100) : 0, averageTurnaroundDays: turnaround.length ? Math.round((turnaround.reduce((sum, value) => sum + value, 0) / turnaround.length) * 10) / 10 : 0 }, trends: { cases: caseTrend, clients: clientTrend, candidates: candidateTrend, checks: checkTrend, reports: reportTrend, auditEvents: auditTrend }, statusMix: Object.entries(statusMix).map(([status, value]) => ({ status, value })), checkTypes: Object.values(checkTypes).sort((a, b) => b.total - a.total), clients: Object.values(clientMix).sort((a, b) => b.cases - a.cases).slice(0, 10), growth: { clients: clients.filter((item) => item.createdAt >= start).length, users: users.filter((item) => item.createdAt >= start).length, candidates: candidates.filter((item) => item.createdAt >= start).length } };
 };
 
 const getDetails = async ({ id }) => {

@@ -87,6 +87,10 @@ const config = {
     baseUrl: process.env.SUREPASS_BASE_URL || '',
     bearerToken: process.env.SUREPASS_BEARER_TOKEN || '',
     panEndpoint: process.env.SUREPASS_PAN_ENDPOINT || '',
+    uanEndpoint: process.env.SUREPASS_UAN_ENDPOINT || '',
+    addressEndpoint: process.env.SUREPASS_ADDRESS_ENDPOINT || '',
+    courtEndpoint: process.env.SUREPASS_COURT_ENDPOINT || '',
+    documentEndpoint: process.env.SUREPASS_DOCUMENT_ENDPOINT || '',
   },
 
   swagger: {

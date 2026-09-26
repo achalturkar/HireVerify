@@ -46,6 +46,7 @@ const menuGroups: { label: string; items: { name: string; href: string; icon: ty
       { name: 'Reports', href: '/company/reports', icon: FileText },
       { name: 'Manual BGV', href: '/company/manual-bgv', icon: FilePlus2 },
       { name: 'Verification Checks', href: '/company/verifications', icon: ShieldCheck },
+      { name: 'Document Verification', href: '/company/document-verification', icon: FileCheck2 },
     ],
   },
   {
