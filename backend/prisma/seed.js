@@ -106,6 +106,7 @@ const COMPANY_ADMIN_MODULES = [
   "bgv.document",
   "bgv.consent",
   "bgv.report",
+  "invoice",
   "users",
   "roles",
   "permissions",

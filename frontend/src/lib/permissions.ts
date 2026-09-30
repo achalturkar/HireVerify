@@ -8,6 +8,7 @@ import {
   Key,
   ClipboardList,
   Folder,
+  Receipt,
 } from 'lucide-react'
 
 export interface MenuItem {
@@ -33,12 +34,13 @@ const MODULE_REGISTRY: Record<string, { label: string; path: string; icon: MenuI
   role: { label: 'Roles', path: '/super-admin/roles', icon: Shield },
   permission: { label: 'Permissions', path: '/super-admin/permissions', icon: Key },
   auditlog: { label: 'Audit Logs', path: '/super-admin/audit', icon: ClipboardList },
+  invoice: { label: 'Invoices', path: '/super-admin/invoices', icon: Receipt },
 };
 
 // Modules listed here (if present) are pinned to the top of the
 // Administration section, in this order. Anything else found in the user's
 // permissions is appended afterwards, alphabetically.
-const PRIORITY_ORDER = ['company', 'client', 'candidate', 'user', 'role', 'permission', 'auditlog'];
+const PRIORITY_ORDER = ['company', 'client', 'candidate', 'user', 'role', 'permission', 'invoice', 'auditlog'];
 
 function normalizeModule(rawModule: string): string {
   return rawModule.toLowerCase().replace(/[^a-z0-9]/g, '');

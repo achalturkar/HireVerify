@@ -18,6 +18,7 @@ import {
   Activity,
   Calendar,
   AlertCircle,
+  Receipt,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getCompanyDetails } from '@/src/lib/api/companies';
@@ -201,13 +202,16 @@ export default function CompanyDetailPage() {
   return (
     <div className="min-h-screen bg-[var(--background)]">
       <div className="border-b border-[var(--border)] bg-[var(--surface)]/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-6 py-4">
           <Link
             href="/super-admin/companies"
             className="inline-flex items-center gap-2 text-[var(--primary)] hover:opacity-80 text-[13px] font-medium"
           >
             <ArrowLeft size={14} />
             Back to companies
+          </Link>
+          <Link href={`/super-admin/invoices?companyId=${encodeURIComponent(company.id)}`} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3.5 py-2 text-[12px] font-semibold text-[var(--primary-foreground)] hover:opacity-90">
+            <Receipt size={14} />View invoices
           </Link>
         </div>
       </div>

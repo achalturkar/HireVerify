@@ -5,9 +5,19 @@ const logger = require('../logger');
 const createRedisStub = () => {
   const store = new Map();
   return {
-    get: async (key) => (store.has(key) ? store.get(key) : null),
-    set: async (key, value) => {
-      store.set(key, value);
+    get: async (key) => {
+      const entry = store.get(key);
+      if (!entry) return null;
+      if (entry.expiresAt && entry.expiresAt <= Date.now()) {
+        store.delete(key);
+        return null;
+      }
+      return entry.value;
+    },
+    set: async (key, value, ...options) => {
+      const expirationIndex = options.findIndex((option) => String(option).toUpperCase() === 'EX');
+      const ttlSeconds = expirationIndex >= 0 ? Number(options[expirationIndex + 1]) : 0;
+      store.set(key, { value, expiresAt: ttlSeconds > 0 ? Date.now() + ttlSeconds * 1000 : null });
       return 'OK';
     },
     del: async (key) => {

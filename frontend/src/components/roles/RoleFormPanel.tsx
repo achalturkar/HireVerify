@@ -57,7 +57,10 @@ export function RoleFormPanel({
     }
   }, [open, mode, role]);
 
-  const isProtected = mode === 'edit' && (role?.isSuperAdmin || role?.isCompanyAdmin);
+  const isSuperAdminRole = mode === 'edit' && Boolean(role?.isSuperAdmin);
+  const isCompanyAdminRole = mode === 'edit' && Boolean(role?.isCompanyAdmin);
+  const isProtected = isSuperAdminRole || (isCompanyAdminRole && !isSuperAdmin);
+  const identityLocked = isProtected || isCompanyAdminRole;
 
   const title = mode === 'create' ? 'New role' : `Edit ${role?.name ?? 'role'}`;
 
@@ -126,9 +129,11 @@ export function RoleFormPanel({
             <h2 className="text-[15px] font-semibold text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
               {title}
             </h2>
-            {isProtected && (
-              <p className="mt-0.5 text-[12px] text-amber-500">System role — name and permissions are locked.</p>
-            )}
+            {isProtected ? (
+              <p className="mt-0.5 text-[12px] text-amber-500">{isSuperAdminRole ? 'Super Admin role — name and permissions are locked.' : 'Only Super Admins can change Company Admin permissions.'}</p>
+            ) : isCompanyAdminRole ? (
+              <p className="mt-0.5 text-[12px] text-amber-500">Company Admin identity is locked; permissions can be managed.</p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -156,7 +161,7 @@ export function RoleFormPanel({
               id="role-name"
               type="text"
               value={form.name}
-              disabled={isProtected}
+              disabled={identityLocked}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[13.5px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]/50 focus:ring-1 focus:ring-[var(--primary)]/30 disabled:bg-[var(--surface-muted)] disabled:text-[var(--muted)] transition-colors"
               placeholder="e.g. Billing Manager"
@@ -213,7 +218,7 @@ export function RoleFormPanel({
               selectedIds={selectedIds}
               onToggle={togglePermission}
               onToggleModule={toggleModule}
-              disabled={isProtected}
+              disabled={identityLocked}
             />
           </div>
         </div>

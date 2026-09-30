@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Building2, Camera, Mail, MapPin, Phone, Save, X, Loader2, PenTool, Stamp as StampIcon } from 'lucide-react';
+import Image from 'next/image';
+import { Building2, Camera, Mail, MapPin, Phone, Save, X, Loader2, PenTool, Stamp as StampIcon, Palette, Settings2, Pencil } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getCompany, updateCompany } from '@/src/lib/api/companies';
 import { resolveLogoUrl } from '@/src/lib/logo';
@@ -34,12 +35,8 @@ function initialsFromName(name: string) {
    ------------------------------------------------------------------
    This page was previously hardcoded to a single dark palette
    (#161C3A, #0B0F26, #8891B8, etc.) with no light-mode branch at all.
-   Everything below is resolved from the `isDark` boolean, driven by
-   the same MutationObserver pattern used elsewhere in the app, and
-   applied via inline `style` rather than Tailwind's `dark:` variant
-   (which was found to be unreliable in this project). Brand accents
-   (teal, red, amber) keep their hue in both themes; only their text
-   shade shifts for contrast against a light background.
+  Neutral surfaces use the `isDark` boolean; brand accents inherit
+  the company shell's primary color through CSS variables.
 ------------------------------------------------------------------- */
 
 function useIsDarkMode() {
@@ -57,8 +54,7 @@ function useIsDarkMode() {
 
 type Tokens = ReturnType<typeof getTokens>;
 
-const ACCENT = '#3FDCC0';
-const ACCENT_LIGHT_TEXT = '#0E8C78';
+const DEFAULT_PRIMARY_COLOR = '#0E8C78';
 const DANGER = '#FF6B6B';
 const DANGER_LIGHT_TEXT = '#C23B3B';
 const WARNING = '#F2AE55';
@@ -72,9 +68,9 @@ function getTokens(isDark: boolean) {
     textSubtle: isDark ? '#AAB2D4' : '#475569',
     textMuted: isDark ? '#8891B8' : '#64748B',
     textFaint: isDark ? '#565F8C' : '#94A3B8',
-    accent: isDark ? ACCENT : ACCENT_LIGHT_TEXT,
-    accentSoftBg: 'rgba(63,220,192,0.10)',
-    accentBorder: 'rgba(63,220,192,0.25)',
+    accent: 'var(--primary)',
+    accentSoftBg: 'color-mix(in srgb, var(--primary) 10%, transparent)',
+    accentBorder: 'color-mix(in srgb, var(--primary) 25%, transparent)',
     dropzoneBg: isDark ? '#0F1330' : '#F8FAFC',
     dropzoneBorder: isDark ? 'rgba(255,255,255,0.12)' : '#CBD5E1',
     checkerBg: isDark ? '#0B0F26' : '#FFFFFF',
@@ -219,7 +215,7 @@ function ImageDropzone({
         onDrop={disabled ? undefined : handleDrop}
         className="group relative shrink-0 rounded-2xl border border-dashed p-1 transition-colors"
         style={{
-          borderColor: dragActive ? ACCENT : t.dropzoneBorder,
+          borderColor: dragActive ? 'var(--primary)' : t.dropzoneBorder,
           background: dragActive ? t.accentSoftBg : t.dropzoneBg,
         }}
       >
@@ -228,7 +224,7 @@ function ImageDropzone({
           style={checkerStyle(isDark)}
         >
           {displayed ? (
-            <img src={displayed} alt={label} className="h-full w-full object-contain p-2" />
+            <Image src={displayed} alt={label} fill sizes={shape === 'wide' ? '160px' : '96px'} unoptimized className="object-contain p-2" />
           ) : (
             <div className="flex flex-col items-center gap-1" style={{ color: t.accent }}>
               {fallbackInitials ? (
@@ -310,6 +306,12 @@ function ImageDropzone({
 
 type ImageField = 'logo' | 'signature' | 'stamp';
 const primaryColorPalette = ['#0E8C78', '#1F417A', '#2563EB', '#7C3AED', '#C2410C', '#BE123C', '#374151', '#0F766E'];
+const isValidPrimaryColor = (value: string) => /^#[0-9a-fA-F]{6}$/.test(value);
+const primaryForeground = (color: string) => {
+  const channels = color.slice(1).match(/.{2}/g)?.map((channel) => Number.parseInt(channel, 16)) || [14, 140, 120];
+  return (0.299 * channels[0] + 0.587 * channels[1] + 0.114 * channels[2]) > 150 ? '#0B0F26' : '#FFFFFF';
+};
+type ProfileTab = 'branding' | 'account' | 'settings';
 
 export default function CompanyProfilePage() {
   const { user, accessToken, refreshUser } = useAuth();
@@ -319,6 +321,8 @@ export default function CompanyProfilePage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [activeTab, setActiveTab] = useState<ProfileTab>('branding');
   const [banner, setBanner] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [form, setForm] = useState({
     name: '',
@@ -327,14 +331,34 @@ export default function CompanyProfilePage() {
     contactEmail: '',
     contactPhone: '',
     address: '',
-    primaryColor: '',
+    primaryColor: DEFAULT_PRIMARY_COLOR,
+    gstNumber: '',
+    panNumber: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    bankAccountName: '',
+    bankName: '',
+    bankAccountNumber: '',
+    bankIfscCode: '',
+    bankSwiftCode: '',
+    bankBranch: '',
+    upiId: '',
   });
+  const [savedForm, setSavedForm] = useState<typeof form | null>(null);
 
   const [images, setImages] = useState<Record<ImageField, ImageFieldState>>({
     logo: { ...emptyImageState },
     signature: { ...emptyImageState },
     stamp: { ...emptyImageState },
   });
+  const [savedImages, setSavedImages] = useState<Record<ImageField, ImageFieldState> | null>(null);
+  const previewPrimaryColor = isValidPrimaryColor(form.primaryColor) ? form.primaryColor : DEFAULT_PRIMARY_COLOR;
+  const brandingImages: Array<{ label: string; url: string | null }> = [
+    { label: 'Company logo', url: images.logo.savedUrl },
+    { label: 'Signature', url: images.signature.savedUrl },
+    { label: 'Company stamp', url: images.stamp.savedUrl },
+  ];
 
   useEffect(() => {
     if (!companyId || !accessToken) {
@@ -346,20 +370,36 @@ export default function CompanyProfilePage() {
       setLoading(true);
       try {
         const data = await getCompany(companyId, accessToken);
-        setForm({
+        const loadedForm = {
           name: data.name ?? '',
           slug: data.slug ?? '',
           shortCode: data.shortCode ?? '',
           contactEmail: data.contactEmail ?? '',
           contactPhone: data.contactPhone ?? '',
           address: data.address ?? '',
-          primaryColor: data.primaryColor ?? '',
-        });
-        setImages({
+          primaryColor: isValidPrimaryColor(data.primaryColor || '') ? data.primaryColor! : DEFAULT_PRIMARY_COLOR,
+          gstNumber: data.gstNumber ?? '',
+          panNumber: data.panNumber ?? '',
+          city: data.city ?? '',
+          state: data.state ?? '',
+          postalCode: data.postalCode ?? '',
+          bankAccountName: data.bankAccountName ?? '',
+          bankName: data.bankName ?? '',
+          bankAccountNumber: data.bankAccountNumber ?? '',
+          bankIfscCode: data.bankIfscCode ?? '',
+          bankSwiftCode: data.bankSwiftCode ?? '',
+          bankBranch: data.bankBranch ?? '',
+          upiId: data.upiId ?? '',
+        };
+        setForm(loadedForm);
+        setSavedForm(loadedForm);
+        const loadedImages = {
           logo: { ...emptyImageState, savedUrl: resolveLogoUrl(data.logoUrl) },
           signature: { ...emptyImageState, savedUrl: resolveLogoUrl(data.signatureUrl) },
           stamp: { ...emptyImageState, savedUrl: resolveLogoUrl(data.stampUrl) },
-        });
+        };
+        setImages(loadedImages);
+        setSavedImages(loadedImages);
       } catch (err) {
         setBanner({
           tone: 'error',
@@ -418,6 +458,11 @@ export default function CompanyProfilePage() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!companyId || !accessToken) return;
+    if (!isValidPrimaryColor(form.primaryColor)) {
+      setBanner({ tone: 'error', text: 'Enter a valid six-digit hex color, such as #0E8C78.' });
+      setActiveTab('branding');
+      return;
+    }
 
     setSaving(true);
     setBanner(null);
@@ -429,7 +474,13 @@ export default function CompanyProfilePage() {
       if (form.contactEmail.trim()) payload.append('contactEmail', form.contactEmail.trim());
       if (form.contactPhone.trim()) payload.append('contactPhone', form.contactPhone.trim());
       if (form.address.trim()) payload.append('address', form.address.trim());
-      if (form.primaryColor.trim()) payload.append('primaryColor', form.primaryColor.trim());
+      payload.append('primaryColor', form.primaryColor.trim().toUpperCase());
+      ['gstNumber', 'panNumber', 'city', 'state', 'postalCode'].forEach((key) => {
+        payload.append(key, form[key as keyof typeof form].trim());
+      });
+      ['bankAccountName', 'bankName', 'bankAccountNumber', 'bankIfscCode', 'bankSwiftCode', 'bankBranch', 'upiId'].forEach((key) => {
+        payload.append(key, form[key as keyof typeof form].trim());
+      });
 
       const fieldToFormKey: Record<ImageField, { file: string; remove: string }> = {
         logo: { file: 'logo', remove: 'removeLogo' },
@@ -449,25 +500,42 @@ export default function CompanyProfilePage() {
 
       const updated = await updateCompany(companyId, payload, accessToken);
       await refreshUser();
-      setForm({
+      const updatedForm = {
         name: updated.name ?? '',
         slug: updated.slug ?? '',
         shortCode: updated.shortCode ?? '',
         contactEmail: updated.contactEmail ?? '',
         contactPhone: updated.contactPhone ?? '',
         address: updated.address ?? '',
-        primaryColor: updated.primaryColor ?? '',
-      });
+        primaryColor: isValidPrimaryColor(updated.primaryColor || '') ? updated.primaryColor! : DEFAULT_PRIMARY_COLOR,
+        gstNumber: updated.gstNumber ?? '',
+        panNumber: updated.panNumber ?? '',
+        city: updated.city ?? '',
+        state: updated.state ?? '',
+        postalCode: updated.postalCode ?? '',
+        bankAccountName: updated.bankAccountName ?? '',
+        bankName: updated.bankName ?? '',
+        bankAccountNumber: updated.bankAccountNumber ?? '',
+        bankIfscCode: updated.bankIfscCode ?? '',
+        bankSwiftCode: updated.bankSwiftCode ?? '',
+        bankBranch: updated.bankBranch ?? '',
+        upiId: updated.upiId ?? '',
+      };
+      setForm(updatedForm);
+      setSavedForm(updatedForm);
+      const updatedImages = {
+        logo: { ...emptyImageState, savedUrl: resolveLogoUrl(updated.logoUrl) },
+        signature: { ...emptyImageState, savedUrl: resolveLogoUrl(updated.signatureUrl) },
+        stamp: { ...emptyImageState, savedUrl: resolveLogoUrl(updated.stampUrl) },
+      };
       setImages((prev) => {
         Object.values(prev).forEach((img) => {
           if (img.previewUrl) URL.revokeObjectURL(img.previewUrl);
         });
-        return {
-          logo: { ...emptyImageState, savedUrl: resolveLogoUrl(updated.logoUrl) },
-          signature: { ...emptyImageState, savedUrl: resolveLogoUrl(updated.signatureUrl) },
-          stamp: { ...emptyImageState, savedUrl: resolveLogoUrl(updated.stampUrl) },
-        };
+        return updatedImages;
       });
+      setSavedImages(updatedImages);
+      setEditing(false);
       setBanner({ tone: 'success', text: 'Company profile updated successfully.' });
     } catch (err) {
       setBanner({
@@ -477,6 +545,19 @@ export default function CompanyProfilePage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const cancelEditing = () => {
+    if (saving) return;
+    if (savedForm) setForm(savedForm);
+    if (savedImages) {
+      Object.values(images).forEach((image) => {
+        if (image.previewUrl) URL.revokeObjectURL(image.previewUrl);
+      });
+      setImages(savedImages);
+    }
+    setBanner(null);
+    setEditing(false);
   };
 
   return (
@@ -491,12 +572,13 @@ export default function CompanyProfilePage() {
             Company Profile
           </p>
           <h1 className="text-[26px] font-semibold tracking-tight" style={{ fontFamily: 'var(--font-display)', color: t.textPrimary }}>
-            Your company details
+            {form.name || 'Company details'}
           </h1>
           <p className="text-[13.5px] mt-1" style={{ color: t.textMuted }}>
-            Update branding, contact info, logo, signature, and stamp.
+            {editing ? 'Edit company branding, account information, and settings.' : 'Company identity, account information, branding, and payment settings.'}
           </p>
         </div>
+        {!editing && <button type="button" onClick={() => { setBanner(null); setEditing(true); }} disabled={loading} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-semibold disabled:opacity-50" style={{ background: 'var(--primary)', color: 'var(--primary-foreground)' }}><Pencil size={15} />Edit details</button>}
       </div>
 
       {banner && (
@@ -515,8 +597,49 @@ export default function CompanyProfilePage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <div role="tablist" aria-label="Company profile sections" className="flex gap-1 overflow-x-auto border-b" style={{ borderColor: t.cardBorder }}>
+        {([
+          { id: 'branding', label: 'Branding', Icon: Palette },
+          { id: 'account', label: 'Account info', Icon: Building2 },
+          { id: 'settings', label: 'Settings', Icon: Settings2 },
+        ] as const).map(({ id, label, Icon }) => (
+          <button key={id} id={`${id}-tab`} type="button" role="tab" aria-selected={activeTab === id} aria-controls={`${id}-panel`} onClick={() => setActiveTab(id)} className="inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-[13px] font-semibold transition-colors" style={{ borderColor: activeTab === id ? t.accent : 'transparent', color: activeTab === id ? t.accent : t.textMuted }}>
+            <Icon size={15} />{label}
+          </button>
+        ))}
+      </div>
+
+      {!editing && activeTab === 'branding' && <div id="branding-panel" role="tabpanel" aria-labelledby="branding-tab" className="grid gap-4 md:grid-cols-2">
+        <SectionCard eyebrow="Branding" title="Company identity" t={t}>
+          <div className="flex items-center gap-3"><span className="h-9 w-9 shrink-0 rounded-md border" style={{ backgroundColor: form.primaryColor, borderColor: t.cardBorder }} /><div><p className="text-[13px] font-medium" style={{ color: t.textPrimary }}>Primary color</p><p className="font-mono text-[11px]" style={{ color: t.textMuted }}>{form.primaryColor}</p></div></div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">{brandingImages.map(({ label, url }) => <div key={label} className="min-w-0"><div className="relative flex h-20 items-center justify-center overflow-hidden rounded-lg border p-2" style={{ background: t.dropzoneBg, borderColor: t.cardBorder }}>{url ? <Image src={url} alt={label} fill sizes="120px" unoptimized className="object-contain p-2" /> : <span className="text-[11px]" style={{ color: t.textFaint }}>Not uploaded</span>}</div><p className="mt-1.5 truncate text-[11px]" style={{ color: t.textMuted }}>{label}</p></div>)}</div>
+        </SectionCard>
+      </div>}
+
+      {!editing && activeTab === 'account' && <div id="account-panel" role="tabpanel" aria-labelledby="account-tab" className="grid gap-4 md:grid-cols-2">
+        <SectionCard eyebrow="Account info" title={form.name || 'Company'} t={t}>
+          <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+            {[['Slug', form.slug], ['Short code', form.shortCode], ['Contact email', form.contactEmail], ['Contact phone', form.contactPhone]].map(([label, value]) => <div key={label}><dt className="text-[11px]" style={{ color: t.textMuted }}>{label}</dt><dd className="mt-1 break-words text-[13px]" style={{ color: t.textPrimary }}>{value || 'Not set'}</dd></div>)}
+          </dl>
+        </SectionCard>
+        <SectionCard eyebrow="Location & tax" title="Registered details" t={t}>
+          <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+            <div className="sm:col-span-2"><dt className="text-[11px]" style={{ color: t.textMuted }}>Street address</dt><dd className="mt-1 whitespace-pre-wrap text-[13px]" style={{ color: t.textPrimary }}>{form.address || 'Not set'}</dd></div>
+            {[['City', form.city], ['State', form.state], ['Postal code', form.postalCode], ['GSTIN', form.gstNumber], ['PAN', form.panNumber]].map(([label, value]) => <div key={label}><dt className="text-[11px]" style={{ color: t.textMuted }}>{label}</dt><dd className="mt-1 break-words text-[13px]" style={{ color: t.textPrimary }}>{value || 'Not set'}</dd></div>)}
+          </dl>
+        </SectionCard>
+      </div>}
+
+      {!editing && activeTab === 'settings' && <div id="settings-panel" role="tabpanel" aria-labelledby="settings-tab">
+        <SectionCard eyebrow="Settings" title="Payment bank account" t={t}>
+          <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">{[['Account holder', form.bankAccountName], ['Bank', form.bankName], ['Account number', form.bankAccountNumber], ['IFSC', form.bankIfscCode], ['SWIFT / BIC', form.bankSwiftCode], ['Branch', form.bankBranch], ['UPI ID', form.upiId]].map(([label, value]) => <div key={label}><dt className="text-[11px]" style={{ color: t.textMuted }}>{label}</dt><dd className="mt-1 break-words text-[13px]" style={{ color: t.textPrimary }}>{value || 'Not set'}</dd></div>)}</dl>
+        </SectionCard>
+      </div>}
+
+      {editing && <form onSubmit={handleSubmit} className="space-y-6" style={{ '--primary': previewPrimaryColor, '--primary-foreground': primaryForeground(previewPrimaryColor) } as React.CSSProperties}>
+
         {/* Branding */}
+        {activeTab === 'branding' && <div id="branding-panel" role="tabpanel" aria-labelledby="branding-tab" className="space-y-6">
         <SectionCard
           eyebrow="Identity"
           title="Logo"
@@ -536,6 +659,27 @@ export default function CompanyProfilePage() {
             isDark={isDark}
             t={t}
           />
+        </SectionCard>
+
+        <SectionCard eyebrow="Brand color" title="Primary color" description="Applied across your company workspace and new invoice PDFs." t={t}>
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            <div className="flex min-w-0 flex-1 items-center gap-4">
+              <div className="h-14 w-14 shrink-0 rounded-lg border" style={{ backgroundColor: form.primaryColor, borderColor: t.cardBorder }} aria-label={`Current brand color ${form.primaryColor}`} />
+              <div className="min-w-0 flex-1">
+                <FieldLabel hint="Six-digit hex" t={t}>Primary color</FieldLabel>
+                <div className="flex gap-2">
+                  <input type="color" value={form.primaryColor} onChange={(event) => setForm((current) => ({ ...current, primaryColor: event.target.value.toUpperCase() }))} disabled={loading} className="h-11 w-12 cursor-pointer rounded-lg border p-1 disabled:cursor-not-allowed" style={{ background: t.dropzoneBg, borderColor: t.dropzoneBorder }} aria-label="Choose primary color" />
+                  <input value={form.primaryColor} onChange={(event) => setForm((current) => ({ ...current, primaryColor: event.target.value.toUpperCase() }))} placeholder="#0E8C78" maxLength={7} pattern="^#[0-9a-fA-F]{6}$" className={`${inputClasses} max-w-44 font-mono uppercase`} disabled={loading} aria-label="Primary color hex value" />
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {primaryColorPalette.map((color) => {
+                const selected = form.primaryColor.toUpperCase() === color;
+                return <button key={color} type="button" onClick={() => setForm((current) => ({ ...current, primaryColor: color }))} disabled={loading} className="h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50" style={{ backgroundColor: color, borderColor: selected ? t.textPrimary : t.swatchRing, boxShadow: selected ? '0 0 0 2px var(--primary)' : undefined }} aria-label={`Select ${color}`} aria-pressed={selected} title={color} />;
+              })}
+            </div>
+          </div>
         </SectionCard>
 
         {/* Signature */}
@@ -580,8 +724,10 @@ export default function CompanyProfilePage() {
             t={t}
           />
         </SectionCard>
+        </div>}
 
         {/* Company details */}
+        {activeTab === 'account' && <div id="account-panel" role="tabpanel" aria-labelledby="account-tab" className="space-y-6">
         <SectionCard eyebrow="Details" title="Company information" t={t}>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
@@ -639,67 +785,35 @@ export default function CompanyProfilePage() {
                 />
               </div>
             </div>
-            <div>
-              <FieldLabel hint="Used on reports & the portal" t={t}>Primary color</FieldLabel>
-              <div className="flex gap-2">
-                <input
-                  type="color"
-                  value={/^#[0-9a-f]{6}$/i.test(form.primaryColor) ? form.primaryColor : '#3FDCC0'}
-                  onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value.toUpperCase() }))}
-                  disabled={loading}
-                  className="h-11 w-12 cursor-pointer rounded-lg border p-1 disabled:cursor-not-allowed"
-                  style={{ background: t.dropzoneBg, borderColor: t.dropzoneBorder }}
-                  aria-label="Choose primary color"
-                />
-                <input
-                  value={form.primaryColor}
-                  onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value }))}
-                  placeholder="#3FDCC0"
-                  pattern="^#[0-9a-fA-F]{6}$"
-                  className={inputClasses}
-                  disabled={loading}
-                />
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {primaryColorPalette.map((color) => {
-                  const selected = form.primaryColor.toUpperCase() === color;
-                  return (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, primaryColor: color }))}
-                      disabled={loading}
-                      className="h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{
-                        backgroundColor: color,
-                        borderColor: selected ? t.textPrimary : t.swatchRing,
-                        boxShadow: selected ? `0 0 0 2px ${ACCENT}66` : undefined,
-                      }}
-                      aria-label={`Select ${color}`}
-                      title={color}
-                    />
-                  );
-                })}
-                <span className="text-[11px]" style={{ color: t.textMuted }}>Select a palette color or enter a hex code.</span>
-              </div>
-            </div>
           </div>
         </SectionCard>
 
         {/* Address */}
         <SectionCard eyebrow="Location" title="Address" t={t}>
-          <div className="relative">
-            <MapPin size={14} className="pointer-events-none absolute left-3 top-3" style={{ color: t.textFaint }} />
-            <textarea
-              value={form.address}
-              onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-              rows={4}
-              className={`${inputClasses} pl-9`}
-              disabled={loading}
-              placeholder="Street, city, state, postal code, country"
-            />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2"><FieldLabel t={t}>Street address</FieldLabel><div className="relative"><MapPin size={14} className="pointer-events-none absolute left-3 top-3" style={{ color: t.textFaint }} /><textarea value={form.address} onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))} rows={3} className={`${inputClasses} pl-9`} disabled={loading} placeholder="Street address" /></div></div>
+            <div><FieldLabel t={t}>City</FieldLabel><input value={form.city} onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))} className={inputClasses} disabled={loading} maxLength={120} /></div>
+            <div><FieldLabel t={t}>State</FieldLabel><input value={form.state} onChange={(event) => setForm((current) => ({ ...current, state: event.target.value }))} className={inputClasses} disabled={loading} maxLength={120} /></div>
+            <div><FieldLabel t={t}>Postal code</FieldLabel><input value={form.postalCode} onChange={(event) => setForm((current) => ({ ...current, postalCode: event.target.value }))} className={inputClasses} disabled={loading} maxLength={20} /></div>
+            <div><FieldLabel t={t}>GSTIN</FieldLabel><input value={form.gstNumber} onChange={(event) => setForm((current) => ({ ...current, gstNumber: event.target.value.toUpperCase() }))} className={inputClasses} disabled={loading} maxLength={30} /></div>
+            <div><FieldLabel t={t}>PAN</FieldLabel><input value={form.panNumber} onChange={(event) => setForm((current) => ({ ...current, panNumber: event.target.value.toUpperCase() }))} className={inputClasses} disabled={loading} maxLength={20} /></div>
           </div>
         </SectionCard>
+        </div>}
+
+        {activeTab === 'settings' && <div id="settings-panel" role="tabpanel" aria-labelledby="settings-tab">
+        <SectionCard eyebrow="Finance" title="Payment bank account" description="These company-level payment details are included on invoices created from now on." t={t}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div><FieldLabel t={t}>Account holder name</FieldLabel><input value={form.bankAccountName} onChange={(event) => setForm((current) => ({ ...current, bankAccountName: event.target.value }))} className={inputClasses} disabled={loading} maxLength={255} /></div>
+            <div><FieldLabel t={t}>Bank name</FieldLabel><input value={form.bankName} onChange={(event) => setForm((current) => ({ ...current, bankName: event.target.value }))} className={inputClasses} disabled={loading} maxLength={255} /></div>
+            <div><FieldLabel t={t}>Account number</FieldLabel><input value={form.bankAccountNumber} onChange={(event) => setForm((current) => ({ ...current, bankAccountNumber: event.target.value }))} className={inputClasses} disabled={loading} maxLength={80} autoComplete="off" /></div>
+            <div><FieldLabel t={t}>IFSC code</FieldLabel><input value={form.bankIfscCode} onChange={(event) => setForm((current) => ({ ...current, bankIfscCode: event.target.value.toUpperCase() }))} className={inputClasses} disabled={loading} maxLength={20} /></div>
+            <div><FieldLabel t={t}>SWIFT / BIC code</FieldLabel><input value={form.bankSwiftCode} onChange={(event) => setForm((current) => ({ ...current, bankSwiftCode: event.target.value.toUpperCase() }))} className={inputClasses} disabled={loading} maxLength={20} /></div>
+            <div><FieldLabel t={t}>Branch</FieldLabel><input value={form.bankBranch} onChange={(event) => setForm((current) => ({ ...current, bankBranch: event.target.value }))} className={inputClasses} disabled={loading} maxLength={255} /></div>
+            <div className="md:col-span-2"><FieldLabel t={t}>UPI ID (optional)</FieldLabel><input value={form.upiId} onChange={(event) => setForm((current) => ({ ...current, upiId: event.target.value }))} className={inputClasses} disabled={loading} maxLength={100} placeholder="accounts@bank" /></div>
+          </div>
+        </SectionCard>
+        </div>}
 
         {/* Save bar */}
         <div className="flex items-center justify-end gap-3 rounded-2xl border px-6 py-4" style={{ background: t.cardBg, borderColor: t.cardBorder }}>
@@ -709,17 +823,20 @@ export default function CompanyProfilePage() {
               Loading company profile…
             </span>
           )}
+          <button type="button" onClick={cancelEditing} disabled={saving || loading} className="mr-auto inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-[13px] font-medium disabled:opacity-50" style={{ borderColor: t.cardBorder, color: t.textSubtle }}>
+            <X size={14} />Cancel
+          </button>
           <button
             type="submit"
             disabled={saving || loading}
             className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-[13.5px] font-semibold transition-colors disabled:opacity-60"
-            style={{ background: ACCENT, color: '#0B0F26' }}
+            style={{ background: 'var(--primary)', color: 'var(--primary-foreground)' }}
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {saving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
-      </form>
+      </form>}
     </div>
   );
 }

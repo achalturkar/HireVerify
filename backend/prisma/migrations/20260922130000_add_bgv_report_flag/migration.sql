@@ -1,0 +1,1 @@
+ALTER TABLE "bgv_cases" ADD COLUMN "include_in_report" BOOLEAN NOT NULL DEFAULT false;

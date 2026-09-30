@@ -3,6 +3,7 @@
 const { BadRequestError, NotFoundError, ConflictError, ForbiddenError } = require('../../utils/errors');
 const permissionRepo = require('../permission/permission.repository');
 const repo = require('./role.repository');
+const { invalidateRoleAuthCache } = require('../../middleware/auth.middleware');
 
 const toDto = (role) => ({
   id: role.id,
@@ -104,6 +105,7 @@ const update = async ({ currentUser, id, payload }) => {
   }
 
   const role = await repo.update({ id, data, permissionIds });
+  await invalidateRoleAuthCache(id);
   return toDto(role);
 };
 

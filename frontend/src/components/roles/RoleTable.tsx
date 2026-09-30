@@ -6,6 +6,7 @@ import type { Role } from '@/src/types/role';
 interface RoleTableProps {
   roles: Role[];
   showCompanyColumn: boolean;
+  isSuperAdmin: boolean;
   canUpdate: boolean;
   canDelete: boolean;
   onEdit: (role: Role) => void;
@@ -74,6 +75,7 @@ function SortHeader({
 export function RoleTable({
   roles,
   showCompanyColumn,
+  isSuperAdmin,
   canUpdate,
   canDelete,
   onEdit,
@@ -119,6 +121,8 @@ export function RoleTable({
         <tbody>
           {roles.map((role) => {
             const protectedRole = role.isSuperAdmin || role.isCompanyAdmin;
+            const viewOnly = role.isSuperAdmin || (role.isCompanyAdmin && !isSuperAdmin);
+            const editLabel = viewOnly ? `View ${role.name}` : role.isCompanyAdmin ? `Edit permissions for ${role.name}` : `Edit ${role.name}`;
             return (
               <tr key={role.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-muted)] transition-colors">
                 <td className="px-5 py-3">
@@ -150,12 +154,12 @@ export function RoleTable({
                     <button
                       type="button"
                       onClick={() => onEdit(role)}
-                      disabled={!protectedRole && !canUpdate}
+                      disabled={!viewOnly && !canUpdate}
                       className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors disabled:opacity-30 disabled:pointer-events-none"
-                      aria-label={protectedRole ? `View ${role.name}` : `Edit ${role.name}`}
-                      title={protectedRole ? 'View' : 'Edit'}
+                      aria-label={editLabel}
+                      title={viewOnly ? 'View' : role.isCompanyAdmin ? 'Edit permissions' : 'Edit'}
                     >
-                      {protectedRole ? <Eye size={13} /> : <Pencil size={13} />}
+                      {viewOnly ? <Eye size={13} /> : <Pencil size={13} />}
                     </button>
                     {!protectedRole && (
                       <button

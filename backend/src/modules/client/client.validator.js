@@ -112,56 +112,56 @@ const updateValidator = [
     .withMessage('logoUrl must be a valid URL'),
 
   body('website')
-    .optional()
+    .optional({ values: 'falsy' })
     .isURL(),
 
   body('industry')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ max: 150 }),
 
   body('contactName')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ max: 150 }),
 
   body('contactEmail')
-    .optional()
+    .optional({ values: 'falsy' })
     .isEmail()
     .normalizeEmail(),
 
   body('contactPhone')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ max: 50 }),
 
   body('gstNumber')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ max: 30 }),
 
   body('panNumber')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ max: 20 }),
 
   body('addressLine1')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ max: 500 }),
 
   body('addressLine2')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ max: 500 }),
 
   body('city')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ max: 100 }),
 
   body('state')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ max: 100 }),
 
   body('country')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ max: 100 }),
 
   body('postalCode')
-    .optional()
+    .optional({ values: 'falsy' })
     .isLength({ max: 20 }),
 
   body('status')

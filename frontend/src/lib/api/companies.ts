@@ -1,9 +1,11 @@
 import { ApiError } from '@/src/lib/api';
 const API_BASE = process.env.NEXT_PUBLIC_API ?? '/api/v1';
 
-const extractApiMessage = (body: any, defaultMessage: string): string => {
+const extractApiMessage = (body: unknown, defaultMessage: string): string => {
   if (!body) return defaultMessage;
-  const message = body.message ?? body;
+  const message = typeof body === 'object' && body !== null && 'message' in body
+    ? (body as { message?: unknown }).message ?? body
+    : body;
   if (typeof message === 'string') return message;
   if (typeof message === 'object' && message !== null) {
     if (typeof message.message === 'string') return message.message;
@@ -25,6 +27,18 @@ interface CompanyResponse {
   stampUrl: string | null;
   primaryColor: string | null;
   address: string | null;
+  gstNumber: string | null;
+  panNumber: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  bankAccountName: string | null;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  bankIfscCode: string | null;
+  bankSwiftCode: string | null;
+  bankBranch: string | null;
+  upiId: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -173,4 +187,6 @@ export async function getCompanyAnalytics(period: 'monthly' | 'yearly', accessTo
   return (body?.data && body.data.data) ? body.data.data : body.data;
 }
 
-export default { getCompanyStats, getCompanyDetails };
+const companyApi = { getCompanyStats, getCompanyDetails };
+
+export default companyApi;

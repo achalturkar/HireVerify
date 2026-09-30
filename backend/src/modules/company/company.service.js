@@ -27,6 +27,18 @@ const toDto = (company) => ({
   stampUrl: company.stampUrl,
   primaryColor: company.primaryColor,
   address: company.address,
+  gstNumber: company.gstNumber,
+  panNumber: company.panNumber,
+  city: company.city,
+  state: company.state,
+  postalCode: company.postalCode,
+  bankAccountName: company.bankAccountName,
+  bankName: company.bankName,
+  bankAccountNumber: company.bankAccountNumber,
+  bankIfscCode: company.bankIfscCode,
+  bankSwiftCode: company.bankSwiftCode,
+  bankBranch: company.bankBranch,
+  upiId: company.upiId,
   settings: company.settings,
   status: company.status,
   isDeleted: company.isDeleted,
@@ -120,6 +132,18 @@ const create = async ({ payload, currentUser, req }) => {
         stampUrl: resolvedStampUrl,
         primaryColor: primaryColor || null,
         address: address || null,
+        gstNumber: payload.gstNumber || null,
+        panNumber: payload.panNumber || null,
+        city: payload.city || null,
+        state: payload.state || null,
+        postalCode: payload.postalCode || null,
+        bankAccountName: payload.bankAccountName || null,
+        bankName: payload.bankName || null,
+        bankAccountNumber: payload.bankAccountNumber || null,
+        bankIfscCode: payload.bankIfscCode || null,
+        bankSwiftCode: payload.bankSwiftCode || null,
+        bankBranch: payload.bankBranch || null,
+        upiId: payload.upiId || null,
         settings: settings || {},
         status: 'ACTIVE',
         createdById: currentUser?.id || null,
@@ -213,8 +237,8 @@ const update = async ({ id, payload, req }) => {
   const existing = await repo.findById(id);
   if (!existing) throw new NotFoundError('Company not found');
   const data = {};
-  ['name', 'shortCode', 'contactEmail', 'contactPhone', 'primaryColor', 'address', 'settings'].forEach((k) => {
-    if (payload[k] !== undefined) data[k] = payload[k];
+  ['name', 'shortCode', 'contactEmail', 'contactPhone', 'primaryColor', 'address', 'settings', 'gstNumber', 'panNumber', 'city', 'state', 'postalCode', 'bankAccountName', 'bankName', 'bankAccountNumber', 'bankIfscCode', 'bankSwiftCode', 'bankBranch', 'upiId'].forEach((k) => {
+    if (payload[k] !== undefined) data[k] = typeof payload[k] === 'string' && !payload[k].trim() ? null : payload[k];
   });
   if (data.shortCode !== undefined) data.shortCode = data.shortCode ? String(data.shortCode).trim().toUpperCase() : null;
 

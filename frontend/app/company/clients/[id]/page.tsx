@@ -3,21 +3,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Building2, Mail, Phone, Globe, Pencil, Users, MapPin, Power, PowerOff,
+  ArrowLeft, Globe, Pencil, Users, MapPin, Power, PowerOff,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { getClient, activateClient, inactivateClient, ApiError as ClientApiError } from '@/src/lib/api/clients';
+import { getClient, updateClient, activateClient, inactivateClient, ApiError as ClientApiError } from '@/src/lib/api/clients';
 import { listCandidates, createCandidate, ApiError as CandidateApiError } from '@/src/lib/api/candidates';
 import ClientFormModal from '@/src/components/layout/company/client/ClientFormModal';
 import ClientConfirmDialog from '@/src/components/layout/company/client/ClientConfirmDialog';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
-import type { Client } from '@/src/types/client';
+import type { Client, ClientFormValues } from '@/src/types/client';
 import type { Candidate, CandidateFormValues, PaginationMeta } from '@/src/types/candidate';
 
 const PAGE_SIZE = 10;
-type TabKey = 'overview' | 'candidates';
+type TabKey = 'overview' | 'billing' | 'candidates';
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: 'Overview' },
+  { key: 'billing', label: 'Billing details' },
   { key: 'candidates', label: 'Candidates' },
 ];
 
@@ -36,6 +37,8 @@ export default function ClientDetailPage() {
   const [tab, setTab] = useState<TabKey>('overview');
 
   const [editOpen, setEditOpen] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [statusTarget, setStatusTarget] = useState<'ACTIVE' | 'INACTIVE' | null>(null);
   const [togglingStatus, setTogglingStatus] = useState(false);
 
@@ -93,6 +96,42 @@ export default function ClientDetailPage() {
     } finally {
       setStatusTarget(null);
       setTogglingStatus(false);
+    }
+  };
+
+  const handleUpdateClient = async (values: ClientFormValues, logoFile: File | null) => {
+    if (!client) return;
+    setEditSubmitting(true);
+    setEditError(null);
+    const payload = new FormData();
+    Object.entries({
+      clientCode: values.clientCode.trim(),
+      name: values.name.trim(),
+      website: values.website.trim(),
+      industry: values.industry.trim(),
+      contactName: values.contactName.trim(),
+      contactEmail: values.contactEmail.trim(),
+      contactPhone: values.contactPhone.trim(),
+      gstNumber: values.gstNumber.trim(),
+      panNumber: values.panNumber.trim(),
+      addressLine1: values.addressLine1.trim(),
+      addressLine2: values.addressLine2.trim(),
+      city: values.city.trim(),
+      state: values.state.trim(),
+      country: values.country.trim(),
+      postalCode: values.postalCode.trim(),
+      status: client.status,
+    }).forEach(([key, value]) => payload.append(key, value));
+    if (logoFile) payload.append('logo', logoFile);
+
+    try {
+      const updated = await updateClient(client.id, payload, accessToken);
+      setClient(updated);
+      setEditOpen(false);
+    } catch (err) {
+      setEditError(err instanceof ClientApiError ? err.message : 'Could not update client details.');
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -193,27 +232,47 @@ export default function ClientDetailPage() {
       </div>
 
       {tab === 'overview' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-            <h3 className="text-[13px] font-semibold text-[var(--foreground)]">Contact</h3>
-            <p className="flex items-center gap-2 text-[13px] text-[var(--muted)]"><Building2 size={13} /> {client.contactName || '—'}</p>
-            <p className="flex items-center gap-2 text-[13px] text-[var(--muted)]"><Mail size={13} /> {client.contactEmail || '—'}</p>
-            <p className="flex items-center gap-2 text-[13px] text-[var(--muted)]"><Phone size={13} /> {client.contactPhone || '—'}</p>
-          </div>
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3">
-            <h3 className="text-[13px] font-semibold text-[var(--foreground)]">Address</h3>
-            <p className="flex items-start gap-2 text-[13px] text-[var(--muted)]">
-              <MapPin size={13} className="mt-0.5" />
-              <span>{[client.addressLine1, client.addressLine2, client.city, client.state, client.country, client.postalCode].filter(Boolean).join(', ') || '—'}</span>
-            </p>
-          </div>
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 space-y-3 sm:col-span-2">
-            <h3 className="text-[13px] font-semibold text-[var(--foreground)]">Compliance</h3>
-            <div className="flex gap-6 text-[13px] text-[var(--muted)]">
-              <span>GST: {client.gstNumber || '—'}</span>
-              <span>PAN: {client.panNumber || '—'}</span>
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <h3 className="text-[13px] font-semibold text-[var(--foreground)]">Client profile</h3>
+          <dl className="mt-4 grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div><dt className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Client code</dt><dd className="mt-1 text-[13px]">{client.clientCode}</dd></div>
+            <div><dt className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Industry</dt><dd className="mt-1 text-[13px]">{client.industry || '—'}</dd></div>
+            <div><dt className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Website</dt><dd className="mt-1 truncate text-[13px]">{client.website || '—'}</dd></div>
+            <div><dt className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Status</dt><dd className="mt-1 text-[13px]">{client.status}</dd></div>
+            <div><dt className="text-[11px] uppercase tracking-wide text-[var(--muted)]">Client since</dt><dd className="mt-1 text-[13px]">{new Date(client.createdAt).toLocaleDateString()}</dd></div>
+          </dl>
+        </section>
+      )}
+
+      {tab === 'billing' && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <h3 className="text-[13px] font-semibold text-[var(--foreground)]">Billing contact</h3>
+            <dl className="mt-4 space-y-3 text-[13px]">
+              <div><dt className="text-[11px] text-[var(--muted)]">Contact person</dt><dd className="mt-0.5">{client.contactName || 'Not provided'}</dd></div>
+              <div><dt className="text-[11px] text-[var(--muted)]">Billing email</dt><dd className="mt-0.5 break-all">{client.contactEmail || 'Not provided'}</dd></div>
+              <div><dt className="text-[11px] text-[var(--muted)]">Phone</dt><dd className="mt-0.5">{client.contactPhone || 'Not provided'}</dd></div>
+            </dl>
+          </section>
+          <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <h3 className="text-[13px] font-semibold text-[var(--foreground)]">Billing address</h3>
+            <div className="mt-4 flex items-start gap-2 text-[13px] leading-5 text-[var(--muted)]">
+              <MapPin size={14} className="mt-0.5 shrink-0" />
+              <address className="not-italic">{[client.addressLine1, client.addressLine2, client.city, client.state, client.postalCode, client.country].filter(Boolean).join(', ') || 'Not provided'}</address>
             </div>
-          </div>
+            <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--border)] pt-3 text-[13px]">
+              <div><dt className="text-[11px] text-[var(--muted)]">State</dt><dd className="mt-0.5">{client.state || 'Not provided'}</dd></div>
+              <div><dt className="text-[11px] text-[var(--muted)]">Postal code</dt><dd className="mt-0.5">{client.postalCode || 'Not provided'}</dd></div>
+              <div><dt className="text-[11px] text-[var(--muted)]">Country</dt><dd className="mt-0.5">{client.country || 'Not provided'}</dd></div>
+            </dl>
+          </section>
+          <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:col-span-2">
+            <h3 className="text-[13px] font-semibold text-[var(--foreground)]">Tax identifiers</h3>
+            <dl className="mt-4 grid gap-4 sm:grid-cols-2 text-[13px]">
+              <div><dt className="text-[11px] text-[var(--muted)]">GSTIN</dt><dd className="mt-0.5 font-medium">{client.gstNumber || 'Not provided'}</dd></div>
+              <div><dt className="text-[11px] text-[var(--muted)]">PAN</dt><dd className="mt-0.5 font-medium">{client.panNumber || 'Not provided'}</dd></div>
+            </dl>
+          </section>
         </div>
       )}
 
@@ -283,6 +342,19 @@ export default function ClientDetailPage() {
           error={null}
           onClose={() => setCandidateModalOpen(false)}
           onSubmit={handleCreateCandidate}
+        />
+      )}
+
+      {editOpen && (
+        <ClientFormModal
+          mode="edit"
+          client={client}
+          companies={[]}
+          isSuperAdmin={false}
+          submitting={editSubmitting}
+          error={editError}
+          onClose={() => { if (!editSubmitting) setEditOpen(false); }}
+          onSubmit={handleUpdateClient}
         />
       )}
     </div>

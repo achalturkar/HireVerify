@@ -18,52 +18,68 @@ import {
   UserCircle,
   ClipboardList,
   BarChart3,
+  Receipt,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { resolveLogoUrl } from '@/src/lib/logo';
 import BrandMark from '@/src/components/ui/BrandMark';
 
+type CompanyMenuItem = {
+  name: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  permission?: string;
+};
+
 // Menu items grouped by what they're used for, rather than one flat list —
 // each group gets its own small uppercase label (hidden when collapsed).
-const menuGroups: { label: string; items: { name: string; href: string; icon: typeof LayoutDashboard }[] }[] = [
+const menuGroups: { label: string; items: CompanyMenuItem[] }[] = [
   {
     label: 'Workspace',
-    items: [{ name: 'Dashboard', href: '/company/dashboard', icon: LayoutDashboard },
-          { name: 'Analytics', href: '/company/analytics', icon: BarChart3 }],
+    items: [
+      { name: 'Dashboard', href: '/company/dashboard', icon: LayoutDashboard, permission: 'company.view' },
+      { name: 'Analytics', href: '/company/analytics', icon: BarChart3, permission: 'company.view' },
+    ],
 
   },
   {
     label: 'Engagement',
     items: [
-      { name: 'Clients', href: '/company/clients', icon: Users },
-      { name: 'Candidates', href: '/company/candidates', icon: Contact },
+      { name: 'Clients', href: '/company/clients', icon: Users, permission: 'client.view' },
+      { name: 'Candidates', href: '/company/candidates', icon: Contact, permission: 'candidate.view' },
     ],
   },
   {
     label: 'Verification',
     items: [
-      { name: 'BGV Cases', href: '/company/bgv-cases', icon: FileCheck2 },
-      { name: 'Reports', href: '/company/reports', icon: FileText },
-      { name: 'Manual BGV', href: '/company/manual-bgv', icon: FilePlus2 },
-      { name: 'Verification Checks', href: '/company/verifications', icon: ShieldCheck },
-      { name: 'Document Verification', href: '/company/document-verification', icon: FileCheck2 },
+      { name: 'BGV Cases', href: '/company/bgv-cases', icon: FileCheck2, permission: 'bgv.case.view' },
+      { name: 'Reports', href: '/company/reports', icon: FileText, permission: 'bgv.report.view' },
+      { name: 'Manual BGV', href: '/company/manual-bgv', icon: FilePlus2, permission: 'bgv.case.create' },
+      { name: 'Verification Checks', href: '/company/verifications', icon: ShieldCheck, permission: 'bgv.verification.view' },
+      { name: 'Document Verification', href: '/company/document-verification', icon: FileCheck2, permission: 'bgv.document.view' },
+    ],
+  },
+    {
+    label: 'Finance',
+    items: [
+      { name: 'Invoices', href: '/company/invoices', icon: Receipt, permission: 'invoice.view' },
     ],
   },
   {
     label: 'Actions',
     items: [
-          { name: 'Government Portals', href: '/company/government-portals', icon: Landmark },
+          { name: 'Government Portals', href: '/company/government-portals', icon: Landmark, permission: 'bgv.case.view' },
 
     ],
   },
   {
     label: 'Organization',
     items: [
-      { name: 'Company Profile', href: '/company/profile', icon: UserCircle },
-      { name: 'Users', href: '/company/users', icon: Users },
-      { name: 'Roles', href: '/company/roles', icon: ShieldCheck },
-      { name: 'Audit activity', href: '/company/audit', icon: ClipboardList },
-      { name: 'Settings', href: '/company/settings', icon: Settings },
+      { name: 'Company Profile', href: '/company/profile', icon: UserCircle, permission: 'company.view' },
+      { name: 'Users', href: '/company/users', icon: Users, permission: 'users.view' },
+      { name: 'Roles', href: '/company/roles', icon: ShieldCheck, permission: 'roles.view' },
+      { name: 'Audit activity', href: '/company/audit', icon: ClipboardList, permission: 'audit.view' },
+      { name: 'Settings', href: '/company/settings', icon: Settings, permission: 'company.update' },
       { name: 'Help', href: '/company/help', icon: CircleHelp },
     ],
   },
@@ -81,6 +97,13 @@ export default function CompanySidebar({ collapsed, onToggleCollapse, mobileOpen
   const { user } = useAuth();
   const companyName = user?.company?.name;
   const companyLogo = resolveLogoUrl(user?.company?.logoUrl);
+  const isSuperAdmin = user?.role?.isSuperAdmin ?? false;
+  const visibleMenuGroups = menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.permission || isSuperAdmin || user?.permissions?.includes(item.permission)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const content = (
     <div className="flex h-full flex-col bg-[var(--surface)] text-[var(--foreground)]">
@@ -115,7 +138,7 @@ export default function CompanySidebar({ collapsed, onToggleCollapse, mobileOpen
 
       {/* Menu */}
       <nav className="flex-1 overflow-y-auto px-3 py-5 space-y-5">
-        {menuGroups.map((group) => (
+        {visibleMenuGroups.map((group) => (
           <div key={group.label}>
             {!collapsed ? (
               <p

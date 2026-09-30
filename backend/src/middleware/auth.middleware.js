@@ -92,4 +92,9 @@ const invalidateUserAuthCache = async (userId) => {
   await redis.del(`user:auth:${userId}`);
 };
 
-module.exports = { authenticate, invalidateUserAuthCache };
+const invalidateRoleAuthCache = async (roleId) => {
+  const users = await prisma.user.findMany({ where: { roleId }, select: { id: true } });
+  await Promise.all(users.map((user) => invalidateUserAuthCache(user.id)));
+};
+
+module.exports = { authenticate, invalidateUserAuthCache, invalidateRoleAuthCache };

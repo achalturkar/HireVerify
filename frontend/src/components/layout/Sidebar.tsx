@@ -18,7 +18,7 @@ interface SidebarProps {
 export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onCloseMobile }: SidebarProps) {
   const { user, permissions } = useAuth();
   const pathname = usePathname();
-  const adminItems = useMemo(() => buildAdminMenu(permissions), [permissions]);
+  const adminItems = useMemo(() => buildAdminMenu(user?.role?.isSuperAdmin ? [...permissions, 'invoice.view'] : permissions), [permissions, user?.role?.isSuperAdmin]);
 
   const initials = user ? `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase() : '';
 

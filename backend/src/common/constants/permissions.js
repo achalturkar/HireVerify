@@ -43,6 +43,17 @@ const PERMISSIONS = [
   { key: 'bgv.case.assign', module: 'bgv.case', action: 'assign', description: 'Assign BGV cases' },
 
   // ==========================
+  // Invoices
+  // ==========================
+  { key: 'invoice.view', module: 'invoice', action: 'view', description: 'View invoices' },
+  { key: 'invoice.create', module: 'invoice', action: 'create', description: 'Create invoices' },
+  { key: 'invoice.delete', module: 'invoice', action: 'delete', description: 'Delete draft invoices' },
+  { key: 'invoice.update', module: 'invoice', action: 'update', description: 'Update draft invoices' },
+  { key: 'invoice.send', module: 'invoice', action: 'send', description: 'Email invoices to clients' },
+  { key: 'invoice.payment', module: 'invoice', action: 'payment', description: 'Record invoice payments' },
+  { key: 'invoice.void', module: 'invoice', action: 'void', description: 'Void invoices' },
+
+  // ==========================
   // Candidate
   // ==========================
   { key: 'candidate.create', module: 'candidate', action: 'create', description: 'Create candidates' },

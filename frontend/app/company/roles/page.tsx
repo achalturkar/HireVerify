@@ -266,6 +266,7 @@ export default function RolesPage() {
             <RoleTable
               roles={roles}
               showCompanyColumn={isSuperAdmin && !companyFilter}
+              isSuperAdmin={isSuperAdmin}
               canUpdate={canUpdate}
               canDelete={canDelete}
               onEdit={openEdit}
