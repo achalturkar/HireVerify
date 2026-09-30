@@ -3,15 +3,24 @@ const API_BASE = process.env.NEXT_PUBLIC_API ?? '/api/v1';
 
 const extractApiMessage = (body: unknown, defaultMessage: string): string => {
   if (!body) return defaultMessage;
-  const message = typeof body === 'object' && body !== null && 'message' in body
-    ? (body as { message?: unknown }).message ?? body
-    : body;
+
+  const message: unknown =
+    typeof body === 'object' && body !== null && 'message' in body
+      ? (body as { message?: unknown }).message ?? body
+      : body;
+
   if (typeof message === 'string') return message;
+
+  if (Array.isArray(message)) {
+    return message.map((item) => extractApiMessage(item, '')).filter(Boolean).join(', ');
+  }
+
   if (typeof message === 'object' && message !== null) {
-    if (typeof message.message === 'string') return message.message;
-    if (Array.isArray(message)) return message.map((item) => extractApiMessage(item, '')).filter(Boolean).join(', ');
+    const nested = (message as { message?: unknown }).message;
+    if (typeof nested === 'string') return nested;
     return JSON.stringify(message);
   }
+
   return defaultMessage;
 };
 

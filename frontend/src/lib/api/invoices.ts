@@ -231,7 +231,10 @@ export interface InvoiceListResult {
 }
 
 async function fetchInvoiceList(path: string, params: InvoiceListParams, token: string | null): Promise<InvoiceListResult> {
-  const result = await request<{ data: Invoice[]; meta: InvoiceListResult['meta']; summary: InvoiceSummary; analytics: InvoiceAnalytics }>(`${path}${query(params)}`, token);
+  const result = await request<{ data: Invoice[]; meta: InvoiceListResult['meta']; summary: InvoiceSummary; analytics: InvoiceAnalytics }>(
+    `${path}${query({ ...params })}`,
+    token,
+  );
   return { items: result.data, meta: result.meta, summary: result.summary, analytics: result.analytics };
 }
 
