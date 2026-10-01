@@ -301,6 +301,7 @@ export default function CandidateDetailPage() {
   const [tab, setTab] = useState<Tab>('summary');
   const [docFilter, setDocFilter] = useState<Category | 'all'>('all');
   const [confirmLock, setConfirmLock] = useState(false);
+  const [confirmReplace, setConfirmReplace] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -415,6 +416,11 @@ export default function CandidateDetailPage() {
         ? `Reminder sent using the same portal link. Expiry remains ${formatDateTime(result.expiresAt)}.`
         : 'The portal link is still active, but the reminder email could not be delivered.');
     }, 'Could not send portal reminder.');
+  };
+
+  const replacePortalLink = () => {
+    setConfirmReplace(false);
+    issueLink('resend');
   };
 
   const setLocked = (locked: boolean) => {
@@ -737,6 +743,11 @@ export default function CandidateDetailPage() {
                     {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Mail size={15} aria-hidden="true" />}Send reminder email
                   </button>
                 )}
+                {(state === 'active' || state === 'expiring' || (state === 'locked' && !expired)) && !confirmReplace && (
+                  <button type="button" onClick={() => setConfirmReplace(true)} disabled={busy || !daysValid} className="inline-flex items-center gap-2 rounded-lg border border-amber-300 px-4 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-50">
+                    <Send size={15} aria-hidden="true" />Replace link
+                  </button>
+                )}
                 {state === 'locked' && !expired && (
                   <button type="button" onClick={() => setLocked(false)} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-[var(--primary-foreground)] disabled:opacity-50">
                     {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Unlock size={15} aria-hidden="true" />}Unlock link
@@ -755,6 +766,16 @@ export default function CandidateDetailPage() {
                   <div className="flex shrink-0 gap-2">
                     <button type="button" onClick={() => setLocked(true)} disabled={busy} className="rounded-lg bg-red-600 px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-50">Lock link</button>
                     <button type="button" onClick={() => setConfirmLock(false)} className="rounded-lg border border-red-200 bg-white px-3.5 py-2 text-sm font-semibold text-red-800">Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {confirmReplace && (
+                <div role="alertdialog" aria-label="Confirm portal link replacement" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-amber-900">Replace the current link? The old URL will stop working immediately, and a new link will be emailed to the candidate.</p>
+                  <div className="flex shrink-0 gap-2">
+                    <button type="button" onClick={replacePortalLink} disabled={busy || !daysValid} className="rounded-lg bg-amber-700 px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-50">Replace and email new link</button>
+                    <button type="button" onClick={() => setConfirmReplace(false)} disabled={busy} className="rounded-lg border border-amber-200 bg-white px-3.5 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50">Cancel</button>
                   </div>
                 </div>
               )}
