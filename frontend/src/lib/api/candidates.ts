@@ -193,6 +193,19 @@ export async function deleteCandidate(id: string, accessToken?: string | null): 
   await authFetch(`/candidates/${id}`, accessToken, { method: 'DELETE' });
 }
 
+export interface CandidatePortalIssueResult {
+  url: string;
+  activatedAt: string;
+  lastSentAt: string | null;
+  expiresAt: string;
+  emailSent: boolean;
+}
+
+export async function sendCandidatePortalLink(id: string, accessToken?: string | null): Promise<CandidatePortalIssueResult> {
+  const json = await authFetch(`/candidate-portal/invitations/${id}`, accessToken, { method: 'POST' });
+  return json.data.data as CandidatePortalIssueResult;
+}
+
 /** Search candidates for BGV case creation and other authorized pickers. */
 export interface SearchCandidatesParams {
   search?: string;
@@ -220,4 +233,44 @@ export async function searchCandidates(
     status: c.status,
     client: (c as any).client ?? null,
   }));
+}
+
+export interface CandidatePortalStatus {
+  activatedAt: string;
+  lastSentAt: string | null;
+  expiresAt: string;
+  revokedAt: string | null;
+  reminderCount: number;
+  lastRemindedAt: string | null;
+  url: string | null;
+}
+
+export interface CandidatePortalReminderResult extends CandidatePortalStatus {
+  emailSent: boolean;
+}
+
+export async function getCandidatePortalStatus(id: string, accessToken?: string | null): Promise<CandidatePortalStatus | null> {
+  const json = await authFetch(`/candidate-portal/invitations/${id}/status`, accessToken, { method: 'GET', cache: 'no-store' });
+  return json.data.data as CandidatePortalStatus | null;
+}
+
+export async function activateCandidatePortal(id: string, expiresInDays: number, accessToken?: string | null): Promise<CandidatePortalIssueResult> {
+  const json = await authFetch(`/candidate-portal/invitations/${id}`, accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ expiresInDays }),
+  });
+  return json.data.data as CandidatePortalIssueResult;
+}
+
+export async function sendCandidatePortalReminder(id: string, accessToken?: string | null): Promise<CandidatePortalReminderResult> {
+  const json = await authFetch(`/candidate-portal/invitations/${id}/remind`, accessToken, { method: 'POST' });
+  return json.data.data as CandidatePortalReminderResult;
+}
+
+export async function setCandidatePortalLocked(id: string, locked: boolean, accessToken?: string | null): Promise<CandidatePortalStatus> {
+  const json = await authFetch(`/candidate-portal/invitations/${id}/lock`, accessToken, {
+    method: 'PATCH',
+    body: JSON.stringify({ locked }),
+  });
+  return json.data.data as CandidatePortalStatus;
 }

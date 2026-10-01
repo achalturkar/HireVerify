@@ -7,7 +7,7 @@ const create = (data) => prisma.candidate.create({ data });
 const findById = (id, companyId, { includeDeleted = false } = {}) =>
   prisma.candidate.findFirst({
     where: { id, companyId, ...(includeDeleted ? {} : { isDeleted: false }) },
-    include: { _count: { select: { bgvCases: true } } },
+    include: { client: { select: { id: true, name: true, clientCode: true, contactEmail: true, contactPhone: true } }, _count: { select: { bgvCases: true } }, documents: true, portalInvitation: { select: { activatedAt: true, lastSentAt: true, expiresAt: true, revokedAt: true, reminderCount: true, lastRemindedAt: true } } },
   });
 
 const findByEmail = (companyId, clientId, email) =>

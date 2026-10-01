@@ -335,6 +335,28 @@ model Candidate {
 
   gender String? @db.VarChar(30)
 
+  aadhaarNumber       String? @map("aadhaar_number") @db.VarChar(20)
+  panNumber           String? @map("pan_number") @db.VarChar(20)
+  uanNumber           String? @map("uan_number") @db.VarChar(20)
+  passportNumber      String? @map("passport_number") @db.VarChar(30)
+  drivingLicenseNumber String? @map("driving_license_number") @db.VarChar(40)
+  voterIdNumber       String? @map("voter_id_number") @db.VarChar(30)
+
+  highestQualification String? @map("highest_qualification") @db.VarChar(120)
+  courseName           String? @map("course_name") @db.VarChar(180)
+  institutionName      String? @map("institution_name") @db.VarChar(255)
+  universityName       String? @map("university_name") @db.VarChar(255)
+  yearOfPassing        String? @map("year_of_passing") @db.VarChar(4)
+  gradeOrPercentage    String? @map("grade_or_percentage") @db.VarChar(50)
+
+  employeeId          String?   @map("employee_id") @db.VarChar(100)
+  employeeDesignation String?   @map("employee_designation") @db.VarChar(150)
+  employeeDepartment  String?   @map("employee_department") @db.VarChar(120)
+  employmentType      String?   @map("employment_type") @db.VarChar(50)
+  joiningDate         DateTime? @map("joining_date") @db.Date
+  workLocation        String?   @map("work_location") @db.VarChar(150)
+  currentEmployer     String?   @map("current_employer") @db.VarChar(255)
+
   currentAddress   String? @map("current_address")
   permanentAddress String? @map("permanent_address")
 
@@ -359,6 +381,8 @@ model Candidate {
 
   consents CandidateConsent[]
 
+  portalInvitation CandidatePortalInvitation?
+
   reports BGVReport[]
 
   @@unique([companyId, candidateCode])
@@ -366,6 +390,26 @@ model Candidate {
   @@index([companyId, clientId])
   @@index([email])
   @@map("candidates")
+}
+
+model CandidatePortalInvitation {
+  id             String    @id @default(uuid()) @db.Uuid
+  candidateId    String    @unique @map("candidate_id") @db.Uuid
+  tokenHash      String    @unique @map("token_hash") @db.VarChar(64)
+  encryptedToken String?   @map("encrypted_token") @db.Text
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  activatedAt    DateTime  @default(now()) @map("activated_at") @db.Timestamptz(6)
+  lastSentAt     DateTime? @map("last_sent_at") @db.Timestamptz(6)
+  lastRemindedAt DateTime? @map("last_reminded_at") @db.Timestamptz(6)
+  reminderCount  Int       @default(0) @map("reminder_count")
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt, revokedAt])
+  @@map("candidate_portal_invitations")
 }
 
 // ============================================================
@@ -762,6 +806,7 @@ enum VerificationEventType {
 
 enum DocumentType {
   PAN
+  UAN
   AADHAAR
   PASSPORT
   DRIVING_LICENSE
@@ -769,6 +814,15 @@ enum DocumentType {
   EDUCATION_CERTIFICATE
   EXPERIENCE_LETTER
   SALARY_SLIP
+  FORM_16
+  RELIEVING_LETTER
+  OFFER_LETTER
+  APPOINTMENT_LETTER
+  INCREMENT_LETTER
+  PROMOTION_LETTER
+  BANK_STATEMENT
+  PF_STATEMENT
+  EMPLOYMENT_CONTRACT
   ADDRESS_PROOF
   OTHER
 }

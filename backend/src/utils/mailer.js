@@ -227,8 +227,25 @@ const buildCompanyAdminWelcomeEmail = ({ companyName, adminName, email, password
   }),
 });
 
+const buildCandidatePortalEmail = ({ candidateName, companyName, clientName, portalUrl, reminder = false, pendingCount = 0 }) => ({
+  subject: reminder
+    ? `${companyName} | Please complete your background verification`
+    : `${companyName} | Your background verification portal is ready`,
+  html: emailShell({
+    signOffName: companyName,
+    footerNote: 'This secure link is personal to you. Please do not forward it.',
+    bodyHtml: `
+      <h2 style="margin:0 0 10px;font-size:20px;">${reminder ? 'A few steps are still waiting' : 'Complete your verification securely'}</h2>
+      <p style="margin:0 0 16px;font-size:14px;color:${BRAND_MUTED};">Dear ${escapeHtml(candidateName)}, ${reminder ? `you still have ${pendingCount} ${pendingCount === 1 ? 'step' : 'steps'} to complete.` : `${escapeHtml(companyName)}${clientName ? `, on behalf of ${escapeHtml(clientName)},` : ''} has invited you to provide the information needed for your background verification.`}</p>
+      ${ctaButton(portalUrl, 'Open candidate portal')}
+      <p style="margin:14px 0 0;font-size:12.5px;color:${BRAND_MUTED};">You can use the portal on your phone to give consent, upload documents, correct your details, and check what remains.</p>
+    `,
+  }),
+});
+
 module.exports = {
   sendMail,
   buildCompanyAdminWelcomeEmail,
   buildBgvReportsEmail,
+  buildCandidatePortalEmail,
 };

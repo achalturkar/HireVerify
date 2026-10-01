@@ -9,6 +9,7 @@ const toDto = (candidate) => ({
   id: candidate.id,
   companyId: candidate.companyId,
   clientId: candidate.clientId,
+  client: candidate.client || null,
   candidateCode: candidate.candidateCode,
   firstName: candidate.firstName,
   lastName: candidate.lastName,
@@ -16,6 +17,25 @@ const toDto = (candidate) => ({
   phone: candidate.phone,
   dateOfBirth: candidate.dateOfBirth,
   gender: candidate.gender,
+  aadhaarNumber: candidate.aadhaarNumber,
+  panNumber: candidate.panNumber,
+  uanNumber: candidate.uanNumber,
+  passportNumber: candidate.passportNumber,
+  drivingLicenseNumber: candidate.drivingLicenseNumber,
+  voterIdNumber: candidate.voterIdNumber,
+  highestQualification: candidate.highestQualification,
+  courseName: candidate.courseName,
+  institutionName: candidate.institutionName,
+  universityName: candidate.universityName,
+  yearOfPassing: candidate.yearOfPassing,
+  gradeOrPercentage: candidate.gradeOrPercentage,
+  employeeId: candidate.employeeId,
+  employeeDesignation: candidate.employeeDesignation,
+  employeeDepartment: candidate.employeeDepartment,
+  employmentType: candidate.employmentType,
+  joiningDate: candidate.joiningDate,
+  workLocation: candidate.workLocation,
+  currentEmployer: candidate.currentEmployer,
   currentAddress: candidate.currentAddress,
   permanentAddress: candidate.permanentAddress,
   status: candidate.status,
@@ -24,6 +44,8 @@ const toDto = (candidate) => ({
   createdAt: candidate.createdAt,
   updatedAt: candidate.updatedAt,
   bgvCaseCount: candidate._count?.bgvCases,
+  documents: candidate.documents?.map((document) => ({ id: document.id, documentType: document.documentType, documentNumber: document.documentNumber, fileName: document.fileName, fileUrl: document.fileUrl, verificationStatus: document.verificationStatus, uploadedAt: document.uploadedAt })) || [],
+  portalInvitation: candidate.portalInvitation || null,
 });
 
 const createCandidateCode = async (clientId, companyId) => {
@@ -85,6 +107,25 @@ const create = async ({ payload, companyId, currentUser }) => {
     phone: phone || null,
     dateOfBirth: normalizeDateOfBirth(payload.dateOfBirth) ?? null,
     gender: payload.gender || null,
+    aadhaarNumber: payload.aadhaarNumber || null,
+    panNumber: payload.panNumber || null,
+    uanNumber: payload.uanNumber || null,
+    passportNumber: payload.passportNumber || null,
+    drivingLicenseNumber: payload.drivingLicenseNumber || null,
+    voterIdNumber: payload.voterIdNumber || null,
+    highestQualification: payload.highestQualification || null,
+    courseName: payload.courseName || null,
+    institutionName: payload.institutionName || null,
+    universityName: payload.universityName || null,
+    yearOfPassing: payload.yearOfPassing || null,
+    gradeOrPercentage: payload.gradeOrPercentage || null,
+    employeeId: payload.employeeId || null,
+    employeeDesignation: payload.employeeDesignation || null,
+    employeeDepartment: payload.employeeDepartment || null,
+    employmentType: payload.employmentType || null,
+    joiningDate: normalizeDateOfBirth(payload.joiningDate) ?? null,
+    workLocation: payload.workLocation || null,
+    currentEmployer: payload.currentEmployer || null,
     currentAddress: payload.currentAddress || null,
     permanentAddress: payload.permanentAddress || null,
     status: 'PENDING',
@@ -135,12 +176,12 @@ const update = async ({ id, companyId, payload, currentUser }) => {
   }
 
   const data = {};
-  ['clientId', 'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'currentAddress', 'permanentAddress', 'status']
+  ['clientId', 'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress', 'status']
     .forEach((field) => {
       if (payload[field] !== undefined) {
         data[field] = field === 'email'
           ? (payload[field]?.trim().toLowerCase() || null)
-          : field === 'dateOfBirth'
+          : ['dateOfBirth', 'joiningDate'].includes(field)
             ? normalizeDateOfBirth(payload[field])
             : payload[field];
       }

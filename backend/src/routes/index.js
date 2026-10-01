@@ -20,6 +20,7 @@ const candidateRoutes = require('../modules/candidate/candidate.routes');
 const bgvCaseRoutes = require('../modules/bgv-case/bgv-case.routes');
 const verificationRoutes = require('../modules/verification/verification.routes');
 const invoiceRoutes = require('../modules/invoice/invoice.routes');
+const candidatePortalRoutes = require('../modules/candidate-portal/candidate-portal.routes');
 
 const router = express.Router();
 
@@ -45,5 +46,6 @@ router.use('/candidates', candidateRoutes);
 router.use('/bgv/cases', bgvCaseRoutes);
 router.use('/bgv/verifications', verificationRoutes);
 router.use('/invoices', invoiceRoutes);
+router.use('/candidate-portal', candidatePortalRoutes);
 
 module.exports = router;

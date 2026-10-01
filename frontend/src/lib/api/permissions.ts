@@ -2,7 +2,8 @@ import type { Permission } from "@/src/types/permission";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API ||
-  "http://localhost:5000/api/v1";
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  '/api/v1';
 
 class ApiError extends Error {
   status: number;

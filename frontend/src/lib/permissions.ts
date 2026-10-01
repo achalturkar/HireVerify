@@ -1,14 +1,16 @@
 import type { ComponentType, SVGProps } from 'react';
 import {
-  Building,
+  Building2,
   BriefcaseBusiness,
   ContactRound,
-  Users,
-  Shield,
-  Key,
+  UsersRound,
+  ShieldCheck,
+  KeyRound,
   ClipboardList,
+  FileCheck2,
   Folder,
-  Receipt,
+  ReceiptText,
+  UserRound,
 } from 'lucide-react'
 
 export interface MenuItem {
@@ -27,14 +29,23 @@ export interface MenuItem {
  * the backend, this registry is purely cosmetic.
  */
 const MODULE_REGISTRY: Record<string, { label: string; path: string; icon: MenuItem['icon'] }> = {
-  company: { label: 'Companies', path: '/super-admin/companies', icon: Building },
-  user: { label: 'Users', path: '/super-admin/users', icon: Users },
+  company: { label: 'Companies', path: '/super-admin/companies', icon: Building2 },
+  user: { label: 'Users', path: '/super-admin/users', icon: UsersRound },
   client: { label: 'Clients', path: '/super-admin/client', icon: BriefcaseBusiness },
   candidate: { label: 'Candidates', path: '/super-admin/candidate', icon: ContactRound },
-  role: { label: 'Roles', path: '/super-admin/roles', icon: Shield },
-  permission: { label: 'Permissions', path: '/super-admin/permissions', icon: Key },
+  role: { label: 'Roles', path: '/super-admin/roles', icon: ShieldCheck },
+  permission: { label: 'Permissions', path: '/super-admin/permissions', icon: KeyRound },
   auditlog: { label: 'Audit Logs', path: '/super-admin/audit', icon: ClipboardList },
-  invoice: { label: 'Invoices', path: '/super-admin/invoices', icon: Receipt },
+  audit: { label: 'Audit', path: '/super-admin/audit', icon: ClipboardList },
+  bgv: { label: 'BGV', path: '/super-admin/bgv', icon: FileCheck2 },
+  invoice: { label: 'Invoices', path: '/super-admin/invoices', icon: ReceiptText },
+  profile: { label: 'Profile', path: '/super-admin/profile', icon: UserRound },
+};
+
+const MODULE_ALIASES: Record<string, string> = {
+  users: 'user',
+  roles: 'role',
+  permissions: 'permission',
 };
 
 // Modules listed here (if present) are pinned to the top of the
@@ -43,7 +54,8 @@ const MODULE_REGISTRY: Record<string, { label: string; path: string; icon: MenuI
 const PRIORITY_ORDER = ['company', 'client', 'candidate', 'user', 'role', 'permission', 'invoice', 'auditlog'];
 
 function normalizeModule(rawModule: string): string {
-  return rawModule.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalized = rawModule.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return MODULE_ALIASES[normalized] ?? normalized;
 }
 
 function humanize(moduleKey: string): string {

@@ -1,0 +1,12 @@
+ALTER TABLE "candidates" ADD COLUMN "aadhaar_number" VARCHAR(20),
+ADD COLUMN "pan_number" VARCHAR(20),
+ADD COLUMN "uan_number" VARCHAR(20),
+ADD COLUMN "passport_number" VARCHAR(30),
+ADD COLUMN "driving_license_number" VARCHAR(40),
+ADD COLUMN "voter_id_number" VARCHAR(30),
+ADD COLUMN "highest_qualification" VARCHAR(120),
+ADD COLUMN "course_name" VARCHAR(180),
+ADD COLUMN "institution_name" VARCHAR(255),
+ADD COLUMN "university_name" VARCHAR(255),
+ADD COLUMN "year_of_passing" VARCHAR(4),
+ADD COLUMN "grade_or_percentage" VARCHAR(50);
