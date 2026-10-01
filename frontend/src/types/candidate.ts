@@ -43,6 +43,8 @@ export interface Candidate {
   phone: string | null;
   dateOfBirth?: string | null;
   gender?: string | null;
+  fatherName?: string | null;
+  motherName?: string | null;
   aadhaarNumber?: string | null;
   panNumber?: string | null;
   uanNumber?: string | null;

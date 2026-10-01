@@ -334,6 +334,8 @@ model Candidate {
   dateOfBirth DateTime? @map("date_of_birth") @db.Date
 
   gender String? @db.VarChar(30)
+  fatherName String? @map("father_name") @db.VarChar(255)
+  motherName String? @map("mother_name") @db.VarChar(255)
 
   aadhaarNumber       String? @map("aadhaar_number") @db.VarChar(20)
   panNumber           String? @map("pan_number") @db.VarChar(20)

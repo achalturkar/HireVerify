@@ -4,6 +4,7 @@ const { prisma } = require('../../common/prisma');
 
 const includePermissions = {
   rolePermissions: { include: { permission: true } },
+  company: { select: { id: true, name: true } },
 };
 
 const create = ({ companyId, name, description, isCompanyAdmin = false, permissionIds = [] }) =>

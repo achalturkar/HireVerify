@@ -101,6 +101,8 @@ const toDto = (invitation) => {
       phone: candidate.phone,
       dateOfBirth: candidate.dateOfBirth,
       gender: candidate.gender,
+      fatherName: candidate.fatherName,
+      motherName: candidate.motherName,
       aadhaarNumber: candidate.aadhaarNumber,
       panNumber: candidate.panNumber,
       uanNumber: candidate.uanNumber,
@@ -214,7 +216,7 @@ const getPortal = async (token) => toDto(await findInvitation(token));
 
 const updateProfile = async (token, payload) => {
   const invitation = await findInvitation(token);
-  const allowed = ['firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress'];
+  const allowed = ['firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress'];
   const data = {};
   for (const field of allowed) {
     if (payload[field] !== undefined) data[field] = field === 'email' ? (payload[field]?.trim().toLowerCase() || null) : payload[field];

@@ -10,6 +10,7 @@ const toDto = (role) => ({
   name: role.name,
   description: role.description,
   companyId: role.companyId,
+  company: role.company || null,
   isCompanyAdmin: role.isCompanyAdmin,
   isSuperAdmin: role.isSuperAdmin,
   isSystem: role.isSystem,

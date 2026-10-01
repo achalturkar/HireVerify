@@ -17,6 +17,8 @@ const toDto = (candidate) => ({
   phone: candidate.phone,
   dateOfBirth: candidate.dateOfBirth,
   gender: candidate.gender,
+  fatherName: candidate.fatherName,
+  motherName: candidate.motherName,
   aadhaarNumber: candidate.aadhaarNumber,
   panNumber: candidate.panNumber,
   uanNumber: candidate.uanNumber,
@@ -107,6 +109,8 @@ const create = async ({ payload, companyId, currentUser }) => {
     phone: phone || null,
     dateOfBirth: normalizeDateOfBirth(payload.dateOfBirth) ?? null,
     gender: payload.gender || null,
+    fatherName: payload.fatherName || null,
+    motherName: payload.motherName || null,
     aadhaarNumber: payload.aadhaarNumber || null,
     panNumber: payload.panNumber || null,
     uanNumber: payload.uanNumber || null,
@@ -176,7 +180,7 @@ const update = async ({ id, companyId, payload, currentUser }) => {
   }
 
   const data = {};
-  ['clientId', 'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress', 'status']
+  ['clientId', 'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress', 'status']
     .forEach((field) => {
       if (payload[field] !== undefined) {
         data[field] = field === 'email'

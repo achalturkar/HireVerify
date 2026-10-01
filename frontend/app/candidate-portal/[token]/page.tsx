@@ -24,6 +24,7 @@ import {
   Trash2,
   Upload,
   UserRound,
+  Users,
   XCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -56,8 +57,8 @@ type PortalData = {
   progress: { pending: PendingItem[]; pendingCount: number; consentComplete: boolean; profileComplete: boolean };
 };
 
-type TabKey = 'overview' | 'details' | 'identity' | 'education' | 'employment' | 'documents' | 'consent';
-type SectionKey = 'details' | 'identity' | 'education' | 'employment';
+type TabKey = 'overview' | 'details' | 'family' | 'identity' | 'education' | 'employment' | 'documents' | 'consent';
+type SectionKey = 'details' | 'family' | 'identity' | 'education' | 'employment';
 type FormState = Record<string, string>;
 
 type FieldDef = {
@@ -104,6 +105,11 @@ const DETAILS_FIELDS: FieldDef[] = [
   { key: 'gender', label: 'Gender', suggestions: ['Male', 'Female', 'Other', 'Prefer not to say'] },
   { key: 'currentAddress', label: 'Current address', multiline: true, wide: true },
   { key: 'permanentAddress', label: 'Permanent address', multiline: true, wide: true },
+];
+
+const FAMILY_FIELDS: FieldDef[] = [
+  { key: 'fatherName', label: "Father's name", maxLength: 255 },
+  { key: 'motherName', label: "Mother's name", maxLength: 255 },
 ];
 
 const IDENTITY_FIELDS: FieldDef[] = [
@@ -169,11 +175,12 @@ const EMPLOYMENT_FIELDS: FieldDef[] = [
 
 const SECTION_FIELDS: Record<SectionKey, FieldDef[]> = {
   details: DETAILS_FIELDS,
+  family: FAMILY_FIELDS,
   identity: IDENTITY_FIELDS,
   education: EDUCATION_FIELDS,
   employment: EMPLOYMENT_FIELDS,
 };
-const SECTION_LABEL: Record<SectionKey, string> = { details: 'Your details', identity: 'Your ID numbers', education: 'Your education details', employment: 'Your employment details' };
+const SECTION_LABEL: Record<SectionKey, string> = { details: 'Your details', family: 'Your family details', identity: 'Your ID numbers', education: 'Your education details', employment: 'Your employment details' };
 const SECTIONS = Object.keys(SECTION_FIELDS) as SectionKey[];
 const ALL_FIELDS = SECTIONS.flatMap((section) => SECTION_FIELDS[section]);
 const EDITABLE_KEYS = ALL_FIELDS.map((field) => field.key);
@@ -187,6 +194,7 @@ const DATE_KEYS = new Set(ALL_FIELDS.filter((field) => field.type === 'date').ma
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'details', label: 'Details', icon: UserRound },
+  { key: 'family', label: 'Family', icon: Users },
   { key: 'identity', label: 'ID numbers', icon: Hash },
   { key: 'education', label: 'Education', icon: GraduationCap },
   { key: 'employment', label: 'Employment', icon: BriefcaseBusiness },
@@ -631,7 +639,15 @@ export default function CandidatePortalPage() {
   const fetchPortal = useCallback(
     async (syncForm: boolean) => {
       const response = await api.get(`/candidate-portal/${token}`);
-      const data = response.data.data as PortalData;
+      const body = response.data as { success?: boolean; message?: unknown; data?: unknown } | undefined;
+      if (body?.success === false) {
+        throw new Error(typeof body.message === 'string' ? body.message : 'The candidate portal request failed.');
+      }
+      const payload = body?.data ?? body;
+      const data = (payload && typeof payload === 'object' && 'data' in payload ? payload.data : payload) as PortalData | undefined;
+      if (!data?.candidate || !data.company || !data.progress) {
+        throw new Error(typeof body?.message === 'string' ? body.message : 'The candidate portal response was incomplete. Ask the company to resend the link.');
+      }
       setPortal(data);
       if (syncForm) {
         const next = toForm(data.candidate);
@@ -690,7 +706,7 @@ export default function CandidatePortalPage() {
   }, [anyDirty]);
 
   const pendingByTab = useMemo(() => {
-    const flags: Record<TabKey, boolean> = { overview: false, details: false, identity: false, education: false, employment: false, documents: false, consent: false };
+    const flags: Record<TabKey, boolean> = { overview: false, details: false, family: false, identity: false, education: false, employment: false, documents: false, consent: false };
     if (!portal) return flags;
     portal.progress.pending.forEach((item) => { flags[tabForPending(item)] = true; });
     if (!portal.progress.profileComplete) flags.details = true;
@@ -931,6 +947,12 @@ export default function CandidatePortalPage() {
         {activeTab === 'details' && (
           <div role="tabpanel" id="panel-details" aria-labelledby="tab-details">
             {sectionPanel('details', UserRound, 'Your details', 'Make sure these match your official documents.', 'Save details')}
+          </div>
+        )}
+
+        {activeTab === 'family' && (
+          <div role="tabpanel" id="panel-family" aria-labelledby="tab-family">
+            {sectionPanel('family', Users, 'Family details', 'Add your parents’ names as they appear on your official documents.', 'Save family details')}
           </div>
         )}
 

@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Unlock,
   UserRound,
+  Users,
   XCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -38,7 +39,7 @@ import type { Candidate } from '@/src/types/candidate';
 /* ------------------------------------------------------------------ */
 type CandidateDocument = { id: string; documentType: string; documentNumber?: string | null; fileName: string; fileUrl: string; verificationStatus: string; uploadedAt: string };
 type CandidateDetail = Candidate & { documents?: CandidateDocument[] };
-type Tab = 'summary' | 'personal' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal';
+type Tab = 'summary' | 'personal' | 'family' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal';
 type PortalState = 'none' | 'active' | 'expiring' | 'expired' | 'locked';
 type Category = 'identity' | 'education' | 'employment' | 'address' | 'other';
 
@@ -447,6 +448,7 @@ export default function CandidateDetailPage() {
   const tabs: { key: Tab; label: string; icon: LucideIcon; count?: number }[] = [
     { key: 'summary', label: 'Summary', icon: LayoutDashboard },
     { key: 'personal', label: 'Personal', icon: UserRound },
+    { key: 'family', label: 'Family', icon: Users },
     { key: 'identity', label: 'Identity', icon: Hash, count: docsOf('identity').length },
     { key: 'education', label: 'Education', icon: GraduationCap, count: docsOf('education').length },
     { key: 'employment', label: 'Employment', icon: BriefcaseBusiness, count: docsOf('employment').length },
@@ -580,6 +582,12 @@ export default function CandidateDetailPage() {
       {tab === 'personal' && (
         <Panel title="Personal information" description="Contact and identity details submitted by the candidate.">
           <InfoGrid rows={[['First name', candidate.firstName], ['Last name', candidate.lastName], ['Email', candidate.email], ['Phone', candidate.phone], ['Date of birth', formatDate(candidate.dateOfBirth)], ['Gender', candidate.gender]]} />
+        </Panel>
+      )}
+
+      {tab === 'family' && (
+        <Panel title="Family details" description="Parent names provided by the candidate.">
+          <InfoGrid rows={[["Father's name", candidate.fatherName], ["Mother's name", candidate.motherName]]} />
         </Panel>
       )}
 
