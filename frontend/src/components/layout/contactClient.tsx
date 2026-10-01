@@ -95,7 +95,7 @@ export default function ContactClient() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <div className="public-brand-surface min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <PublicNav />
 
       <main className="relative overflow-hidden">

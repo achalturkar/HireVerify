@@ -39,6 +39,7 @@ interface Company {
   isDeleted: boolean;
   createdAt: string;
   updatedAt: string;
+  admin: { firstName: string; lastName: string; email: string } | null;
 }
 
 interface Meta {
@@ -139,7 +140,7 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 function statusStyles(status: CompanyStatus) {
   switch (status) {
     case 'ACTIVE':
-      return 'bg-[#3FDCC0]/[0.12] text-[#3FDCC0] border-[#3FDCC0]/30';
+      return 'bg-[var(--primary)]/[0.12] text-[var(--primary)] border-[var(--primary)]/30';
     case 'SUSPENDED':
       return 'bg-[#F2AE55]/[0.12] text-[#F2AE55] border-[#F2AE55]/30';
     default:
@@ -400,7 +401,7 @@ export default function CompaniesPage() {
           </div>
           <button
             onClick={openCreateModal}
-            className="inline-flex items-center gap-2 rounded-[10px] bg-[#3FDCC0] text-[#06231D] font-semibold text-[14px] px-4 py-[11px] hover:brightness-[1.08] active:translate-y-px transition self-start sm:self-auto"
+            className="inline-flex items-center gap-2 rounded-[10px] bg-[var(--primary)] text-[var(--primary-foreground)] font-semibold text-[14px] px-4 py-[11px] hover:brightness-[1.08] active:translate-y-px transition self-start sm:self-auto"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="12" y1="5" x2="12" y2="19" />
@@ -412,7 +413,7 @@ export default function CompaniesPage() {
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3 mb-5">
-          <div className="flex-1 flex items-center rounded-[10px] border border-white/[0.09] bg-[#1B2145] focus-within:border-[#3FDCC0] transition-colors">
+          <div className="flex-1 flex items-center rounded-[10px] border border-white/[0.09] bg-[#1B2145] focus-within:border-[var(--primary)] transition-colors">
             <svg className="ml-3.5 flex-shrink-0 text-[#565F8C]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -427,7 +428,7 @@ export default function CompaniesPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as '' | CompanyStatus)}
-            className="rounded-[10px] border border-white/[0.09] bg-[#1B2145] text-[14px] text-[#F2F4FA] px-3.5 py-[11px] outline-none focus:border-[#3FDCC0] transition-colors"
+            className="rounded-[10px] border border-white/[0.09] bg-[#1B2145] text-[14px] text-[#F2F4FA] px-3.5 py-[11px] outline-none focus:border-[var(--primary)] transition-colors"
           >
             <option value="">All statuses</option>
             <option value="ACTIVE">Active</option>
@@ -447,9 +448,10 @@ export default function CompaniesPage() {
 
         {/* Table */}
         <div className="rounded-[14px] border border-white/[0.09] bg-[#141A38] overflow-hidden">
-          <div className="grid grid-cols-[2fr_1.6fr_1fr_1fr_44px] gap-3 px-5 py-3 text-[11px] uppercase tracking-[0.08em] text-[#565F8C] border-b border-white/[0.09]">
+          <div className="grid grid-cols-[1.7fr_1.4fr_1.6fr_0.9fr_1fr_44px] gap-3 px-5 py-3 text-[11px] uppercase tracking-[0.08em] text-[#565F8C] border-b border-white/[0.09]">
             <span>Company</span>
             <span>Contact</span>
+            <span>Company Admin</span>
             <span>Status</span>
             <span>Created</span>
             <span />
@@ -466,7 +468,7 @@ export default function CompaniesPage() {
                     setSearch('');
                     setStatusFilter('');
                   }}
-                  className="mt-2 text-[13px] text-[#3FDCC0] hover:underline"
+                  className="mt-2 text-[13px] text-[var(--primary)] hover:underline"
                 >
                   Clear filters
                 </button>
@@ -476,11 +478,11 @@ export default function CompaniesPage() {
             companies.map((c) => (
               <div
                 key={c.id}
-                className="grid grid-cols-[2fr_1.6fr_1fr_1fr_44px] gap-3 px-5 py-4 items-center border-b border-white/[0.06] last:border-b-0 hover:bg-white/[0.02] transition-colors"
+                className="grid grid-cols-[1.7fr_1.4fr_1.6fr_0.9fr_1fr_44px] gap-3 px-5 py-4 items-center border-b border-white/[0.06] last:border-b-0 hover:bg-white/[0.02] transition-colors"
               >
                 <div className="min-w-0">
                   <Link href={`/super-admin/companies/${c.id}`} className="block">
-                    <div className="text-[14.5px] font-medium truncate text-[#F2F4FA] hover:text-[#3FDCC0]">
+                    <div className="text-[14.5px] font-medium truncate text-[#F2F4FA] hover:text-[var(--primary)]">
                       {c.name}
                     </div>
                     <div
@@ -493,6 +495,18 @@ export default function CompaniesPage() {
                 </div>
                 <div className="min-w-0 text-[13.5px] text-[#8891B8] truncate">
                   {c.contactEmail || '—'}
+                </div>
+                <div className="min-w-0">
+                  {c.admin ? (
+                    <>
+                      <div className="text-[13px] text-[#AAB2D4] truncate">
+                        {c.admin.firstName} {c.admin.lastName}
+                      </div>
+                      <div className="text-[11.5px] text-[#565F8C] truncate">{c.admin.email}</div>
+                    </>
+                  ) : (
+                    <span className="text-[12px] text-[#565F8C]">No admin assigned</span>
+                  )}
                 </div>
                 <div>
                   <span
@@ -537,7 +551,7 @@ export default function CompaniesPage() {
                             setActionMenuId(null);
                             router.push(`/super-admin/companies/${c.id}`);
                           }}
-                          className="w-full text-left px-3.5 py-2 text-[13.5px] text-[#3FDCC0] hover:bg-white/[0.06] transition"
+                          className="w-full text-left px-3.5 py-2 text-[13.5px] text-[var(--primary)] hover:bg-white/[0.06] transition"
                         >
                           View details
                         </button>
@@ -673,7 +687,7 @@ export default function CompaniesPage() {
                         JPG, PNG, WEBP, or SVG up to 500 KB.
                       </p>
                     </div>
-                    <label className="inline-flex cursor-pointer items-center justify-center rounded-[10px] border border-[#3FDCC0]/30 bg-[#3FDCC0]/[0.12] px-3.5 py-2 text-[13px] font-semibold text-[#3FDCC0] transition hover:bg-[#3FDCC0]/[0.2]">
+                    <label className="inline-flex cursor-pointer items-center justify-center rounded-[10px] border border-[var(--primary)]/30 bg-[var(--primary)]/[0.12] px-3.5 py-2 text-[13px] font-semibold text-[var(--primary)] transition hover:bg-[var(--primary)]/[0.2]">
                       <input
                         type="file"
                         accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
@@ -749,7 +763,7 @@ export default function CompaniesPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-[10px] bg-[#3FDCC0] text-[#06231D] font-semibold text-[14px] px-5 py-[11px] hover:brightness-[1.08] disabled:opacity-65 transition"
+                  className="rounded-[10px] bg-[var(--primary)] text-[var(--primary-foreground)] font-semibold text-[14px] px-5 py-[11px] hover:brightness-[1.08] disabled:opacity-65 transition"
                 >
                   {submitting ? 'Creating…' : 'Create company'}
                 </button>
@@ -763,8 +777,8 @@ export default function CompaniesPage() {
       {credentialsModal && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/60 px-4">
           <div className="w-full max-w-[440px] rounded-[14px] border border-white/[0.1] bg-[#141A38] p-6">
-            <div className="w-10 h-10 rounded-full bg-[#3FDCC0]/[0.12] flex items-center justify-center mb-4">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3FDCC0" strokeWidth="2.5">
+            <div className="w-10 h-10 rounded-full bg-[var(--primary)]/[0.12] flex items-center justify-center mb-4">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
@@ -788,7 +802,7 @@ export default function CompaniesPage() {
               </div>
               <button
                 onClick={copyPassword}
-                className="flex-shrink-0 text-[12.5px] font-medium text-[#3FDCC0] hover:underline"
+                className="flex-shrink-0 text-[12.5px] font-medium text-[var(--primary)] hover:underline"
               >
                 {copied ? 'Copied ✓' : 'Copy'}
               </button>
@@ -796,7 +810,7 @@ export default function CompaniesPage() {
 
             <button
               onClick={() => setCredentialsModal(null)}
-              className="w-full rounded-[10px] bg-[#3FDCC0] text-[#06231D] font-semibold text-[14px] px-4 py-[11px] hover:brightness-[1.08] transition"
+              className="w-full rounded-[10px] bg-[var(--primary)] text-[var(--primary-foreground)] font-semibold text-[14px] px-4 py-[11px] hover:brightness-[1.08] transition"
             >
               Done
             </button>
@@ -864,7 +878,7 @@ function Field({
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         className={`rounded-[10px] border bg-[#1B2145] text-[14px] text-[#F2F4FA] placeholder:text-[#565F8C] px-3 py-[10px] outline-none transition-colors ${
-          error ? 'border-[#FF6B6B]' : 'border-white/[0.09] focus:border-[#3FDCC0]'
+          error ? 'border-[#FF6B6B]' : 'border-white/[0.09] focus:border-[var(--primary)]'
         }`}
       />
       {error && <span className="text-[12px] text-[#FF6B6B]">{error}</span>}

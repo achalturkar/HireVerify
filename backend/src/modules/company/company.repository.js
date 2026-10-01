@@ -40,6 +40,14 @@ const list = async ({ skip, limit, search, status, sortBy, sortOrder, includeDel
       skip,
       take: limit,
       orderBy: { [sortBy]: sortOrder },
+      include: {
+        users: {
+          where: { isDeleted: false, role: { isCompanyAdmin: true } },
+          select: { firstName: true, lastName: true, email: true },
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+        },
+      },
     }),
     prisma.company.count({ where }),
   ]);

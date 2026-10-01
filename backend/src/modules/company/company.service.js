@@ -44,6 +44,13 @@ const toDto = (company) => ({
   isDeleted: company.isDeleted,
   createdAt: company.createdAt,
   updatedAt: company.updatedAt,
+  admin: company.users?.[0]
+    ? {
+        firstName: company.users[0].firstName,
+        lastName: company.users[0].lastName,
+        email: company.users[0].email,
+      }
+    : null,
 });
 
 const ensureUniqueSlug = async (base) => {

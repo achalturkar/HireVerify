@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Bell, Check, ChevronRight, KeyRound, LogOut, Monitor, Palette, RotateCcw, ShieldCheck, UserRound } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { useTheme } from '@/src/lib/theme-context';
+import { usePlatformBranding, DEFAULT_PLATFORM_COLOR } from '@/src/components/providers/PlatformBrandingProvider';
+import { updatePlatformBranding } from '@/src/lib/api/platform-branding';
 
 type Preferences = {
   securityAlerts: boolean;
@@ -28,10 +30,16 @@ const labels: Array<{ key: keyof Preferences; title: string; description: string
 ];
 
 export default function SettingsPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, accessToken } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { primaryColor, setPrimaryColor } = usePlatformBranding();
   const [preferences, setPreferences] = useState(defaults);
   const [saved, setSaved] = useState(false);
+  const [draftColor, setDraftColor] = useState<string | null>(null);
+  const [savingColor, setSavingColor] = useState(false);
+  const [colorMessage, setColorMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const selectedColor = draftColor ?? primaryColor;
+  const isValidColor = /^#[0-9a-f]{6}$/i.test(selectedColor);
 
   useEffect(() => {
     const task = Promise.resolve().then(() => {
@@ -50,6 +58,25 @@ export default function SettingsPage() {
     window.setTimeout(() => setSaved(false), 1800);
   };
 
+  const savePublicColor = async (color = selectedColor) => {
+    if (!/^#[0-9a-f]{6}$/i.test(color)) {
+      setColorMessage({ tone: 'error', text: 'Enter a valid six-digit hex color.' });
+      return;
+    }
+    setSavingColor(true);
+    setColorMessage(null);
+    try {
+      const branding = await updatePlatformBranding(color, accessToken);
+      setPrimaryColor(branding.primaryColor);
+      setDraftColor(null);
+      setColorMessage({ tone: 'success', text: 'Public site color saved.' });
+    } catch (error) {
+      setColorMessage({ tone: 'error', text: error instanceof Error ? error.message : 'Could not save public site color.' });
+    } finally {
+      setSavingColor(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <header>
@@ -59,6 +86,68 @@ export default function SettingsPage() {
       </header>
 
       {saved && <div className="flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-[13px] text-emerald-600 dark:text-emerald-400"><Check size={15} /> Preferences saved on this browser.</div>}
+
+      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm">
+        <div className="mb-5 flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--primary)]/15 text-[var(--primary)]"><Palette size={17} /></span>
+          <div>
+            <h2 className="text-[15px] font-semibold">Public site color</h2>
+            <p className="text-[11px] text-[var(--muted)]">Home, Contact, Sign in, and company registration entry</p>
+          </div>
+        </div>
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-wrap items-end gap-4">
+            <label className="space-y-1.5">
+              <span className="block text-[11px] font-medium text-[var(--muted)]">Choose color</span>
+              <input
+                aria-label="Choose public site primary color"
+                type="color"
+                value={/^#[0-9a-f]{6}$/i.test(selectedColor) ? selectedColor : DEFAULT_PLATFORM_COLOR}
+                onChange={(event) => setDraftColor(event.target.value.toUpperCase())}
+                className="h-10 w-14 cursor-pointer rounded-md border border-[var(--border)] bg-[var(--surface)] p-1"
+              />
+            </label>
+            <label className="space-y-1.5">
+              <span className="block text-[11px] font-medium text-[var(--muted)]">Hex value</span>
+              <input
+                value={selectedColor}
+                onChange={(event) => setDraftColor(event.target.value)}
+                maxLength={7}
+                placeholder={primaryColor}
+                aria-label="Public site color hex value"
+                className="h-10 w-32 rounded-md border border-[var(--border)] bg-[var(--surface-muted)] px-3 font-mono text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
+              />
+            </label>
+            <div className="flex h-10 items-center gap-2 rounded-md border border-[var(--border)] px-3">
+              <span className="h-5 w-5 rounded-sm border border-black/10" style={{ backgroundColor: isValidColor ? selectedColor : DEFAULT_PLATFORM_COLOR }} />
+              <span className="text-[12px] text-[var(--muted)]">Preview</span>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={savingColor}
+              onClick={() => void savePublicColor(DEFAULT_PLATFORM_COLOR)}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-[var(--border)] px-3.5 text-[12px] text-[var(--muted)] hover:border-[var(--primary)] disabled:opacity-50"
+            >
+              <RotateCcw size={14} /> Reset
+            </button>
+            <button
+              type="button"
+              disabled={savingColor || !isValidColor || selectedColor.toUpperCase() === primaryColor.toUpperCase()}
+              onClick={() => void savePublicColor()}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-[var(--primary)] px-4 text-[12px] font-semibold text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50"
+            >
+              {savingColor ? 'Saving…' : 'Save color'}
+            </button>
+          </div>
+        </div>
+        {colorMessage && (
+          <p className={`mt-3 text-[12px] ${colorMessage.tone === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+            {colorMessage.text}
+          </p>
+        )}
+      </section>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm">

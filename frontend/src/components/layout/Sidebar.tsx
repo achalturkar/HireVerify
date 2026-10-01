@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useMemo, type SVGProps } from 'react';
 import { useAuth } from '../../auth/AuthProvider';
 import { buildAdminMenu } from '@/src/lib/permissions';
 import { FileCheck2, LayoutDashboard, ChevronLeft, Settings, X } from 'lucide-react';
+import BrandMark from '@/src/components/ui/BrandMark';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -26,14 +26,15 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
     <div className="flex h-full flex-col bg-[var(--surface)] text-[var(--foreground)]">
       {/* Logo row */}
       <div className={`flex items-center gap-2.5 h-16 shrink-0 border-b border-[var(--border)] bg-[var(--surface)] ${collapsed ? 'justify-between px-3' : 'px-5'}`}>
-        <div className={`relative shrink-0 overflow-hidden ${collapsed ? 'h-9 w-9' : 'h-9 w-[142px]'}`}>
-          <Image
-            src="/hireverify-logo.svg"
-            alt="HireVerify"
-            width={760}
-            height={210}
-            className="absolute left-0 top-0 h-9 w-[130px] max-w-none object-contain object-left"
-          />
+        <div className={`flex h-9 shrink-0 items-center ${collapsed ? 'w-9 justify-center' : 'gap-2.5'}`}>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--primary)]/12 text-[var(--primary)]">
+            <BrandMark size={20} />
+          </span>
+          {!collapsed && (
+            <span className="text-[15px] font-semibold tracking-tight text-[var(--foreground)]" style={{ fontFamily: 'var(--font-display)' }}>
+              <span className="text-[#2F4054]">Hire</span><span className="text-[var(--primary)]">Verify</span>
+            </span>
+          )}
         </div>
         <button
           onClick={onToggleCollapse}

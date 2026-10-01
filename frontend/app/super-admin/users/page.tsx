@@ -76,7 +76,7 @@ function formatDate(value: string | null) {
 
 function StatusBadge({ status }: { status: UserStatus }) {
   const styles: Record<UserStatus, string> = {
-    ACTIVE: 'bg-[#3FDCC0]/15 text-[#3FDCC0]',
+    ACTIVE: 'bg-[var(--primary)]/15 text-[var(--primary)]',
     SUSPENDED: 'bg-[#FF6B6B]/15 text-[#FF6B6B]',
     INACTIVE: 'bg-[#565F8C]/20 text-[#8891B8]',
   };
@@ -276,7 +276,7 @@ export default function UsersPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p
-            className="text-[11px] uppercase tracking-[0.14em] text-[#3FDCC0] mb-1.5"
+            className="text-[11px] uppercase tracking-[0.14em] text-[var(--primary)] mb-1.5"
             style={{ fontFamily: 'var(--font-mono)' }}
           >
             User Management
@@ -290,7 +290,7 @@ export default function UsersPage() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-1.5 rounded-lg bg-[#3FDCC0] text-[#0B0F26] text-[13px] font-semibold px-4 py-2.5 hover:bg-[#3FDCC0]/90 transition-colors shrink-0"
+          className="flex items-center gap-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13px] font-semibold px-4 py-2.5 hover:bg-[var(--primary)]/90 transition-colors shrink-0"
         >
           <PlusIcon />
           Add user
@@ -302,7 +302,7 @@ export default function UsersPage() {
         <div
           className={`rounded-xl border px-4 py-3 text-[13px] flex items-center justify-between ${
             banner.tone === 'success'
-              ? 'bg-[#3FDCC0]/10 border-[#3FDCC0]/25 text-[#3FDCC0]'
+              ? 'bg-[var(--primary)]/10 border-[var(--primary)]/25 text-[var(--primary)]'
               : 'bg-[#FF6B6B]/10 border-[#FF6B6B]/25 text-[#FF6B6B]'
           }`}
         >
@@ -323,7 +323,7 @@ export default function UsersPage() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by name or email…"
-            className="w-full rounded-lg bg-[#161C3A] border border-white/[0.08] pl-9 pr-3 py-2.5 text-[13.5px] text-[#F2F4FA] placeholder:text-[#565F8C] outline-none focus:border-[#3FDCC0]/50 focus:ring-1 focus:ring-[#3FDCC0]/30 transition-colors"
+            className="w-full rounded-lg bg-[#161C3A] border border-white/[0.08] pl-9 pr-3 py-2.5 text-[13.5px] text-[#F2F4FA] placeholder:text-[#565F8C] outline-none focus:border-[var(--primary)]/50 focus:ring-1 focus:ring-[var(--primary)]/30 transition-colors"
           />
         </div>
         <select
@@ -332,7 +332,7 @@ export default function UsersPage() {
             setStatus(e.target.value as UserStatus | '');
             setPage(1);
           }}
-          className="rounded-lg bg-[#161C3A] border border-white/[0.08] px-3 py-2.5 text-[13px] text-[#AAB2D4] outline-none focus:border-[#3FDCC0]/50 transition-colors"
+          className="rounded-lg bg-[#161C3A] border border-white/[0.08] px-3 py-2.5 text-[13px] text-[#AAB2D4] outline-none focus:border-[var(--primary)]/50 transition-colors"
         >
           <option value="">All statuses</option>
           <option value="ACTIVE">Active</option>
@@ -346,7 +346,7 @@ export default function UsersPage() {
               setCompanyId(e.target.value);
               setPage(1);
             }}
-            className="max-w-[260px] rounded-lg bg-[#161C3A] border border-white/[0.08] px-3 py-2.5 text-[13px] text-[#AAB2D4] outline-none focus:border-[#3FDCC0]/50 transition-colors"
+            className="max-w-[260px] rounded-lg bg-[#161C3A] border border-white/[0.08] px-3 py-2.5 text-[13px] text-[#AAB2D4] outline-none focus:border-[var(--primary)]/50 transition-colors"
           >
             <option value="">All companies</option>
             {companies.map((company) => (
@@ -408,7 +408,7 @@ export default function UsersPage() {
                     <div className="flex items-center gap-3">
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0 ${
-                          i % 2 === 0 ? 'bg-[#3FDCC0]/15 text-[#3FDCC0]' : 'bg-[#F2AE55]/15 text-[#F2AE55]'
+                          i % 2 === 0 ? 'bg-[var(--primary)]/15 text-[var(--primary)]' : 'bg-[#F2AE55]/15 text-[#F2AE55]'
                         }`}
                       >
                         {initials(u.firstName, u.lastName)}
@@ -438,7 +438,7 @@ export default function UsersPage() {
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         onClick={() => openEdit(u)}
-                        className="w-7 h-7 rounded-md flex items-center justify-center text-[#8891B8] hover:text-[#3FDCC0] hover:bg-[#3FDCC0]/10 transition-colors"
+                        className="w-7 h-7 rounded-md flex items-center justify-center text-[#8891B8] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
                         aria-label={`Edit ${u.firstName}`}
                       >
                         <EditIcon />

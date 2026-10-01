@@ -24,17 +24,31 @@ import { useAuth } from '@/src/auth/AuthProvider';
 import { getCompanyDetails } from '@/src/lib/api/companies';
 import { ApiError } from '@/src/lib/api';
 import { resolveLogoUrl } from '@/src/lib/logo';
+import CompanyWorkspaceTabs from '@/src/components/superadmin/CompanyWorkspaceTabs';
 
 interface CompanyDetailsResponse {
   company: {
     id: string;
     name: string;
     slug: string;
+    shortCode: string | null;
     contactEmail: string | null;
     contactPhone: string | null;
     logoUrl: string | null;
     primaryColor: string | null;
     address: string | null;
+    gstNumber: string | null;
+    panNumber: string | null;
+    city: string | null;
+    state: string | null;
+    postalCode: string | null;
+    bankAccountName: string | null;
+    bankName: string | null;
+    bankAccountNumber: string | null;
+    bankIfscCode: string | null;
+    bankSwiftCode: string | null;
+    bankBranch: string | null;
+    upiId: string | null;
     status: string;
     createdAt: string;
     updatedAt: string;
@@ -62,7 +76,7 @@ interface CompanyDetailsResponse {
     action: string;
     entity: string;
     entityId: string | null;
-    metadata: any;
+    metadata: unknown;
     createdAt: string;
     user: {
       id: string;
@@ -145,10 +159,7 @@ export default function CompanyDetailPage() {
   const [logoBroken, setLogoBroken] = useState(false);
 
   useEffect(() => {
-    if (!companyId || !accessToken) {
-      setLoading(false);
-      return;
-    }
+    if (!companyId || !accessToken) return;
 
     const loadDetails = async () => {
       setLoading(true);
@@ -167,7 +178,7 @@ export default function CompanyDetailPage() {
     loadDetails();
   }, [companyId, accessToken]);
 
-  if (loading) {
+  if (loading || !accessToken) {
     return (
       <div className="min-h-screen bg-[var(--background)]">
         <DetailSkeleton />
@@ -312,6 +323,35 @@ export default function CompanyDetailPage() {
           </div>
         </div>
 
+        <CompanyWorkspaceTabs companyId={company.id} accessToken={accessToken}>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+          <div className="mb-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Registered and payout details</p>
+          </div>
+          <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ['Short Code', company.shortCode],
+              ['GST Number', company.gstNumber],
+              ['PAN Number', company.panNumber],
+              ['City', company.city],
+              ['State', company.state],
+              ['Postal Code', company.postalCode],
+              ['Bank Account Name', company.bankAccountName],
+              ['Bank Name', company.bankName],
+              ['Account Number', company.bankAccountNumber],
+              ['IFSC', company.bankIfscCode],
+              ['SWIFT', company.bankSwiftCode],
+              ['Branch', company.bankBranch],
+              ['UPI ID', company.upiId],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">{label}</p>
+                <p className="mt-1 break-words text-[13px] text-[var(--foreground)]">{value || '—'}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Administrator */}
         {admin && (
           <div className="rounded-2xl border border-[var(--border)] bg-gradient-to-br from-[var(--surface)] to-[color-mix(in_srgb,var(--surface)_65%,var(--background))] p-8">
@@ -353,25 +393,23 @@ export default function CompanyDetailPage() {
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="rounded-xl border border-[var(--border)] bg-gradient-to-br from-[var(--surface)] to-[color-mix(in_srgb,var(--surface)_65%,var(--background))] p-6">
-            <p className="text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wide mb-4">Exam Attempts</p>
+            <p className="text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wide mb-4">Case Progress</p>
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between text-[12px] mb-2">
-                  <span className="text-[var(--muted)]">Total</span>
-                  <span className="text-[var(--foreground)] font-bold">{stats.pendingCases}</span>
-                </div>
-                <div className="w-full h-2 bg-[var(--surface-muted)] rounded-full overflow-hidden">
-                  <div className="h-full bg-[var(--primary)]" style={{ width: '100%' }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-[12px] mb-2">
-                  <span className="text-[var(--muted)]">Completed ({completionRate}%)</span>
-                  <span className="text-[var(--primary)] font-bold">{stats.inProgressCases}</span>
+                  <span className="text-[var(--muted)]">Total cases</span>
+                  <span className="text-[var(--foreground)] font-bold">{stats.bgvCases}</span>
                 </div>
                 <div className="w-full h-2 bg-[var(--surface-muted)] rounded-full overflow-hidden">
                   <div className="h-full bg-[var(--primary)]" style={{ width: `${completionRate}%` }} />
                 </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-[12px] mb-2">
+                  <span className="text-[var(--muted)]">Pending / in progress</span>
+                  <span className="text-[var(--primary)] font-bold">{stats.pendingCases + stats.inProgressCases}</span>
+                </div>
+                <p className="text-[11px] text-[var(--muted)]">Completed: {stats.completedCases} ({completionRate}%)</p>
               </div>
             </div>
           </div>
@@ -433,6 +471,7 @@ export default function CompanyDetailPage() {
             <p className="text-[14px] text-[var(--muted)]">No audit activity recorded</p>
           </div>
         )}
+        </CompanyWorkspaceTabs>
       </div>
     </div>
   );

@@ -161,7 +161,7 @@ export default function RolesPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p
-            className="text-[11px] uppercase tracking-[0.14em] text-[#3FDCC0] mb-1.5"
+            className="text-[11px] uppercase tracking-[0.14em] text-[var(--primary)] mb-1.5"
             style={{ fontFamily: 'var(--font-mono)' }}
           >
             Access Control
@@ -175,7 +175,7 @@ export default function RolesPage() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-1.5 rounded-lg bg-[#3FDCC0] text-[#0B0F26] text-[13px] font-semibold px-4 py-2.5 hover:bg-[#3FDCC0]/90 transition-colors shrink-0"
+          className="flex items-center gap-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13px] font-semibold px-4 py-2.5 hover:bg-[var(--primary)]/90 transition-colors shrink-0"
         >
           <Plus size={14} strokeWidth={2.5} />
           Add role
@@ -187,7 +187,7 @@ export default function RolesPage() {
         <div
           className={`rounded-xl border px-4 py-3 text-[13px] flex items-center justify-between ${
             banner.tone === 'success'
-              ? 'bg-[#3FDCC0]/10 border-[#3FDCC0]/25 text-[#3FDCC0]'
+              ? 'bg-[var(--primary)]/10 border-[var(--primary)]/25 text-[var(--primary)]'
               : 'bg-[#FF6B6B]/10 border-[#FF6B6B]/25 text-[#FF6B6B]'
           }`}
         >
@@ -207,7 +207,7 @@ export default function RolesPage() {
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search roles by name…"
-          className="w-full rounded-lg bg-[#161C3A] border border-white/[0.08] pl-9 pr-3 py-2.5 text-[13.5px] text-[#F2F4FA] placeholder:text-[#565F8C] outline-none focus:border-[#3FDCC0]/50 focus:ring-1 focus:ring-[#3FDCC0]/30 transition-colors"
+          className="w-full rounded-lg bg-[#161C3A] border border-white/[0.08] pl-9 pr-3 py-2.5 text-[13.5px] text-[#F2F4FA] placeholder:text-[#565F8C] outline-none focus:border-[var(--primary)]/50 focus:ring-1 focus:ring-[var(--primary)]/30 transition-colors"
         />
       </div>
 
@@ -255,13 +255,14 @@ export default function RolesPage() {
               !loadError &&
               roles.map((role) => {
                 const isProtected = role.isSuperAdmin || role.isCompanyAdmin;
+                const editDisabled = role.isSuperAdmin || (role.isCompanyAdmin && !isSuperAdmin);
                 return (
                   <tr key={role.id} className="border-t border-white/[0.06] hover:bg-white/[0.03]">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2.5">
                         <span
                           className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                            isProtected ? 'bg-[#F2AE55]/15 text-[#F2AE55]' : 'bg-[#3FDCC0]/15 text-[#3FDCC0]'
+                            isProtected ? 'bg-[#F2AE55]/15 text-[#F2AE55]' : 'bg-[var(--primary)]/15 text-[var(--primary)]'
                           }`}
                         >
                           <ShieldCheck size={15} />
@@ -308,11 +309,12 @@ export default function RolesPage() {
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => openEdit(role)}
-                          disabled={isProtected}
-                          className="w-7 h-7 rounded-md flex items-center justify-center text-[#8891B8] hover:text-[#3FDCC0] hover:bg-[#3FDCC0]/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#8891B8]"
-                          aria-label={`Edit ${role.name}`}
+                          disabled={editDisabled}
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-[#8891B8] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#8891B8]"
+                          aria-label={editDisabled ? `View ${role.name}` : role.isCompanyAdmin ? `Edit permissions for ${role.name}` : `Edit ${role.name}`}
+                          title={editDisabled ? 'Protected role' : role.isCompanyAdmin ? 'Edit permissions' : 'Edit role'}
                         >
-                          <Pencil size={13} />
+                          {editDisabled ? <Lock size={13} /> : <Pencil size={13} />}
                         </button>
                         <button
                           onClick={() => setDeleteTarget(role)}

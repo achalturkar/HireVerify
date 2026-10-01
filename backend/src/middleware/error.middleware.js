@@ -15,42 +15,29 @@ const globalErrorHandler = (err, req, res, next) => {
     // P2002 = unique constraint failed
     if (err.code === 'P2002') {
       const target = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : 'field';
-      return errorResponse(res, {
-        message: `Duplicate value for ${target}`,
-        statusCode: 409,
-      });
+      return errorResponse(res, `Duplicate value for ${target}`, 409);
     }
     if (err.code === 'P2025') {
-      return errorResponse(res, { message: 'Record not found', statusCode: 404 });
+      return errorResponse(res, 'Record not found', 404);
     }
   }
 
   if (err && err.name === 'TokenExpiredError') {
-    return errorResponse(res, { message: 'Token expired', statusCode: 401 });
+    return errorResponse(res, 'Token expired', 401);
   }
   if (err && err.name === 'JsonWebTokenError') {
-    return errorResponse(res, { message: 'Invalid token', statusCode: 401 });
+    return errorResponse(res, 'Invalid token', 401);
   }
 
   if (err instanceof AppError) {
-    return errorResponse(res, {
-      message: err.message,
-      errors: err.errors,
-      statusCode: err.statusCode,
-    });
+    return errorResponse(res, err.message, err.statusCode, err.errors);
   }
 
   logger.error(`Unhandled error: ${err && err.stack ? err.stack : err}`);
-  return errorResponse(res, {
-    message: err?.message || 'Internal Server Error',
-    statusCode: 500,
-  });
+  return errorResponse(res, err?.message || 'Internal Server Error', 500);
 };
 
 const notFoundHandler = (req, res) =>
-  errorResponse(res, {
-    message: `Route not found: ${req.method} ${req.originalUrl}`,
-    statusCode: 404,
-  });
+  errorResponse(res, `Route not found: ${req.method} ${req.originalUrl}`, 404);
 
 module.exports = { globalErrorHandler, notFoundHandler };

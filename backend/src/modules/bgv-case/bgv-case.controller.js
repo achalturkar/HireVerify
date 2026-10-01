@@ -22,7 +22,9 @@ const getCase = asyncHandler(async (req, res) => success(res, { message: 'BGV ca
 
 const listCases = asyncHandler(async (req, res) => {
   const pagination = parsePagination(req.query);
-  const { items, total } = await service.list({ companyId: req.user.companyId, query: { ...pagination, search: req.query.search, clientId: req.query.clientId, candidateId: req.query.candidateId, status: req.query.status, overallResult: req.query.overallResult, initiatedFrom: req.query.initiatedFrom, initiatedTo: req.query.initiatedTo, completedFrom: req.query.completedFrom, completedTo: req.query.completedTo, sortBy: req.query.sortBy, sortOrder: req.query.sortOrder } });
+  const companyId = req.user.role?.isSuperAdmin ? req.query.companyId : req.user.companyId;
+  if (!companyId) throw new BadRequestError('Company ID is required to list BGV cases.');
+  const { items, total } = await service.list({ companyId, query: { ...pagination, search: req.query.search, clientId: req.query.clientId, candidateId: req.query.candidateId, status: req.query.status, overallResult: req.query.overallResult, initiatedFrom: req.query.initiatedFrom, initiatedTo: req.query.initiatedTo, completedFrom: req.query.completedFrom, completedTo: req.query.completedTo, sortBy: req.query.sortBy, sortOrder: req.query.sortOrder } });
   return success(res, { message: 'BGV cases', data: items, meta: buildMeta({ page: pagination.page, limit: pagination.limit, total }) });
 });
 

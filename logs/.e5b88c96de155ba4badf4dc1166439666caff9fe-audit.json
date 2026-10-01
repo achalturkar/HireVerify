@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 30
+    },
+    "auditLog": "C:\\Users\\Roshan Verma\\Desktop\\BGV\\logs\\.e5b88c96de155ba4badf4dc1166439666caff9fe-audit.json",
+    "files": [
+        {
+            "date": 1790821818203,
+            "name": "C:\\Users\\Roshan Verma\\Desktop\\BGV\\logs\\error-2026-10-01.log",
+            "hash": "ef9f8dac9b0f2a0325a7ba98459fb9a0fd3a7ac9145618ba61a44f7e7c1017ea"
+        }
+    ],
+    "hashType": "sha256"
+}

@@ -14,7 +14,7 @@ import BrandMark from '@/src/components/ui/BrandMark';
 // low-contrast in light mode. Those get dark: pairs below instead.
 const linkIdle = 'text-slate-500 dark:text-[#AAB2D4]';
 const linkHover = 'hover:text-slate-900 dark:hover:text-[#F2F4FA] hover:bg-slate-100 dark:hover:bg-white/[0.05]';
-const linkActive = 'text-[#3FDCC0] bg-[#3FDCC0]/10'; // brand accent, already reads fine on light or dark
+const linkActive = 'text-[var(--primary)] bg-[var(--primary)]/10';
 const iconMuted = 'text-slate-500 dark:text-[#AAB2D4] hover:text-slate-900 dark:hover:text-[#F2F4FA] hover:bg-slate-100 dark:hover:bg-white/[0.05]';
 
 const LINKS = [
@@ -61,7 +61,7 @@ export default function PublicNav() {
           <ThemeToggle />
           <Link
             href="/login"
-            className="ml-2 rounded-lg bg-[#3FDCC0] text-[#0B0F26] text-[13px] font-semibold px-4 py-2 hover:bg-[#3FDCC0]/90 transition-colors"
+            className="ml-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13px] font-semibold px-4 py-2 hover:opacity-90 transition-opacity"
           >
             Sign in
           </Link>
@@ -72,7 +72,7 @@ export default function PublicNav() {
           <ThemeToggle />
           <Link
             href="/login"
-            className="rounded-lg bg-[#3FDCC0] text-[#0B0F26] text-[13px] font-semibold px-3.5 py-2 hover:bg-[#3FDCC0]/90 transition-colors"
+            className="rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13px] font-semibold px-3.5 py-2 hover:opacity-90 transition-opacity"
           >
             Sign in
           </Link>

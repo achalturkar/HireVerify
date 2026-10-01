@@ -17,7 +17,7 @@ const cardBorderB = 'border-slate-200 dark:border-white/[0.08]';
 const textPrimary = 'text-slate-900 dark:text-[#F2F4FA]';
 const textMuted = 'text-slate-500 dark:text-[#8891B8]';
 const textFaint = 'text-slate-400 dark:text-[#565F8C]';
-const tealChip = 'bg-[#3FDCC0]/10 dark:bg-[#3FDCC0]/15 text-[#0E8C78] dark:text-[#3FDCC0]';
+const tealChip = 'bg-[var(--primary)]/10 dark:bg-[var(--primary)]/15 text-[var(--primary)]';
 const inputBg = 'bg-slate-50 dark:bg-[#0B0F26]';
 const inputBorder = 'border-slate-200 dark:border-white/[0.08]';
 const trackBg = 'bg-slate-200 dark:bg-white/[0.08]';
@@ -38,8 +38,8 @@ const REQUIREMENTS: { label: string; test: (v: string) => boolean }[] = [
 function strengthMeta(score: number) {
   if (score <= 1) return { label: 'Weak', color: '#FF6B6B' };
   if (score <= 3) return { label: 'Fair', color: '#F2AE55' };
-  if (score === 4) return { label: 'Good', color: '#3FDCC0' };
-  return { label: 'Strong', color: '#3FDCC0' };
+  if (score === 4) return { label: 'Good', color: 'var(--primary)' };
+  return { label: 'Strong', color: 'var(--primary)' };
 }
 
 function PasswordField({
@@ -77,7 +77,7 @@ function PasswordField({
           className={`w-full rounded-lg ${inputBg} border pl-9 pr-16 py-2.5 text-[13.5px] ${textPrimary} placeholder:text-slate-400 dark:placeholder:text-[#565F8C] outline-none focus:ring-1 transition-colors ${
             invalid
               ? 'border-[#FF6B6B]/50 focus:border-[#FF6B6B]/60 focus:ring-[#FF6B6B]/20'
-              : `${inputBorder} focus:border-[#3FDCC0]/50 focus:ring-[#3FDCC0]/30`
+              : `${inputBorder} focus:border-[var(--primary)]/50 focus:ring-[var(--primary)]/30`
           }`}
         />
         <span className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -174,7 +174,7 @@ export default function ChangePasswordPage() {
       {/* Header */}
       <div>
         <p
-          className="text-[11px] uppercase tracking-[0.14em] text-[#3FDCC0] mb-1.5"
+          className="text-[11px] uppercase tracking-[0.14em] text-[var(--primary)] mb-1.5"
           style={{ fontFamily: 'var(--font-mono)' }}
         >
           Account Security
@@ -189,7 +189,7 @@ export default function ChangePasswordPage() {
 
       {/* Banner */}
       {success && (
-        <div className="rounded-xl border px-4 py-3 text-[13px] flex items-center gap-2.5 bg-[#3FDCC0]/10 border-[#3FDCC0]/25 text-[#3FDCC0]">
+        <div className="rounded-xl border px-4 py-3 text-[13px] flex items-center gap-2.5 bg-[var(--primary)]/10 border-[var(--primary)]/25 text-[var(--primary)]">
           <ShieldCheck size={15} className="shrink-0" />
           <span>Your password was changed successfully.</span>
         </div>
@@ -260,11 +260,11 @@ export default function ChangePasswordPage() {
                   {checks.map((c) => (
                     <div key={c.label} className="flex items-center gap-1.5">
                       {c.passed ? (
-                        <Check size={11} className="text-[#3FDCC0] shrink-0" />
+                        <Check size={11} className="text-[var(--primary)] shrink-0" />
                       ) : (
                         <X size={11} className={`shrink-0 ${textFaint}`} />
                       )}
-                      <span className={`text-[11px] ${c.passed ? 'text-[#3FDCC0]' : textFaint}`}>{c.label}</span>
+                      <span className={`text-[11px] ${c.passed ? 'text-[var(--primary)]' : textFaint}`}>{c.label}</span>
                     </div>
                   ))}
                 </div>
@@ -284,7 +284,7 @@ export default function ChangePasswordPage() {
               rightAdornment={
                 confirmTouched ? (
                   passwordsMatch ? (
-                    <Check size={14} className="text-[#3FDCC0]" />
+                    <Check size={14} className="text-[var(--primary)]" />
                   ) : (
                     <X size={14} className="text-[#FF6B6B]" />
                   )
@@ -298,7 +298,7 @@ export default function ChangePasswordPage() {
             <button
               type="submit"
               disabled={!canSubmit}
-              className="flex items-center gap-1.5 rounded-lg bg-[#3FDCC0] text-[#0B0F26] text-[13px] font-semibold px-4 py-2.5 hover:bg-[#3FDCC0]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13px] font-semibold px-4 py-2.5 hover:bg-[var(--primary)]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>

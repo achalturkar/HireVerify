@@ -40,6 +40,12 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+.public-brand-surface,
+.super-admin-surface {
+  --primary: var(--public-primary, #0d9488);
+  --primary-foreground: var(--public-primary-foreground, #ffffff);
+}
+
 /* The Super Admin workspace contains a few legacy utility classes that were
    authored for the dark brand palette. Keep those screens theme-aware while
    they continue to share the same visual language as the rest of the app. */

@@ -28,13 +28,13 @@ import { ApiError } from '@/src/lib/api';
 
 // Illustrative case shown in the "sample report" preview card — demo data only
 const SIDE_CHECKS = [
-  { label: 'PAN verification', result: 'Verified', color: '#3FDCC0' },
-  { label: 'UAN verification', result: 'Verified', color: '#3FDCC0' },
+  { label: 'PAN verification', result: 'Verified', color: 'var(--primary)' },
+  { label: 'UAN verification', result: 'Verified', color: 'var(--primary)' },
   { label: 'Court verification', result: 'No record found', color: '#818CF8' },
 ];
 
 const SIDE_HIGHLIGHTS = [
-  { icon: ClipboardList, title: 'Centralized case management', color: '#3FDCC0' },
+  { icon: ClipboardList, title: 'Centralized case management', color: 'var(--primary)' },
   { icon: Users, title: 'Invite & track candidates', color: '#818CF8' },
   { icon: BarChart3, title: 'Client-ready reports', color: '#F2AE55' },
   { icon: ShieldCheck, title: 'Role-based access', color: '#F472B6' },
@@ -117,7 +117,7 @@ function LoginContent() {
 
   return (
     <div
-      className="h-screen flex flex-col overflow-hidden"
+      className="public-brand-surface h-screen flex flex-col overflow-hidden"
       style={{ background: 'var(--background)' }}
     >
       {/* Ambient background glow */}
@@ -125,14 +125,14 @@ function LoginContent() {
         className="pointer-events-none fixed inset-0"
         style={{
           background:
-            'radial-gradient(60% 50% at 18% 8%, rgba(63,220,192,0.14) 0%, transparent 60%), radial-gradient(50% 45% at 88% 92%, rgba(242,174,85,0.10) 0%, transparent 60%)',
+            'radial-gradient(60% 50% at 18% 8%, color-mix(in srgb, var(--primary) 14%, transparent) 0%, transparent 60%), radial-gradient(50% 45% at 88% 92%, rgba(242,174,85,0.10) 0%, transparent 60%)',
         }}
       />
       <style>{`
         @keyframes ringPulse {
-          0% { box-shadow: 0 0 0 0 rgba(63,220,192,0.35); }
-          70% { box-shadow: 0 0 0 8px rgba(63,220,192,0); }
-          100% { box-shadow: 0 0 0 0 rgba(63,220,192,0); }
+          0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 35%, transparent); }
+          70% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 0%, transparent); }
+          100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 0%, transparent); }
         }
         .badge-ring { animation: ringPulse 2.4s ease-out infinite; }
         @media (prefers-reduced-motion: reduce) {
@@ -153,7 +153,7 @@ function LoginContent() {
         >
           <div
             className="pointer-events-none absolute -top-20 -left-20 h-64 w-64 rounded-full opacity-20 blur-3xl"
-            style={{ background: '#3FDCC0' }}
+            style={{ background: 'var(--primary)' }}
           />
           <div
             className="pointer-events-none absolute -bottom-24 -right-8 h-56 w-56 rounded-full opacity-[0.12] blur-3xl"
@@ -165,7 +165,7 @@ function LoginContent() {
               className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10.5px] mb-3.5"
               style={{ borderColor: 'var(--border)', background: 'var(--surface-muted)', color: 'var(--muted)' }}
             >
-              <Sparkles size={12} className="text-[#3FDCC0]" />
+              <Sparkles size={12} className="text-[var(--primary)]" />
               Background verification platform
             </div>
 
@@ -174,7 +174,7 @@ function LoginContent() {
               style={{ fontFamily: 'var(--font-display)', color: 'var(--foreground)' }}
             >
               Hiring decisions,{' '}
-              <span className="bg-gradient-to-r from-[#3FDCC0] to-[#F2AE55] bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-[var(--primary)] to-[color-mix(in_srgb,var(--primary)_58%,#F2AE55)] bg-clip-text text-transparent">
                 backed by verified facts.
               </span>
             </h2>
@@ -216,7 +216,7 @@ function LoginContent() {
                 >
                   Sample verification case
                 </p>
-                <span className="flex items-center gap-1 rounded-full bg-[#3FDCC0]/12 text-[#3FDCC0] text-[10px] font-semibold px-2 py-0.5">
+                <span className="flex items-center gap-1 rounded-full bg-[var(--primary)]/12 text-[var(--primary)] text-[10px] font-semibold px-2 py-0.5">
                   <BarChart3 size={10} />
                   Ready
                 </span>
@@ -241,7 +241,7 @@ function LoginContent() {
                 </span>
                 <span
                   className="text-[11.5px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ color: '#3FDCC0', background: 'rgba(63,220,192,0.12)', fontFamily: 'var(--font-mono)' }}
+                  style={{ color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 12%, transparent)', fontFamily: 'var(--font-mono)' }}
                 >
                   Clear
                 </span>
@@ -249,8 +249,8 @@ function LoginContent() {
             </div>
 
             {/* Register company callout */}
-            <div className="mt-4 rounded-xl border border-[#3FDCC0]/20 bg-[#3FDCC0]/[0.06] px-3.5 py-3 flex items-center gap-3">
-              <span className="shrink-0 w-8 h-8 rounded-lg bg-[#3FDCC0]/15 text-[#3FDCC0] flex items-center justify-center">
+            <div className="mt-4 rounded-xl border border-[var(--primary)]/20 bg-[var(--primary)]/[0.06] px-3.5 py-3 flex items-center gap-3">
+              <span className="shrink-0 w-8 h-8 rounded-lg bg-[var(--primary)]/15 text-[var(--primary)] flex items-center justify-center">
                 <Building2 size={15} />
               </span>
               <div className="min-w-0">
@@ -259,7 +259,7 @@ function LoginContent() {
                 </p>
                 <Link
                   href="/contact"
-                  className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#3FDCC0] hover:underline mt-1"
+                  className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[var(--primary)] hover:underline mt-1"
                 >
                   Contact us
                   <ArrowRight size={11} />
@@ -273,11 +273,11 @@ function LoginContent() {
         <div className="flex items-center justify-center px-4 py-4 min-h-0 overflow-y-auto">
           <div className="w-full max-w-[360px]">
             <Link href="/" className="flex flex-col items-center mb-4 group lg:hidden" aria-label="Go to homepage">
-              <span className="badge-ring w-9 h-9 rounded-xl bg-[#3FDCC0]/15 text-[#3FDCC0] flex items-center justify-center mb-2 transition-transform group-hover:scale-105 group-active:scale-95">
+              <span className="badge-ring w-9 h-9 rounded-xl bg-[var(--primary)]/15 text-[var(--primary)] flex items-center justify-center mb-2 transition-transform group-hover:scale-105 group-active:scale-95">
                 <BrandMark size={18} />
               </span>
               <h1
-                className="text-[18px] font-semibold tracking-tight group-hover:text-[#3FDCC0] transition-colors"
+                className="text-[18px] font-semibold tracking-tight group-hover:text-[var(--primary)] transition-colors"
                 style={{ fontFamily: 'var(--font-display)', color: 'var(--foreground)' }}
               >
                 Welcome back
@@ -330,7 +330,7 @@ function LoginContent() {
                     required
                     autoComplete="email"
                     placeholder="you@company.com"
-                    className="w-full rounded-lg pl-8 pr-3 py-2 text-[13px] outline-none border focus:border-[#3FDCC0]/50 focus:ring-1 focus:ring-[#3FDCC0]/30 transition-colors"
+                    className="w-full rounded-lg pl-8 pr-3 py-2 text-[13px] outline-none border focus:border-[var(--primary)]/50 focus:ring-1 focus:ring-[var(--primary)]/30 transition-colors"
                     style={{ background: 'var(--surface-muted)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
                   />
                 </div>
@@ -341,7 +341,7 @@ function LoginContent() {
                   <label className="text-[11.5px]" style={{ color: 'var(--muted)' }}>
                     Password
                   </label>
-                  <Link href="/forgot-password" className="text-[11.5px] text-[#3FDCC0] hover:underline">
+                  <Link href="/forgot-password" className="text-[11.5px] text-[var(--primary)] hover:underline">
                     Forgot password?
                   </Link>
                 </div>
@@ -359,7 +359,7 @@ function LoginContent() {
                     required
                     autoComplete="current-password"
                     placeholder="••••••••"
-                    className="w-full rounded-lg pl-8 pr-8 py-2 text-[13px] outline-none border focus:border-[#3FDCC0]/50 focus:ring-1 focus:ring-[#3FDCC0]/30 transition-colors"
+                    className="w-full rounded-lg pl-8 pr-8 py-2 text-[13px] outline-none border focus:border-[var(--primary)]/50 focus:ring-1 focus:ring-[var(--primary)]/30 transition-colors"
                     style={{ background: 'var(--surface-muted)', borderColor: 'var(--border)', color: 'var(--foreground)' }}
                   />
                   <button
@@ -383,8 +383,8 @@ function LoginContent() {
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border accent-[#3FDCC0] cursor-pointer"
-                  style={{ borderColor: 'var(--border)', background: 'var(--surface-muted)' }}
+                  className="w-3.5 h-3.5 rounded border cursor-pointer"
+                  style={{ accentColor: 'var(--primary)', borderColor: 'var(--border)', background: 'var(--surface-muted)' }}
                 />
                 Keep me signed in
               </label>
@@ -392,7 +392,7 @@ function LoginContent() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#3FDCC0] text-[#0B0F26] text-[13px] font-semibold px-4 py-2.5 hover:brightness-[1.08] active:scale-[0.99] transition disabled:opacity-60"
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13px] font-semibold px-4 py-2.5 hover:brightness-[1.08] active:scale-[0.99] transition disabled:opacity-60"
               >
                 {loading ? (
                   <>
@@ -410,14 +410,14 @@ function LoginContent() {
 
             <p className="text-center text-[12px] mt-3.5" style={{ color: 'var(--muted)' }}>
               Need help?{' '}
-              <Link href="/contact" className="text-[#3FDCC0] hover:underline">
+              <Link href="/contact" className="text-[var(--primary)] hover:underline">
                 Contact us
               </Link>
             </p>
 
             {/* Mobile-only register callout (hidden on desktop since it's in the left panel) */}
-            <div className="lg:hidden mt-3.5 rounded-xl border border-[#3FDCC0]/20 bg-[#3FDCC0]/[0.06] px-3.5 py-2.5 flex items-center gap-2.5">
-              <span className="shrink-0 w-7 h-7 rounded-lg bg-[#3FDCC0]/15 text-[#3FDCC0] flex items-center justify-center">
+            <div className="lg:hidden mt-3.5 rounded-xl border border-[var(--primary)]/20 bg-[var(--primary)]/[0.06] px-3.5 py-2.5 flex items-center gap-2.5">
+              <span className="shrink-0 w-7 h-7 rounded-lg bg-[var(--primary)]/15 text-[var(--primary)] flex items-center justify-center">
                 <Building2 size={13} />
               </span>
               <div className="min-w-0">
@@ -426,7 +426,7 @@ function LoginContent() {
                 </p>
                 <Link
                   href="/contact"
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#3FDCC0] hover:underline"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--primary)] hover:underline"
                 >
                   Contact us
                   <ArrowRight size={10} />

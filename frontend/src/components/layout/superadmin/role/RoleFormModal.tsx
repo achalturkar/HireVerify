@@ -19,7 +19,7 @@ interface RoleFormModalProps {
 }
 
 const ACTION_STYLES: Record<string, string> = {
-  create: 'text-[#3FDCC0]',
+  create: 'text-[var(--primary)]',
   view: 'text-[#8891B8]',
   update: 'text-[#F2AE55]',
   delete: 'text-[#FF6B6B]',
@@ -54,8 +54,11 @@ export default function RoleFormModal({
 
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const isProtected = mode === 'edit' && (role?.isSuperAdmin || role?.isCompanyAdmin);
-  const permissionsLocked = Boolean(role?.isSuperAdmin || (role?.isCompanyAdmin && !isSuperAdmin));
+  const isSuperAdminRole = mode === 'edit' && Boolean(role?.isSuperAdmin);
+  const isCompanyAdminRole = mode === 'edit' && Boolean(role?.isCompanyAdmin);
+  const identityLocked = isSuperAdminRole || isCompanyAdminRole;
+  const permissionsLocked = isSuperAdminRole || (isCompanyAdminRole && !isSuperAdmin);
+  const isProtected = isSuperAdminRole || (isCompanyAdminRole && !isSuperAdmin);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,20 +135,22 @@ export default function RoleFormModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] shrink-0">
           <div className="flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-lg bg-[#3FDCC0]/15 text-[#3FDCC0] flex items-center justify-center">
+            <span className="w-8 h-8 rounded-lg bg-[var(--primary)]/15 text-[var(--primary)] flex items-center justify-center">
               <ShieldCheck size={16} />
             </span>
             <div>
               <h2 className="text-[15px] font-semibold text-[#F2F4FA]" style={{ fontFamily: 'var(--font-display)' }}>
                 {mode === 'create' ? 'Create role' : 'Edit role'}
               </h2>
-              {isProtected && (
+              {isProtected ? (
                 <p className="text-[11.5px] text-[#565F8C]">
-                  {role?.isCompanyAdmin && isSuperAdmin
-                    ? 'Company Admin role — permissions can be edited; identity is locked'
-                    : 'System role — name and permissions are locked'}
+                  {isSuperAdminRole
+                    ? 'Super Admin role — name and permissions are locked'
+                    : 'Only Super Admins can change Company Admin permissions'}
                 </p>
-              )}
+              ) : isCompanyAdminRole ? (
+                <p className="text-[11.5px] text-[#565F8C]">Company Admin identity is locked; permissions can be edited.</p>
+              ) : null}
             </div>
           </div>
           <button
@@ -172,9 +177,9 @@ export default function RoleFormModal({
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  disabled={isProtected}
+                  disabled={identityLocked}
                   placeholder="e.g. Interview Coordinator"
-                  className="w-full rounded-lg bg-[#0B0F26] border border-white/[0.08] px-3 py-2.5 text-[13.5px] text-[#F2F4FA] placeholder:text-[#565F8C] outline-none focus:border-[#3FDCC0]/50 focus:ring-1 focus:ring-[#3FDCC0]/30 transition-colors disabled:opacity-50"
+                  className="w-full rounded-lg bg-[#0B0F26] border border-white/[0.08] px-3 py-2.5 text-[13.5px] text-[#F2F4FA] placeholder:text-[#565F8C] outline-none focus:border-[var(--primary)]/50 focus:ring-1 focus:ring-[var(--primary)]/30 transition-colors disabled:opacity-50"
                 />
               </div>
 
@@ -187,7 +192,7 @@ export default function RoleFormModal({
                   <select
                     value={companyId}
                     onChange={(e) => setCompanyId(e.target.value)}
-                    className="w-full rounded-lg bg-[#0B0F26] border border-white/[0.08] px-3 py-2.5 text-[13.5px] text-[#F2F4FA] outline-none focus:border-[#3FDCC0]/50 transition-colors"
+                    className="w-full rounded-lg bg-[#0B0F26] border border-white/[0.08] px-3 py-2.5 text-[13.5px] text-[#F2F4FA] outline-none focus:border-[var(--primary)]/50 transition-colors"
                   >
                     <option value="">Select company…</option>
                     {companies.map((c) => (
@@ -217,10 +222,10 @@ export default function RoleFormModal({
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                disabled={isProtected}
+                disabled={identityLocked}
                 rows={2}
                 placeholder="What this role is for…"
-                className="w-full rounded-lg bg-[#0B0F26] border border-white/[0.08] px-3 py-2.5 text-[13.5px] text-[#F2F4FA] placeholder:text-[#565F8C] outline-none focus:border-[#3FDCC0]/50 focus:ring-1 focus:ring-[#3FDCC0]/30 transition-colors resize-none disabled:opacity-50"
+                className="w-full rounded-lg bg-[#0B0F26] border border-white/[0.08] px-3 py-2.5 text-[13.5px] text-[#F2F4FA] placeholder:text-[#565F8C] outline-none focus:border-[var(--primary)]/50 focus:ring-1 focus:ring-[var(--primary)]/30 transition-colors resize-none disabled:opacity-50"
               />
             </div>
 
@@ -231,7 +236,7 @@ export default function RoleFormModal({
                 Permissions
                 {permissionIds.length > 0 && (
                   <span
-                    className="rounded-full bg-[#3FDCC0]/15 text-[#3FDCC0] px-2 py-0.5 text-[10.5px]"
+                    className="rounded-full bg-[var(--primary)]/15 text-[var(--primary)] px-2 py-0.5 text-[10.5px]"
                     style={{ fontFamily: 'var(--font-mono)' }}
                   >
                     {permissionIds.length} selected
@@ -267,7 +272,7 @@ export default function RoleFormModal({
                             }}
                             disabled={permissionsLocked}
                             onChange={() => toggleModule(items)}
-                            className="w-3.5 h-3.5 rounded accent-[#3FDCC0]"
+                            className="w-3.5 h-3.5 rounded accent-[var(--primary)]"
                           />
                           <span className="text-[13px] font-medium text-[#F2F4FA]">{moduleLabel(module)}</span>
                         </label>
@@ -282,7 +287,7 @@ export default function RoleFormModal({
                                 checked={permissionIds.includes(p.id)}
                                 disabled={permissionsLocked}
                                 onChange={() => togglePermission(p.id)}
-                                className="w-3.5 h-3.5 rounded accent-[#3FDCC0]"
+                                className="w-3.5 h-3.5 rounded accent-[var(--primary)]"
                               />
                               <span
                                 className={`text-[12px] uppercase tracking-wide ${
@@ -316,7 +321,7 @@ export default function RoleFormModal({
             <button
               type="submit"
               disabled={submitting || isProtected}
-              className="flex items-center gap-2 rounded-lg bg-[#3FDCC0] text-[#0B0F26] text-[13px] font-semibold px-4 py-2.5 hover:bg-[#3FDCC0]/90 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13px] font-semibold px-4 py-2.5 hover:bg-[var(--primary)]/90 transition-colors disabled:opacity-50"
             >
               {submitting && <Loader2 size={14} className="animate-spin" />}
               {mode === 'create' ? 'Create role' : 'Save changes'}

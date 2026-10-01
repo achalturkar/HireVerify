@@ -14,6 +14,7 @@ const auditRoutes = require('../modules/audit/audit.routes');
 const platformCandidateRoutes = require('../modules/platform-candidate/platform-candidate.routes');
 const platformClientRoutes = require('../modules/platform-client/platform-client.routes');
 const platformDashboardRoutes = require('../modules/platform-dashboard/platform-dashboard.routes');
+const platformBrandingRoutes = require('../modules/platform-branding/platform-branding.routes');
 
 const candidateRoutes = require('../modules/candidate/candidate.routes');
 const bgvCaseRoutes = require('../modules/bgv-case/bgv-case.routes');
@@ -33,6 +34,7 @@ router.use('/audit-logs', auditRoutes);
 router.use('/platform/candidates', platformCandidateRoutes);
 router.use('/platform/clients', platformClientRoutes);
 router.use('/platform/dashboard', platformDashboardRoutes);
+router.use('/platform/branding', platformBrandingRoutes);
 router.use('/clients', clientRoutes);
 
 

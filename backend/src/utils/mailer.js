@@ -127,18 +127,14 @@ const BRAND_MUTED = '#5B6280';
 const BRAND_BORDER = '#E4E7F0';
 const BRAND_WARNING = '#B45309';
 
-const PLATFORM_LOGO_URL = `${config.frontendUrl.replace(/\/$/, '')}/hireverify-logo.svg`;
+const PLATFORM_LOGO_URL = `${config.frontendUrl.replace(/\/$/, '')}/hireverify-logo.svg?v=2`;
 
 /**
- * `logoUrl` should be a fully-resolved absolute URL (e.g. a company's
- * uploaded logo already run through whatever asset-URL resolver you use
- * elsewhere in the app). Falls back to the HireVerify mark when no company
- * logo is available, so emails always render with *some* logo.
  */
-const emailShell = ({ logoUrl, bodyHtml, signOffName, footerNote }) => `
+const emailShell = ({ bodyHtml, signOffName, footerNote }) => `
   <div style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin: 0 auto; color: ${BRAND_HEADING}; line-height: 1.55;">
     <div style="text-align: center; padding: 8px 0 20px;">
-      <img src="${logoUrl || PLATFORM_LOGO_URL}" alt="Logo" style="height: 42px; width: auto; display: inline-block;" />
+      <img src="${PLATFORM_LOGO_URL}" alt="HireVerify" style="height: 42px; width: auto; display: inline-block;" />
     </div>
     <div style="background: #ffffff; border: 1px solid ${BRAND_BORDER}; border-radius: 12px; padding: 28px 30px;">
       ${bodyHtml}
@@ -203,13 +199,11 @@ const infoRow = (label, value) => `
 /**
  * Company admin welcome email (referenced by user.service.js). Sent by the
  * platform when a new company admin account is created — accepts an
- * optional `companyLogoUrl` so the header shows the company's own branding
- * once they have a logo, rather than always the HireVerify mark.
+ * HireVerify platform branding is used for every welcome email.
  */
-const buildCompanyAdminWelcomeEmail = ({ companyName, adminName, email, password, loginUrl, companyLogoUrl }) => ({
+const buildCompanyAdminWelcomeEmail = ({ companyName, adminName, email, password, loginUrl }) => ({
   subject: `Welcome to ${companyName} on HireVerify — your account is ready`,
   html: emailShell({
-    logoUrl: companyLogoUrl,
     signOffName: 'The HireVerify Team',
     footerNote: `This account was created for you as an administrator of ${companyName} on the HireVerify platform.`,
     bodyHtml: `
