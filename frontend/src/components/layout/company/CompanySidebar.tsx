@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   Contact,
   FileCheck2,
-  FilePlus2,
   FileText,
   Landmark,
   Settings,
@@ -20,6 +19,7 @@ import {
   BarChart3,
   Receipt,
   UserRound,
+  Megaphone,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { resolveLogoUrl } from '@/src/lib/logo';
@@ -55,7 +55,6 @@ const menuGroups: { label: string; items: CompanyMenuItem[] }[] = [
     items: [
       { name: 'BGV Cases', href: '/company/bgv-cases', icon: FileCheck2, permission: 'bgv.case.view' },
       { name: 'Reports', href: '/company/reports', icon: FileText, permission: 'bgv.report.view' },
-      { name: 'Manual BGV', href: '/company/manual-bgv', icon: FilePlus2, permission: 'bgv.case.create' },
       { name: 'Verification Checks', href: '/company/verifications', icon: ShieldCheck, permission: 'bgv.verification.view' },
       { name: 'Document Verification', href: '/company/document-verification', icon: FileCheck2, permission: 'bgv.document.view' },
     ],
@@ -64,6 +63,12 @@ const menuGroups: { label: string; items: CompanyMenuItem[] }[] = [
     label: 'Finance',
     items: [
       { name: 'Invoices', href: '/company/invoices', icon: Receipt, permission: 'invoice.view' },
+    ],
+  },
+  {
+    label: 'Growth',
+    items: [
+      { name: 'Marketing', href: '/company/marketing', icon: Megaphone, permission: 'marketing.view' },
     ],
   },
   {

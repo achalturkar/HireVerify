@@ -101,6 +101,16 @@ export const ACHU_KNOWLEDGE: AchuHelpEntry[] = [
     nextSteps: ['Open Billing profile and confirm your business and bank details', 'Choose a client and add services or eligible BGV cases as invoice lines', 'Check quantities, rates, discounts, taxes, and due date', 'Preview the invoice, then email it or download the PDF', 'Record each payment to update the paid amount and balance due'],
   },
   {
+    id: 'marketing',
+    title: 'Marketing campaigns',
+    keywords: ['marketing', 'campaign', 'campaigns', 'lead', 'leads', 'outreach', 'newsletter', 'smtp', 'app-password', 'csv'],
+    phrases: ['send marketing email', 'email campaign', 'import leads', 'marketing steps', 'gmail app password', 'campaign delivery'],
+    answer: 'Marketing supports both campaigns and individual emails, and both require explicit opt-in consent. Verify a Gmail or Google Workspace sender with a Google app password, add your company mailing address in Company Profile, and use Campaign to send to subscribed Leads. For Individual email, enter addresses separated by commas/new lines or upload a CSV with an email column. Before previewing, confirm that all recipients opted in and enter the accurate consent source. New addresses are then saved to Leads with that source; previously unsubscribed addresses are always excluded. Individual emails are delivered separately with optional attachments. Both flows include unsubscribe links and send no more than 50 messages per minute. Review direct-email delivery details in the Individual email tab and campaign results in Campaign history.',
+    href: '/company/marketing',
+    linkLabel: 'Open Marketing',
+    nextSteps: ['Verify the Gmail sender with a Google app password', 'Add only leads with documented marketing consent', 'For new individual-email recipients, confirm opt-in and record the true consent source', 'Preview eligible recipients and send with the displayed confirmation'],
+  },
+  {
     id: 'users',
     title: 'Users and roles',
     keywords: ['user', 'users', 'team', 'invite', 'invitation', 'role', 'roles', 'permission', 'permissions', 'access'],
@@ -179,5 +189,6 @@ export function getAchuNextStep(pathname: string): AchuHelpEntry {
   if (pathname.startsWith('/company/verifications')) return ACHU_KNOWLEDGE.find((entry) => entry.id === 'review')!;
   if (pathname.startsWith('/company/reports')) return ACHU_KNOWLEDGE.find((entry) => entry.id === 'invoices')!;
   if (pathname.startsWith('/company/invoices')) return ACHU_KNOWLEDGE.find((entry) => entry.id === 'invoices')!;
+  if (pathname.startsWith('/company/marketing')) return ACHU_KNOWLEDGE.find((entry) => entry.id === 'marketing')!;
   return ACHU_KNOWLEDGE.find((entry) => entry.id === 'start')!;
 }

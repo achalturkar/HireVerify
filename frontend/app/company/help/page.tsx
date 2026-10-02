@@ -24,6 +24,7 @@ import {
   Mail,
   Phone,
   Receipt,
+  Megaphone,
 } from 'lucide-react';
 
 const steps = [
@@ -49,6 +50,12 @@ const otherSections = [
     group: 'Actions',
     items: [
       { title: 'Government Portals', description: 'Quick links to external government verification portals (e.g. for identity, education, or police checks) that you may need while working a case.', href: '/company/government-portals', icon: Landmark },
+    ],
+  },
+  {
+    group: 'Growth',
+    items: [
+      { title: 'Marketing', description: 'Connect a Gmail or Google Workspace sender with an app password, add only consented leads, and choose Campaign or Individual email. For individual email, confirm opt-in and record the consent source before previewing; unsubscribed leads are blocked.', href: '/company/marketing', icon: Megaphone },
     ],
   },
   {
@@ -103,6 +110,13 @@ const moduleGroups = [
     color: '#56B88A',
     items: [
       { name: 'Invoices', href: '/company/invoices', description: 'Configure your billing profile, create and send client invoices, download invoice PDFs, record payments, and monitor outstanding balances.' },
+    ],
+  },
+  {
+    group: 'Growth',
+    color: '#E88564',
+    items: [
+      { name: 'Marketing', href: '/company/marketing', description: 'Manage consented leads, verify your Google email sender, confirm the consent source for new individual-email recipients, and review delivery results.' },
     ],
   },
   {

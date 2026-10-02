@@ -33,14 +33,14 @@ model Company {
   signatureUrl String? @map("signature_url") @db.VarChar(500)
   stampUrl     String? @map("stamp_url") @db.VarChar(500)
 
-  primaryColor String? @map("primary_color") @db.VarChar(20)
-  address      String?
-  gstNumber    String? @map("gst_number") @db.VarChar(30)
-  panNumber    String? @map("pan_number") @db.VarChar(20)
-  city         String? @db.VarChar(120)
-  country      String? @db.VarChar(120)
-  state        String? @db.VarChar(120)
-  postalCode   String? @map("postal_code") @db.VarChar(20)
+  primaryColor      String? @map("primary_color") @db.VarChar(20)
+  address           String?
+  gstNumber         String? @map("gst_number") @db.VarChar(30)
+  panNumber         String? @map("pan_number") @db.VarChar(20)
+  city              String? @db.VarChar(120)
+  country           String? @db.VarChar(120)
+  state             String? @db.VarChar(120)
+  postalCode        String? @map("postal_code") @db.VarChar(20)
   bankAccountName   String? @map("bank_account_name") @db.VarChar(255)
   bankName          String? @map("bank_name") @db.VarChar(255)
   bankAccountNumber String? @map("bank_account_number") @db.VarChar(80)
@@ -61,16 +61,19 @@ model Company {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  users      User[]
-  roles      Role[]
-  clients    Client[]
-  candidates Candidate[]
-  bgvCases   BGVCase[]
-  reports    BGVReport[]
-  invoices   Invoice[]
-  invoiceSequences InvoiceSequence[]
-  auditLogs  AuditLog[]
-  verifiers  Verifier[]
+  users               User[]
+  roles               Role[]
+  clients             Client[]
+  candidates          Candidate[]
+  bgvCases            BGVCase[]
+  reports             BGVReport[]
+  invoices            Invoice[]
+  invoiceSequences    InvoiceSequence[]
+  auditLogs           AuditLog[]
+  verifiers           Verifier[]
+  marketingSmtpConfig MarketingSmtpConfig?
+  marketingLeads      MarketingLead[]
+  marketingCampaigns  MarketingCampaign[]
 
   @@index([status])
   @@index([isDeleted])
@@ -335,16 +338,16 @@ model Candidate {
 
   dateOfBirth DateTime? @map("date_of_birth") @db.Date
 
-  gender String? @db.VarChar(30)
+  gender     String? @db.VarChar(30)
   fatherName String? @map("father_name") @db.VarChar(255)
   motherName String? @map("mother_name") @db.VarChar(255)
 
-  aadhaarNumber       String? @map("aadhaar_number") @db.VarChar(20)
-  panNumber           String? @map("pan_number") @db.VarChar(20)
-  uanNumber           String? @map("uan_number") @db.VarChar(20)
-  passportNumber      String? @map("passport_number") @db.VarChar(30)
+  aadhaarNumber        String? @map("aadhaar_number") @db.VarChar(20)
+  panNumber            String? @map("pan_number") @db.VarChar(20)
+  uanNumber            String? @map("uan_number") @db.VarChar(20)
+  passportNumber       String? @map("passport_number") @db.VarChar(30)
   drivingLicenseNumber String? @map("driving_license_number") @db.VarChar(40)
-  voterIdNumber       String? @map("voter_id_number") @db.VarChar(30)
+  voterIdNumber        String? @map("voter_id_number") @db.VarChar(30)
 
   highestQualification String? @map("highest_qualification") @db.VarChar(120)
   courseName           String? @map("course_name") @db.VarChar(180)
@@ -919,27 +922,27 @@ model InvoiceSequence {
 }
 
 model Invoice {
-  id           String        @id @default(uuid()) @db.Uuid
-  companyId    String        @map("company_id") @db.Uuid
-  clientId     String        @map("client_id") @db.Uuid
-  invoiceNumber String       @map("invoice_number") @db.VarChar(60)
-  status       InvoiceStatus @default(DRAFT)
-  invoiceDate  DateTime      @map("invoice_date") @db.Date
-  dueDate      DateTime      @map("due_date") @db.Date
+  id            String        @id @default(uuid()) @db.Uuid
+  companyId     String        @map("company_id") @db.Uuid
+  clientId      String        @map("client_id") @db.Uuid
+  invoiceNumber String        @map("invoice_number") @db.VarChar(60)
+  status        InvoiceStatus @default(DRAFT)
+  invoiceDate   DateTime      @map("invoice_date") @db.Date
+  dueDate       DateTime      @map("due_date") @db.Date
 
-  supplierName       String  @map("supplier_name") @db.VarChar(255)
-  supplierAddress    String? @map("supplier_address")
-  supplierGst        String? @map("supplier_gst") @db.VarChar(30)
-  supplierPan        String? @map("supplier_pan") @db.VarChar(20)
-  supplierState      String? @map("supplier_state") @db.VarChar(120)
-  supplierCity       String? @map("supplier_city") @db.VarChar(120)
-  supplierPostalCode String? @map("supplier_postal_code") @db.VarChar(20)
-  supplierEmail      String? @map("supplier_email") @db.VarChar(255)
-  supplierPhone      String? @map("supplier_phone") @db.VarChar(50)
-  supplierLogoUrl    String? @map("supplier_logo_url") @db.VarChar(500)
-  supplierPrimaryColor String? @map("supplier_primary_color") @db.VarChar(20)
-  supplierSignatureUrl String? @map("supplier_signature_url") @db.VarChar(500)
-  supplierAdminName    String? @map("supplier_admin_name") @db.VarChar(255)
+  supplierName              String  @map("supplier_name") @db.VarChar(255)
+  supplierAddress           String? @map("supplier_address")
+  supplierGst               String? @map("supplier_gst") @db.VarChar(30)
+  supplierPan               String? @map("supplier_pan") @db.VarChar(20)
+  supplierState             String? @map("supplier_state") @db.VarChar(120)
+  supplierCity              String? @map("supplier_city") @db.VarChar(120)
+  supplierPostalCode        String? @map("supplier_postal_code") @db.VarChar(20)
+  supplierEmail             String? @map("supplier_email") @db.VarChar(255)
+  supplierPhone             String? @map("supplier_phone") @db.VarChar(50)
+  supplierLogoUrl           String? @map("supplier_logo_url") @db.VarChar(500)
+  supplierPrimaryColor      String? @map("supplier_primary_color") @db.VarChar(20)
+  supplierSignatureUrl      String? @map("supplier_signature_url") @db.VarChar(500)
+  supplierAdminName         String? @map("supplier_admin_name") @db.VarChar(255)
   supplierBankAccountName   String? @map("supplier_bank_account_name") @db.VarChar(255)
   supplierBankName          String? @map("supplier_bank_name") @db.VarChar(255)
   supplierBankAccountNumber String? @map("supplier_bank_account_number") @db.VarChar(80)
@@ -948,23 +951,23 @@ model Invoice {
   supplierBankBranch        String? @map("supplier_bank_branch") @db.VarChar(255)
   supplierUpiId             String? @map("supplier_upi_id") @db.VarChar(100)
 
-  clientName    String  @map("client_name") @db.VarChar(255)
-  clientAddress String? @map("client_address")
-  clientGst     String? @map("client_gst") @db.VarChar(30)
-  clientPan     String? @map("client_pan") @db.VarChar(20)
-  clientState   String? @map("client_state") @db.VarChar(120)
-  clientEmail   String? @map("client_email") @db.VarChar(255)
+  clientName        String  @map("client_name") @db.VarChar(255)
+  clientAddress     String? @map("client_address")
+  clientGst         String? @map("client_gst") @db.VarChar(30)
+  clientPan         String? @map("client_pan") @db.VarChar(20)
+  clientState       String? @map("client_state") @db.VarChar(120)
+  clientEmail       String? @map("client_email") @db.VarChar(255)
   clientContactName String? @map("client_contact_name") @db.VarChar(150)
   clientPhone       String? @map("client_phone") @db.VarChar(50)
 
-  placeOfSupply       String? @map("place_of_supply") @db.VarChar(120)
-  taxType             String  @default("NONE") @map("tax_type") @db.VarChar(20)
-  currency            String  @default("INR") @db.VarChar(3)
-  purchaseOrderNumber String? @map("purchase_order_number") @db.VarChar(100)
-  subtotal            Decimal @db.Decimal(14, 2)
-  discountTotal       Decimal @default(0) @map("discount_total") @db.Decimal(14, 2)
-  taxTotal            Decimal @default(0) @map("tax_total") @db.Decimal(14, 2)
-  total               Decimal @db.Decimal(14, 2)
+  placeOfSupply       String?   @map("place_of_supply") @db.VarChar(120)
+  taxType             String    @default("NONE") @map("tax_type") @db.VarChar(20)
+  currency            String    @default("INR") @db.VarChar(3)
+  purchaseOrderNumber String?   @map("purchase_order_number") @db.VarChar(100)
+  subtotal            Decimal   @db.Decimal(14, 2)
+  discountTotal       Decimal   @default(0) @map("discount_total") @db.Decimal(14, 2)
+  taxTotal            Decimal   @default(0) @map("tax_total") @db.Decimal(14, 2)
+  total               Decimal   @db.Decimal(14, 2)
   notes               String?
   terms               String?
   sentAt              DateTime? @map("sent_at") @db.Timestamptz(6)
@@ -973,8 +976,8 @@ model Invoice {
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  client   Client           @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  company  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client   Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
   items    InvoiceItem[]
   payments InvoicePayment[]
   activity InvoiceActivity[]
@@ -986,21 +989,21 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id              String   @id @default(uuid()) @db.Uuid
-  invoiceId       String   @map("invoice_id") @db.Uuid
-  caseId          String?  @map("case_id") @db.Uuid
-  description     String   @db.VarChar(500)
-  candidateName   String?  @map("candidate_name") @db.VarChar(255)
-  serviceCode     String?  @map("service_code") @db.VarChar(30)
-  quantity        Decimal  @db.Decimal(12, 3)
-  unitPrice       Decimal  @map("unit_price") @db.Decimal(14, 2)
-  discountPercent Decimal  @default(0) @map("discount_percent") @db.Decimal(5, 2)
-  taxPercent      Decimal  @default(0) @map("tax_percent") @db.Decimal(5, 2)
-  subtotal        Decimal  @db.Decimal(14, 2)
-  discountAmount  Decimal  @default(0) @map("discount_amount") @db.Decimal(14, 2)
-  taxableAmount   Decimal  @map("taxable_amount") @db.Decimal(14, 2)
-  taxAmount       Decimal  @default(0) @map("tax_amount") @db.Decimal(14, 2)
-  total           Decimal  @db.Decimal(14, 2)
+  id              String  @id @default(uuid()) @db.Uuid
+  invoiceId       String  @map("invoice_id") @db.Uuid
+  caseId          String? @map("case_id") @db.Uuid
+  description     String  @db.VarChar(500)
+  candidateName   String? @map("candidate_name") @db.VarChar(255)
+  serviceCode     String? @map("service_code") @db.VarChar(30)
+  quantity        Decimal @db.Decimal(12, 3)
+  unitPrice       Decimal @map("unit_price") @db.Decimal(14, 2)
+  discountPercent Decimal @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  taxPercent      Decimal @default(0) @map("tax_percent") @db.Decimal(5, 2)
+  subtotal        Decimal @db.Decimal(14, 2)
+  discountAmount  Decimal @default(0) @map("discount_amount") @db.Decimal(14, 2)
+  taxableAmount   Decimal @map("taxable_amount") @db.Decimal(14, 2)
+  taxAmount       Decimal @default(0) @map("tax_amount") @db.Decimal(14, 2)
+  total           Decimal @db.Decimal(14, 2)
 
   invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   case    BGVCase? @relation(fields: [caseId], references: [id], onDelete: SetNull)
@@ -1039,4 +1042,96 @@ model InvoiceActivity {
 
   @@index([invoiceId, createdAt])
   @@map("invoice_activities")
+}
+
+model MarketingSmtpConfig {
+  companyId         String   @id @map("company_id") @db.Uuid
+  email             String   @db.VarChar(255)
+  fromName          String   @map("from_name") @db.VarChar(150)
+  passwordEncrypted String   @map("password_encrypted")
+  updatedById       String?  @map("updated_by_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("marketing_smtp_configs")
+}
+
+model MarketingLead {
+  id             String    @id @default(uuid()) @db.Uuid
+  companyId      String    @map("company_id") @db.Uuid
+  email          String    @db.VarChar(255)
+  name           String?   @db.VarChar(150)
+  consentSource  String    @map("consent_source") @db.VarChar(255)
+  consentedAt    DateTime  @default(now()) @map("consented_at") @db.Timestamptz(6)
+  unsubscribedAt DateTime? @map("unsubscribed_at") @db.Timestamptz(6)
+  createdById    String?   @map("created_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company    Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  recipients MarketingCampaignRecipient[]
+
+  @@unique([companyId, email])
+  @@index([companyId, unsubscribedAt])
+  @@map("marketing_leads")
+}
+
+model MarketingCampaign {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @map("company_id") @db.Uuid
+  mailType        String    @default("CAMPAIGN") @map("mail_type") @db.VarChar(20)
+  subject         String    @db.VarChar(255)
+  body            String
+  status          String    @default("SENDING") @db.VarChar(20)
+  attachmentNames Json      @default("[]") @map("attachment_names")
+  recipientCount  Int       @default(0) @map("recipient_count")
+  sentCount       Int       @default(0) @map("sent_count")
+  failedCount     Int       @default(0) @map("failed_count")
+  skippedCount    Int       @default(0) @map("skipped_count")
+  nextBatchAt     DateTime? @map("next_batch_at") @db.Timestamptz(6)
+  createdById     String?   @map("created_by_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  company     Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  recipients  MarketingCampaignRecipient[]
+  attachments MarketingCampaignAttachment[]
+
+  @@index([companyId, createdAt])
+  @@map("marketing_campaigns")
+}
+
+model MarketingCampaignAttachment {
+  id          String   @id @default(uuid()) @db.Uuid
+  campaignId  String   @map("campaign_id") @db.Uuid
+  filename    String   @db.VarChar(255)
+  contentType String   @map("content_type") @db.VarChar(150)
+  content     Bytes
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("marketing_campaign_attachments")
+}
+
+model MarketingCampaignRecipient {
+  id         String    @id @default(uuid()) @db.Uuid
+  campaignId String    @map("campaign_id") @db.Uuid
+  leadId     String?   @map("lead_id") @db.Uuid
+  email      String    @db.VarChar(255)
+  status     String    @db.VarChar(20)
+  error      String?   @db.VarChar(500)
+  attemptedAt DateTime? @map("attempted_at") @db.Timestamptz(6)
+  sentAt     DateTime? @map("sent_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead     MarketingLead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId, status])
+  @@index([leadId])
+  @@map("marketing_campaign_recipients")
 }

@@ -19,6 +19,7 @@ const app = require('./app');
 const config = require('./config');
 const logger = require('./common/logger');
 const { connectPrisma, disconnectPrisma, prisma } = require('./common/prisma');
+const marketingService = require('./modules/marketing/marketing.service');
 
 const ensureDefaultSuperAdmin = async () => {
   try {
@@ -51,6 +52,29 @@ const ensureDefaultSuperAdmin = async () => {
       data: allPermissions.map((permission) => ({ roleId: superAdminRole.id, permissionId: permission.id })),
       skipDuplicates: true,
     });
+
+    const companyAdminRole = await prisma.role.findFirst({
+      where: { companyId: null, isCompanyAdmin: true },
+    });
+    if (companyAdminRole) {
+      const companyAdminPermissionIds = allPermissions
+        .filter((permission) => ['company.view', 'company.update', 'marketing.view', 'marketing.manage', 'marketing.send'].includes(permission.key))
+        .map((permission) => permission.id);
+      await prisma.rolePermission.createMany({
+        data: companyAdminPermissionIds.map((permissionId) => ({ roleId: companyAdminRole.id, permissionId })),
+        skipDuplicates: true,
+      });
+      const existingCompanyAdminRoles = await prisma.role.findMany({
+        where: { companyId: { not: null }, isCompanyAdmin: true },
+        select: { id: true },
+      });
+      for (const role of existingCompanyAdminRoles) {
+        await prisma.rolePermission.createMany({
+          data: companyAdminPermissionIds.map((permissionId) => ({ roleId: role.id, permissionId })),
+          skipDuplicates: true,
+        });
+      }
+    }
 
     const email = (process.env.SUPER_ADMIN_EMAIL || 'superadmin@portal.com').toLowerCase();
     const password = process.env.SUPER_ADMIN_PASSWORD || 'Admin@123';
@@ -86,6 +110,7 @@ const start = async () => {
   try {
     await connectPrisma();
     await ensureDefaultSuperAdmin();
+    await marketingService.resumeCampaigns();
 
     const server = app.listen(config.port, '0.0.0.0', () => {
       logger.info(`API listening on http://0.0.0.0:${config.port} (env=${config.env})`);

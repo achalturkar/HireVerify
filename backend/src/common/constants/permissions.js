@@ -54,6 +54,13 @@ const PERMISSIONS = [
   { key: 'invoice.void', module: 'invoice', action: 'void', description: 'Void invoices' },
 
   // ==========================
+  // Marketing
+  // ==========================
+  { key: 'marketing.view', module: 'marketing', action: 'view', description: 'View marketing leads and campaigns' },
+  { key: 'marketing.manage', module: 'marketing', action: 'manage', description: 'Manage marketing sender settings and consented leads' },
+  { key: 'marketing.send', module: 'marketing', action: 'send', description: 'Send marketing campaigns to consented leads' },
+
+  // ==========================
   // Candidate
   // ==========================
   { key: 'candidate.create', module: 'candidate', action: 'create', description: 'Create candidates' },

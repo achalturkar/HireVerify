@@ -6,6 +6,14 @@ import Link from 'next/link';
 import { Bot, MessageCircle, Send, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { findAchuAnswer, getAchuNextStep } from '@/src/lib/help/achuKnowledge';
+import { listClients } from '@/src/lib/api/clients';
+import { listCandidates } from '@/src/lib/api/candidates';
+import { useAuth } from '@/src/auth/AuthProvider';
+
+interface ChatLink {
+  href: string;
+  label: string;
+}
 
 interface ChatMessage {
   id: number;
@@ -13,6 +21,7 @@ interface ChatMessage {
   text: string;
   href?: string;
   linkLabel?: string;
+  links?: ChatLink[];
   nextSteps?: string[];
 }
 
@@ -20,6 +29,7 @@ const QUICK_QUESTIONS = ['What should I do next?', 'How do I start a BGV case?',
 
 export default function AchuHelpAssistant() {
   const pathname = usePathname();
+  const { accessToken } = useAuth();
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -32,17 +42,81 @@ export default function AchuHelpAssistant() {
   ]);
   const [messageId, setMessageId] = useState(1);
   const [announcement, setAnnouncement] = useState('');
+  const [searching, setSearching] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open && feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
   }, [messages, open]);
 
+  const searchRecord = async (type: 'client' | 'candidate', name: string, questionText: string) => {
+    setSearching(true);
+    setQuestion('');
+    const userMessageId = messageId;
+    const assistantMessageId = messageId + 1;
+    setMessageId(messageId + 2);
+    setMessages((current) => [...current, { id: userMessageId, role: 'user', text: questionText }]);
+    try {
+      const links: ChatLink[] = type === 'client'
+        ? (await listClients({ page: 1, limit: 10, search: name }, accessToken)).items.map((client) => ({
+          href: `/company/clients/${encodeURIComponent(client.id)}`,
+          label: `${client.name}${client.clientCode ? ` (${client.clientCode})` : ''}`,
+        }))
+        : (await listCandidates({
+          page: 1,
+          limit: 10,
+          search: name,
+          sortBy: 'firstName',
+          sortOrder: 'asc',
+        }, accessToken)).items.map((candidate) => ({
+          href: `/company/candidate/${encodeURIComponent(candidate.id)}`,
+          label: `${candidate.firstName} ${candidate.lastName}${candidate.client?.name ? ` · ${candidate.client.name}` : ''}`,
+        }));
+      setMessages((current) => [
+        ...current,
+        {
+          id: assistantMessageId,
+          role: 'assistant',
+          text: links.length
+            ? `I found ${links.length} matching ${type}${links.length === 1 ? '' : ' records'} in your company. Choose one to open its page.`
+            : `I couldn't find a ${type} matching “${name}” in your company. Check the spelling or try another name.`,
+          links,
+          href: links.length ? undefined : `/company/${type === 'client' ? 'clients' : 'candidates'}`,
+          linkLabel: links.length ? undefined : `Open ${type === 'client' ? 'Clients' : 'Candidates'} list`,
+        },
+      ]);
+      setAnnouncement(links.length ? `Found matching ${type} records.` : `No matching ${type} found.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The record search failed.';
+      setMessages((current) => [
+        ...current,
+        {
+          id: assistantMessageId,
+          role: 'assistant',
+          text: `I couldn't search ${type} records: ${message}`,
+          href: `/company/${type === 'client' ? 'clients' : 'candidates'}`,
+          linkLabel: `Open ${type === 'client' ? 'Clients' : 'Candidates'} list`,
+        },
+      ]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
   const ask = (rawQuestion: string) => {
     const text = rawQuestion.trim();
     if (!text) return;
 
     const normalized = text.toLowerCase();
+    const recordSearch = text.match(/^(?:(?:open|show|find|search(?:\s+for)?|go\s+to)\s+)?(client|candidate)\s+(.+?)(?:\s+(?:page|profile|record|details?))?$/i);
+    if (recordSearch?.[2]?.trim()) {
+      const type = recordSearch[1].toLowerCase();
+      if (type === 'client' || type === 'candidate') {
+        void searchRecord(type, recordSearch[2].trim(), text);
+        return;
+      }
+    }
+
     const isNextQuestion = /\b(next|what now|what should i do)\b/.test(normalized);
     const answer = isNextQuestion ? getAchuNextStep(pathname) : findAchuAnswer(text);
     const nextMessageId = messageId + 2;
@@ -101,8 +175,19 @@ export default function AchuHelpAssistant() {
             {messages.map((message) => (
               <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[90%] rounded-2xl px-3 py-2.5 ${message.role === 'user' ? 'rounded-br-md bg-[var(--primary)] text-[var(--primary-foreground)]' : 'rounded-bl-md border border-[var(--border)] bg-[var(--surface-muted)] text-[var(--foreground)]'}`}>
-                  <p className="whitespace-pre-line text-[12px] leading-5">{message.text}</p>
-                  {message.role === 'assistant' && message.nextSteps && (
+                      <p className="whitespace-pre-line text-[12px] leading-5">{message.text}</p>
+                      {message.role === 'assistant' && message.links?.length ? (
+                        <ul className="mt-2 space-y-1.5 border-t border-[var(--border)]/70 pt-2">
+                          {message.links.map((link) => (
+                            <li key={link.href}>
+                              <Link href={link.href} onClick={() => setOpen(false)} className="inline-flex text-[11px] font-semibold text-[var(--primary)] hover:underline">
+                                {link.label} →
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {message.role === 'assistant' && message.nextSteps && (
                     <ol className="mt-2 space-y-1.5 border-t border-[var(--border)]/70 pt-2">
                       {message.nextSteps.map((step, index) => <li key={step} className="flex gap-2 text-[11px] leading-4 text-[var(--muted)]"><span className="font-semibold text-[var(--primary)]">{index + 1}.</span><span>{step}</span></li>)}
                     </ol>
@@ -129,14 +214,15 @@ export default function AchuHelpAssistant() {
               id="achu-question"
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
-              placeholder="Ask about a HireVerify workflow..."
+              placeholder={searching ? 'Searching your company records…' : 'Ask about a module or type “client Acme”...'}
               maxLength={500}
+              disabled={searching}
               className="min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-[12px] outline-none focus:border-[var(--primary)]"
             />
-            <button type="submit" disabled={!question.trim()} aria-label="Send question" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity disabled:cursor-not-allowed disabled:opacity-40"><Send size={16} /></button>
+            <button type="submit" disabled={!question.trim() || searching} aria-label="Send question" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity disabled:cursor-not-allowed disabled:opacity-40"><Send size={16} /></button>
           </form>
           <span className="sr-only" role="status">{announcement}</span>
-          <p className="px-3 pb-2 text-center text-[9px] text-[var(--muted)]">ACHU answers from the built-in HireVerify guide; it does not access case or candidate data.</p>
+          <p className="px-3 pb-2 text-center text-[9px] text-[var(--muted)]">ACHU uses your signed-in company access to find client and candidate pages; it does not expose other companies’ records.</p>
         </section>
       )}
 
