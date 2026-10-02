@@ -16,6 +16,7 @@ import {
   PowerOff,
   Globe,
   Eye,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import ClientFormModal from '@/src/components/layout/company/client/ClientFormModal';
@@ -37,6 +38,11 @@ import {
 import type { Client, ClientFormValues, ClientStatus, PaginationMeta, CompanyRef } from '@/src/types/client';
 
 const PAGE_SIZE = 10;
+const clientSummaryCards = [
+  { label: 'All clients', status: '' as const, accent: 'var(--primary)', icon: Building2 },
+  { label: 'Active', status: 'ACTIVE' as const, accent: '#269A78', icon: CheckCircle2 },
+  { label: 'Inactive', status: 'INACTIVE' as const, accent: '#8891B8', icon: PowerOff },
+];
 
 function initials(name: string) {
   return name
@@ -83,6 +89,9 @@ export default function ClientsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<ClientStatus | ''>('');
+  const [summaryCounts, setSummaryCounts] = useState<Record<string, number | null>>({ '': null, ACTIVE: null, INACTIVE: null });
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   const [companies, setCompanies] = useState<CompanyRef[]>([]);
 
@@ -134,6 +143,31 @@ export default function ClientsPage() {
   useEffect(() => {
     fetchClients();
   }, [fetchClients]);
+
+  useEffect(() => {
+    let active = true;
+    const loadSummary = async () => {
+      setSummaryLoading(true);
+      setSummaryError(null);
+      const results = await Promise.all(clientSummaryCards.map(({ status: cardStatus }) =>
+        listClients({
+          page: 1,
+          limit: 1,
+          search,
+          status: cardStatus || undefined,
+        }, accessToken)
+          .then((result) => ({ status: cardStatus, count: result.meta.total }))
+          .catch(() => ({ status: cardStatus, count: null })),
+      ));
+      if (active) {
+        setSummaryCounts(Object.fromEntries(results.map((result) => [result.status, result.count])));
+        if (results.some((result) => result.count === null)) setSummaryError('Some client summary counts could not be loaded. Check your access and try again.');
+        setSummaryLoading(false);
+      }
+    };
+    void loadSummary();
+    return () => { active = false; };
+  }, [accessToken, search]);
 
   // useEffect(() => {
   //   if (isSuperAdmin) {
@@ -290,10 +324,6 @@ export default function ClientsPage() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="rounded-2xl bg-[var(--surface)] px-4 py-3 text-[13px] text-[var(--foreground)] border border-[var(--border)]">
-            <span className="block text-[11px] text-[var(--muted)]">Total clients</span>
-            <span className="text-[20px] font-semibold">{meta.total}</span>
-          </div>
           <button
             onClick={openCreate}
             className="flex items-center gap-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13px] font-semibold px-4 py-2.5 hover:bg-[var(--primary)]/90 transition-colors shrink-0"
@@ -303,6 +333,42 @@ export default function ClientsPage() {
           </button>
         </div>
       </div>
+
+      <section aria-label="Client summary" className="space-y-3">
+        <div>
+          <h2 className="text-[15px] font-semibold text-[var(--foreground)]">Client overview</h2>
+          <p className="mt-0.5 text-[11px] text-[var(--muted)]">Select a card to filter clients. Counts follow your search.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {clientSummaryCards.map((card) => {
+            const selected = status === card.status;
+            const Icon = card.icon;
+            return (
+              <button
+                key={card.label}
+                type="button"
+                onClick={() => { setStatus(card.status); setPage(1); }}
+                aria-pressed={selected}
+                className={`group relative isolate overflow-hidden rounded-xl border bg-[var(--surface)] p-3 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 ${selected ? 'ring-2 ring-[var(--primary)]/40 ring-offset-1' : 'hover:border-[var(--primary)]/40'}`}
+                style={{ borderColor: selected ? card.accent : undefined, boxShadow: selected ? `0 4px 14px ${card.accent}20` : undefined }}
+              >
+                <span className="absolute inset-x-0 top-0 h-0.5" style={{ background: card.accent }} />
+                <span className="flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${card.accent}18`, color: card.accent }}><Icon size={16} /></span>
+                    <span className="truncate text-[11px] font-semibold text-[var(--muted)]">{card.label}</span>
+                  </span>
+                  {selected && <span className="text-[10px] font-semibold" style={{ color: card.accent }}>Active</span>}
+                </span>
+                <span className="mt-2 block text-[24px] font-bold leading-none tabular-nums text-[var(--foreground)]">
+                  {summaryLoading ? <span className="inline-block h-6 w-10 animate-pulse rounded-md bg-[var(--surface-muted)] align-middle" /> : summaryCounts[card.status] ?? '—'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {summaryError && <p role="alert" className="text-[12px] text-[#FF6B6B]">{summaryError}</p>}
+      </section>
 
       {/* Banner */}
       {banner && (

@@ -4,6 +4,7 @@ import { type CSSProperties, type ReactNode, useState } from 'react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import CompanyNavbar from './CompanyNavbar';
 import CompanySidebar from './CompanySidebar';
+import AchuHelpAssistant from './AchuHelpAssistant';
 
 interface Props {
   children: ReactNode;
@@ -47,6 +48,7 @@ export default function CompanyDashboardShell({ children }: Props) {
         <CompanyNavbar onOpenMobileMenu={() => setMobileOpen(true)} />
         <main className="flex-1 overflow-y-auto p-4 md:p-7">{children}</main>
       </div>
+      <AchuHelpAssistant />
     </div>
   );
 }

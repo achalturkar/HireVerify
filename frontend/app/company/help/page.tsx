@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { ACHU_KNOWLEDGE } from '@/src/lib/help/achuKnowledge';
 import {
   ArrowRight,
   BriefcaseBusiness,
@@ -327,6 +328,23 @@ export default function CompanyHelpPage() {
 
       {activeTab === 'support' && (
         <section className="grid gap-5 md:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-2xl border border-[var(--primary)]/30 bg-[var(--primary)]/10 p-6 md:col-span-2">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-2xl">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">Built-in portal guide</p>
+                <h2 className="mt-2 text-[22px] font-semibold">Meet ACHU</h2>
+                <p className="mt-2 text-[13px] leading-6 text-[var(--muted)]">ACHU matches module names and common question phrases to a focused answer, numbered steps, and a direct page link. Its help topics are maintained from curated HireVerify guidance, so the assistant does not access candidate or case records. Use the Ask ACHU button at the bottom-right of the portal.</p>
+              </div>
+              <div className="max-w-md">
+                <p className="mb-2 text-[11px] font-semibold text-[var(--muted)]">Topics ACHU can guide you through</p>
+                <div className="flex flex-wrap gap-2">
+                  {ACHU_KNOWLEDGE.filter((entry) => entry.id !== 'start' && entry.id !== 'help').map((entry) => (
+                    <span key={entry.id} className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[10.5px] text-[var(--muted)]">{entry.title}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
           <div className="rounded-2xl border border-[var(--primary)]/30 bg-[var(--primary)]/10 p-6">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">Need assistance?</p>
             <h2 className="mt-2 text-[24px] font-semibold">Contact Brainhunt Ventures</h2>
