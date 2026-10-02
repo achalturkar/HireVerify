@@ -30,6 +30,7 @@ const toDto = (company) => ({
   gstNumber: company.gstNumber,
   panNumber: company.panNumber,
   city: company.city,
+  country: company.country,
   state: company.state,
   postalCode: company.postalCode,
   bankAccountName: company.bankAccountName,
@@ -142,6 +143,7 @@ const create = async ({ payload, currentUser, req }) => {
         gstNumber: payload.gstNumber || null,
         panNumber: payload.panNumber || null,
         city: payload.city || null,
+        country: payload.country || null,
         state: payload.state || null,
         postalCode: payload.postalCode || null,
         bankAccountName: payload.bankAccountName || null,
@@ -244,7 +246,7 @@ const update = async ({ id, payload, req }) => {
   const existing = await repo.findById(id);
   if (!existing) throw new NotFoundError('Company not found');
   const data = {};
-  ['name', 'shortCode', 'contactEmail', 'contactPhone', 'primaryColor', 'address', 'settings', 'gstNumber', 'panNumber', 'city', 'state', 'postalCode', 'bankAccountName', 'bankName', 'bankAccountNumber', 'bankIfscCode', 'bankSwiftCode', 'bankBranch', 'upiId'].forEach((k) => {
+  ['name', 'shortCode', 'contactEmail', 'contactPhone', 'primaryColor', 'address', 'settings', 'gstNumber', 'panNumber', 'city', 'country', 'state', 'postalCode', 'bankAccountName', 'bankName', 'bankAccountNumber', 'bankIfscCode', 'bankSwiftCode', 'bankBranch', 'upiId'].forEach((k) => {
     if (payload[k] !== undefined) data[k] = typeof payload[k] === 'string' && !payload[k].trim() ? null : payload[k];
   });
   if (data.shortCode !== undefined) data.shortCode = data.shortCode ? String(data.shortCode).trim().toUpperCase() : null;

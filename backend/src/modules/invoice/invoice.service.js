@@ -37,6 +37,7 @@ const getProfile = async (companyId) => {
     gstNumber: company.gstNumber || '',
     panNumber: company.panNumber || '',
     city: company.city || '',
+    country: company.country || '',
     state: company.state || '',
     postalCode: company.postalCode || '',
     bankAccountName: company.bankAccountName || '',
@@ -50,7 +51,7 @@ const getProfile = async (companyId) => {
 };
 
 const saveProfile = async ({ companyId, payload }) => {
-  const data = Object.fromEntries(['gstNumber', 'panNumber', 'state', 'city', 'postalCode', 'address', 'bankAccountName', 'bankName', 'bankAccountNumber', 'bankIfscCode', 'bankSwiftCode', 'bankBranch', 'upiId']
+  const data = Object.fromEntries(['gstNumber', 'panNumber', 'country', 'state', 'city', 'postalCode', 'address', 'bankAccountName', 'bankName', 'bankAccountNumber', 'bankIfscCode', 'bankSwiftCode', 'bankBranch', 'upiId']
     .filter((key) => payload[key] !== undefined)
     .map((key) => [key, payload[key]?.trim() || null]));
   const company = await prisma.company.update({ where: { id: companyId }, data });
@@ -64,6 +65,7 @@ const saveProfile = async ({ companyId, payload }) => {
     gstNumber: company.gstNumber || '',
     panNumber: company.panNumber || '',
     city: company.city || '',
+    country: company.country || '',
     state: company.state || '',
     postalCode: company.postalCode || '',
     bankAccountName: company.bankAccountName || '',
@@ -159,7 +161,7 @@ const buildInvoiceData = async ({ payload, companyId, clientId }) => {
   const clientPhone = payload.clientPhone?.trim() || client.contactPhone;
   const placeOfSupply = payload.placeOfSupply?.trim() || clientState || '';
   const taxType = !anyTaxable || !company.gstNumber ? 'NONE' : supplierState.localeCompare(placeOfSupply, undefined, { sensitivity: 'accent' }) === 0 ? 'CGST_SGST' : 'IGST';
-  const supplierAddress = composeAddress(company.address, company.city, company.state, company.postalCode);
+  const supplierAddress = composeAddress(company.address, company.city, company.state, company.postalCode, company.country);
   return {
     company,
     items,

@@ -22,6 +22,7 @@ import {
   Network,
   Mail,
   Phone,
+  Receipt,
 } from 'lucide-react';
 
 const steps = [
@@ -31,6 +32,7 @@ const steps = [
   { number: '04', title: 'Complete verification details', description: 'Open the case, choose a check tab, enter findings, upload supporting documents, and save the verification.', href: '/company/verifications', icon: ClipboardCheck },
   { number: '05', title: 'Generate and view the report', description: 'Use View report from the case or Reports page. A case does not need to be marked Completed to preview or download its report.', href: '/company/reports', icon: FileText },
   { number: '06', title: 'Send completed reports', description: 'For client email delivery, select completed cases in Reports and choose Send selected to client.', href: '/company/reports', icon: FileDown },
+  { number: '07', title: 'Manage invoices and payments', description: 'Set up your business billing profile, create and send client invoices, then record payments and track outstanding balances.', href: '/company/invoices', icon: Receipt },
 ];
 
 // Sidebar sections that sit outside the core 6-step flow but still need a short explanation.
@@ -60,11 +62,58 @@ const otherSections = [
 ];
 
 const tabs = [
-  { id: 'steps', label: 'Steps' },
-  { id: 'flowchart', label: 'Flowchart' },
-  { id: 'navigation', label: 'Full navigation' },
-  { id: 'other', label: 'Other sections' },
-  { id: 'support', label: 'Support contact' },
+  { id: 'steps', label: 'Quick start' },
+  { id: 'flowchart', label: 'Workflow' },
+  { id: 'navigation', label: 'Modules' },
+  { id: 'other', label: 'More tools' },
+  { id: 'support', label: 'Support' },
+] as const;
+
+const moduleGroups = [
+  {
+    group: 'Setup',
+    color: '#3FDCC0',
+    items: [
+      { name: 'Company Profile', href: '/company/profile', description: 'Build your company identity and branding before sending reports.' },
+      { name: 'Users', href: '/company/users', description: 'Add your team and assign portal access.' },
+      { name: 'Roles', href: '/company/roles', description: 'Define what each team member can view and manage.' },
+    ],
+  },
+  {
+    group: 'Client & candidate',
+    color: '#5EA8D9',
+    items: [
+      { name: 'Clients', href: '/company/clients', description: 'Create the company or customer organizations you are verifying.' },
+      { name: 'Candidates', href: '/company/candidates', description: 'Add candidate profiles and link them to the right client.' },
+    ],
+  },
+  {
+    group: 'Verification operations',
+    color: '#F2AE55',
+    items: [
+      { name: 'BGV Cases', href: '/company/bgv-cases', description: 'Create a case, choose checks, and track the verification journey.' },
+      { name: 'Manual BGV', href: '/company/manual-bgv', description: 'Record checks completed outside the normal portal flow.' },
+      { name: 'Verification Checks', href: '/company/verification-checks', description: 'Manage the master checklist used in check packages.' },
+      { name: 'Reports', href: '/company/reports', description: 'Preview, download, and share final verification reports.' },
+    ],
+  },
+  {
+    group: 'Billing',
+    color: '#56B88A',
+    items: [
+      { name: 'Invoices', href: '/company/invoices', description: 'Configure your billing profile, create and send client invoices, download invoice PDFs, record payments, and monitor outstanding balances.' },
+    ],
+  },
+  {
+    group: 'Control & support',
+    color: '#B18AF2',
+    items: [
+      { name: 'Government Portals', href: '/company/government-portals', description: 'Use external portals during the verification process when needed.' },
+      { name: 'Audit activity', href: '/company/audit', description: 'Review recent actions taken in the platform.' },
+      { name: 'Settings', href: '/company/settings', description: 'Update workspace preferences and account behavior.' },
+      { name: 'Help', href: '/company/help', description: 'This guide and contact information for additional support.' },
+    ],
+  },
 ] as const;
 
 type TabId = (typeof tabs)[number]['id'];
@@ -74,13 +123,21 @@ export default function CompanyHelpPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
-      <header className="max-w-3xl">
+      <header className="max-w-4xl rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
         <div className="mb-3 flex items-center gap-2 text-[var(--primary)]">
           <HelpCircle size={18} />
           <span className="text-[11px] font-semibold uppercase tracking-[0.14em]">Portal guide</span>
         </div>
         <h1 className="text-[28px] font-semibold">How HireVerify works</h1>
-        <p className="mt-2 text-[13px] leading-6 text-[var(--muted)]">Follow these steps to set up a client, create a candidate case, complete checks, and produce the verification report.</p>
+        <p className="mt-2 text-[13px] leading-6 text-[var(--muted)]">Use this flow to set up your organization, run BGV checks, share verification reports, and manage client billing.</p>
+        <div className="mt-5 flex flex-wrap gap-2 text-[11px]">
+          <span className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1 text-[var(--muted)]">1. Setup</span>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1 text-[var(--muted)]">2. Add client</span>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1 text-[var(--muted)]">3. Add candidate</span>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1 text-[var(--muted)]">4. Run verification</span>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1 text-[var(--muted)]">5. Share report</span>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1 text-[var(--muted)]">6. Manage billing</span>
+        </div>
       </header>
 
       <div className="flex items-center gap-1 border-b border-[var(--border)]">
@@ -133,9 +190,9 @@ export default function CompanyHelpPage() {
 
       {activeTab === 'flowchart' && (
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-          <svg width="100%" viewBox="0 0 680 616" role="img" aria-labelledby="flow-title flow-desc">
+          <svg width="100%" viewBox="0 0 680 680" role="img" aria-labelledby="flow-title flow-desc">
             <title id="flow-title">HireVerify workflow</title>
-            <desc id="flow-desc">Flowchart of the six-step HireVerify process: create client, add candidate, create BGV case, complete verification details, generate and view report, send completed reports.</desc>
+            <desc id="flow-desc">Flowchart of the HireVerify process: create client, add candidate, create BGV case, complete verification details, generate and send reports, then manage invoices and payments.</desc>
             <defs>
               <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                 <path d="M2 1L8 5L2 9" fill="none" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -172,16 +229,67 @@ export default function CompanyHelpPage() {
               <div><h2 className="text-[16px] font-semibold">Complete portal map</h2><p className="mt-1 text-[12.5px] leading-5 text-[var(--muted)]">Use this map to understand every company navigation area, what it is for, and how the main tabs connect to the work.</p></div>
             </div>
           </div>
-          <div className="relative space-y-4 pl-5 before:absolute before:bottom-5 before:left-[19px] before:top-5 before:w-px before:bg-[var(--primary)]/30">
-            {[
-              { group: 'Workspace', color: '#3FDCC0', items: [{ name: 'Dashboard', href: '/company/dashboard', description: 'At-a-glance workload, status, reports, and operational summary.' }, { name: 'Analytics', href: '/company/analytics', description: 'Monthly/yearly trends, growth, completion, checks, clients, candidates, and reports.' }] },
-              { group: 'Engagement', color: '#5EA8D9', items: [{ name: 'Clients', href: '/company/clients', description: 'Create and manage client organizations.' }, { name: 'Candidates', href: '/company/candidates', description: 'Create candidates and associate them with clients.' }] },
-              { group: 'Verification', color: '#F2AE55', items: [{ name: 'BGV Cases', href: '/company/bgv-cases', description: 'Create cases, select checks, update status, and open candidate verification tabs.' }, { name: 'Reports', href: '/company/reports', description: 'Review, download, and send completed reports.' }, { name: 'Manual BGV', href: '/company/manual-bgv', description: 'Record verification completed outside the portal.' }, { name: 'Verification Checks', href: '/company/verifications', description: 'Review verification check records and outcomes.' }] },
-              { group: 'Actions', color: '#B18AF2', items: [{ name: 'Government Portals', href: '/company/government-portals', description: 'Open external portals used during verification work.' }] },
-              { group: 'Organization', color: '#FF6B6B', items: [{ name: 'Company Profile', href: '/company/profile', description: 'Maintain company identity, logo, contact, and report branding.' }, { name: 'Users', href: '/company/users', description: 'Invite teammates and manage user access.' }, { name: 'Roles', href: '/company/roles', description: 'Configure role capabilities and permissions.' }, { name: 'Audit activity', href: '/company/audit', description: 'Review all recorded company activity.' }, { name: 'Settings', href: '/company/settings', description: 'Manage workspace preferences.' }, { name: 'Help', href: '/company/help', description: 'Use this guide and contact support.' }] },
-            ].map((group) => <div key={group.group} className="relative"><span className="absolute -left-5 top-5 h-3 w-3 rounded-full border-2 border-[var(--surface)]" style={{ backgroundColor: group.color }} /><div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4"><div className="mb-3 flex items-center justify-between"><h2 className="text-[14px] font-semibold" style={{ color: group.color }}>{group.group}</h2><span className="text-[11px] text-[var(--muted)]">{group.items.length} sections</span></div><div className="grid gap-2 md:grid-cols-2">{group.items.map((item) => <Link key={item.href} href={item.href} className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 transition-colors hover:border-[var(--primary)]/50"><div className="flex items-center justify-between gap-2"><p className="text-[12.5px] font-semibold">{item.name}</p><ArrowRight size={13} className="text-[var(--muted)]" /></div><p className="mt-1 text-[11.5px] leading-5 text-[var(--muted)]">{item.description}</p></Link>)}</div></div></div>)}
+          <div className="space-y-4">
+            {moduleGroups.map((group) => (
+              <div key={group.group} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h2 className="text-[14px] font-semibold" style={{ color: group.color }}>{group.group}</h2>
+                  <span className="text-[11px] text-[var(--muted)]">{group.items.length} modules</span>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {group.items.map((item) => (
+                    <Link key={item.href} href={item.href} className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 transition-colors hover:border-[var(--primary)]/50">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[12.5px] font-semibold">{item.name}</p>
+                        <ArrowRight size={13} className="text-[var(--muted)]" />
+                      </div>
+                      <p className="mt-1 text-[11.5px] leading-5 text-[var(--muted)]">{item.description}</p>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><h2 className="text-[15px] font-semibold">BGV case tabs</h2><p className="mt-1 text-[12px] text-[var(--muted)]">Inside a case, the visible tabs depend on the checks included in that case.</p><div className="mt-4 flex flex-wrap gap-2">{['Candidate', 'PAN', 'Identity', 'Address', 'Address (Physical)', 'UAN', 'Education', 'Employment', 'Gap Check', 'Reference Check', 'CV Validation', 'Social Media', 'Criminal Record', 'CIBIL', '26AS', 'Police Verification', 'Police Record'].map((item) => <span key={item} className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-[11px] text-[var(--muted)]">{item}</span>)}</div></div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[15px] font-semibold">Invoice workflow</h2>
+                <p className="mt-1 text-[12px] leading-5 text-[var(--muted)]">Use Invoices to prepare client bills and keep payment status up to date.</p>
+              </div>
+              <Link href="/company/invoices" className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--primary)] hover:underline">
+                Open Invoices <ArrowRight size={14} />
+              </Link>
+            </div>
+            <ol className="mt-4 grid gap-3 sm:grid-cols-2">
+              {[
+                { title: 'Set up your billing profile', description: 'Add your business address, tax identifiers, and bank or UPI details for future invoices.' },
+                { title: 'Create an invoice', description: 'Choose a client, add services or eligible BGV cases, and enter quantities, rates, discounts, and tax.' },
+                { title: 'Review and send', description: 'Check the invoice details, preview it, then email it to your client or download the PDF.' },
+                { title: 'Record payments', description: 'Add each received payment with its date, method, and reference so the balance stays current.' },
+                { title: 'Track status and balance', description: 'Use invoice status and outstanding balances to follow drafts, sent invoices, partial payments, overdue bills, and paid invoices.' },
+              ].map((step, index) => (
+                <li key={step.title} className="flex gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--primary)]/10 text-[11px] font-semibold text-[var(--primary)]">{index + 1}</span>
+                  <div>
+                    <h3 className="text-[12px] font-semibold">{step.title}</h3>
+                    <p className="mt-1 text-[11.5px] leading-5 text-[var(--muted)]">{step.description}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-[11.5px] leading-5 text-[var(--muted)]">
+              <span className="font-semibold text-[var(--foreground)]">Before you start:</span> Check that your business billing profile and the client’s billing details are correct.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <h2 className="text-[15px] font-semibold">BGV case tabs</h2>
+            <p className="mt-1 text-[12px] text-[var(--muted)]">Inside a case, the visible tabs depend on the checks included in that case.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {['Candidate', 'PAN', 'Identity', 'Address', 'Address (Physical)', 'UAN', 'Education', 'Employment', 'Gap Check', 'Reference Check', 'CV Validation', 'Social Media', 'Criminal Record', 'CIBIL', '26AS', 'Police Verification', 'Police Record'].map((item) => (
+                <span key={item} className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-[11px] text-[var(--muted)]">{item}</span>
+              ))}
+            </div>
+          </div>
         </section>
       )}
 
@@ -218,9 +326,37 @@ export default function CompanyHelpPage() {
       )}
 
       {activeTab === 'support' && (
-        <section className="grid gap-5 md:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-2xl border border-[var(--primary)]/30 bg-[var(--primary)]/10 p-6"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">Need assistance?</p><h2 className="mt-2 text-[24px] font-semibold">Contact Brainhunt Ventures</h2><p className="mt-2 max-w-xl text-[13px] leading-6 text-[var(--muted)]">For portal access, verification workflow, report generation, account, or technical support questions, contact the support team directly.</p><div className="mt-6 grid gap-3 sm:grid-cols-2"><a href="mailto:contact@brainhuntventures.com" className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors hover:border-[var(--primary)]"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><Mail size={17} /></span><span><span className="block text-[11px] text-[var(--muted)]">Email support</span><span className="mt-1 block break-all text-[12.5px] font-semibold">contact@brainhuntventures.com</span></span></a><a href="tel:9359647748" className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors hover:border-[var(--primary)]"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><Phone size={17} /></span><span><span className="block text-[11px] text-[var(--muted)]">Phone support</span><span className="mt-1 block text-[12.5px] font-semibold">9359647748</span></span></a></div></div>
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6"><h2 className="text-[15px] font-semibold">What to include</h2><div className="mt-4 space-y-3 text-[12.5px] leading-5 text-[var(--muted)]"><p>• Your company name and registered email.</p><p>• The page, case number, or candidate reference involved.</p><p>• A short description of what happened and the expected result.</p><p>• A screenshot or error message when reporting a technical issue.</p></div></div>
+        <section className="grid gap-5 md:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-2xl border border-[var(--primary)]/30 bg-[var(--primary)]/10 p-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">Need assistance?</p>
+            <h2 className="mt-2 text-[24px] font-semibold">Contact Brainhunt Ventures</h2>
+            <p className="mt-2 max-w-xl text-[13px] leading-6 text-[var(--muted)]">For account access, verification workflow questions, report issues, or technical help, reach out to the support team directly.</p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <a href="mailto:contact@brainhuntventures.com" className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors hover:border-[var(--primary)]">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><Mail size={17} /></span>
+                <span>
+                  <span className="block text-[11px] text-[var(--muted)]">Email support</span>
+                  <span className="mt-1 block break-all text-[12.5px] font-semibold">contact@brainhuntventures.com</span>
+                </span>
+              </a>
+              <a href="tel:9359647748" className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors hover:border-[var(--primary)]">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><Phone size={17} /></span>
+                <span>
+                  <span className="block text-[11px] text-[var(--muted)]">Phone support</span>
+                  <span className="mt-1 block text-[12.5px] font-semibold">9359647748</span>
+                </span>
+              </a>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
+            <h2 className="text-[15px] font-semibold">What to include</h2>
+            <div className="mt-4 space-y-3 text-[12.5px] leading-5 text-[var(--muted)]">
+              <p>• Your company name and registered email.</p>
+              <p>• The page, case number, or candidate reference involved.</p>
+              <p>• A short description of the issue and the expected outcome.</p>
+              <p>• A screenshot or error message when reporting a technical problem.</p>
+            </div>
+          </div>
         </section>
       )}
 

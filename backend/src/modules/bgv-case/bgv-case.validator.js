@@ -13,6 +13,7 @@ const emailReportsValidator = { body: Joi.object({ caseIds: Joi.array().items(Jo
 const createValidator = { body: Joi.object({
   clientId: Joi.string().uuid().required(),
   candidateId: Joi.string().uuid().required(),
+  status: Joi.string().valid('DRAFT', 'INITIATED').default('DRAFT'),
   clientReference: Joi.string().max(100).allow(null, ''),
   packageName: Joi.string().max(150).allow(null, ''),
   priority: Joi.number().integer().min(0).max(100),
@@ -38,7 +39,7 @@ const updateChecksValidator = { params: Joi.object({ id: Joi.string().uuid().req
     type: Joi.string().valid(...CHECK_TYPES).required(),
     provider: Joi.string().valid(...PROVIDERS).default('MANUAL'),
     priority: Joi.number().integer().min(0).max(100).default(0),
-  })).min(1).max(20).required(),
+  })).max(20).required(),
 }).required() };
 
 module.exports = { idParamValidator, emailReportsValidator, createValidator, listValidator, transitionValidator, updateMetaValidator, updateChecksValidator };

@@ -1,14 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Eye, FileDown, FilePlus2, ListChecks, Lock, Save, Unlock } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronRight, ChevronUp, Eye, FileDown, FilePlus2, ListChecks, Lock, Save, Unlock } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { updateCandidate } from '@/src/lib/api/candidates';
 import {
   ApiError, downloadBGVReport, getBGVCase, listVerifications, lockVerification,
-  transitionBGVCase, updateBGVCaseChecks, updateBGVCaseMeta, updateVerificationResult,
+  listCompanyVerifiers, transitionBGVCase, updateBGVCaseChecks, updateBGVCaseMeta, updateVerificationResult,
 } from '@/src/lib/api/bgv';
+import type { CompanyVerifier } from '@/src/lib/api/bgv';
 import type { BGVCase, BGVCaseStatus, VerificationCheck, VerificationStatus, VerificationType } from '@/src/types/bgv';
 import FileUploadField from '@/src/components/layout/company/bgv/FileUploadField';
 
@@ -41,6 +42,90 @@ const editableCheckTypes: { type: VerificationType; label: string; provider: 'SU
   { type: 'POLICE', label: 'Police verification', provider: 'MANUAL' },
   { type: 'POLICE_RECORD', label: 'Police record', provider: 'MANUAL' },
 ];
+type WorkflowAction = 'candidate' | 'consent' | 'checks' | 'review' | 'complete' | 'resume' | 'none';
+const workflowStages = ['Candidate details', 'Consent', 'Verification', 'Review', 'Complete'];
+
+function getCaseWorkflow(caseData: BGVCase, checks: VerificationCheck[]) {
+  const consentGiven = caseData.consents?.some((consent) => consent.consentType === 'BGV_CONSENT' && consent.consentGiven && !consent.revokedAt) ?? false;
+  const candidateDetailsComplete = Boolean(caseData.candidate?.firstName && caseData.candidate.lastName && caseData.candidate.email && caseData.candidate.phone && caseData.candidate.dateOfBirth && caseData.candidate.currentAddress);
+  const unresolvedChecks = checks.filter((check) => check.status !== 'COMPLETED' && check.status !== 'CANCELLED');
+  const failedCount = checks.filter((check) => check.status === 'FAILED').length;
+  const checksComplete = checks.length > 0 && unresolvedChecks.length === 0;
+  let action: WorkflowAction = 'none';
+  let activeStage = caseData.status === 'COMPLETED' ? 4 : caseData.status === 'CANCELLED' ? -1 : 0;
+  let title = 'Case complete';
+  let description = 'All case workflow stages are complete.';
+  let actionLabel = '';
+
+  if (caseData.status === 'CANCELLED') {
+    title = 'Case cancelled';
+    description = 'This case is closed and no further actions are available.';
+  } else if (caseData.status === 'COMPLETED') {
+    title = 'Case complete';
+    description = 'All case workflow stages are complete.';
+  } else if (caseData.status === 'ON_HOLD') {
+    activeStage = consentGiven ? 2 : 1;
+    title = 'Case on hold';
+    description = 'Resume the case when your team is ready to continue.';
+    action = 'resume';
+    actionLabel = 'Resume case';
+  } else if (caseData.status === 'DRAFT') {
+    activeStage = 0;
+    title = 'Candidate details need review';
+    description = 'Review the candidate record and case setup before moving forward.';
+    action = 'candidate';
+    actionLabel = 'Review candidate';
+  } else if (!candidateDetailsComplete) {
+    activeStage = 0;
+    title = 'Candidate details need attention';
+    description = 'Complete the candidate profile before requesting consent or starting verification.';
+    action = 'candidate';
+    actionLabel = 'Complete candidate details';
+  } else if (!consentGiven) {
+    activeStage = 1;
+    title = caseData.status === 'CONSENT_PENDING' ? 'Waiting for candidate consent' : 'Candidate consent needed';
+    description = caseData.status === 'CONSENT_PENDING' ? 'The candidate has not submitted consent yet.' : 'Open the candidate record to activate or share their portal.';
+    action = 'consent';
+    actionLabel = 'Open candidate';
+  } else if (!checks.length) {
+    activeStage = 2;
+    title = 'Verification checks needed';
+    description = 'Add at least one check before verification can begin.';
+    action = 'checks';
+    actionLabel = 'Add checks';
+  } else if (!checksComplete) {
+    activeStage = 2;
+    title = failedCount ? `${failedCount} verification check${failedCount === 1 ? '' : 's'} need attention` : 'Verification in progress';
+    description = failedCount ? 'Open a failed check to review its result and decide what to do next.' : `${unresolvedChecks.length} check${unresolvedChecks.length === 1 ? '' : 's'} still need a result.`;
+    action = 'checks';
+    actionLabel = failedCount ? 'Review failed checks' : 'Open pending check';
+  } else if (caseData.status === 'UNDER_REVIEW') {
+    activeStage = 3;
+    title = 'Ready to complete review';
+    description = 'All checks have results. Complete the case when the review is finished.';
+    action = 'complete';
+    actionLabel = 'Complete case';
+  } else {
+    activeStage = 3;
+    title = 'Checks ready for review';
+    description = 'All checks have results and are ready for a reviewer.';
+    action = 'review';
+    actionLabel = 'Move to review';
+  }
+
+  const finalized = caseData.status === 'COMPLETED';
+  const complete = [(caseData.status !== 'DRAFT' && candidateDetailsComplete) || finalized, consentGiven || finalized, checksComplete || finalized, finalized, finalized];
+  if (caseData.status === 'COMPLETED') complete[3] = true;
+  return {
+    title,
+    description,
+    action,
+    actionLabel,
+    activeStage,
+    latestEvent: caseData.events?.[0],
+    stages: workflowStages.map((label, index) => ({ label, complete: complete[index], active: index === activeStage && caseData.status !== 'COMPLETED' })),
+  };
+}
 
 export default function BGVCaseWorkspacePage() {
   const { id } = useParams<{ id: string }>();
@@ -48,6 +133,7 @@ export default function BGVCaseWorkspacePage() {
   const { accessToken } = useAuth();
   const [caseData, setCaseData] = useState<BGVCase | null>(null);
   const [checks, setChecks] = useState<VerificationCheck[]>([]);
+  const [verifiers, setVerifiers] = useState<CompanyVerifier[]>([]);
   const [tab, setTab] = useState<TabKey>('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,8 +148,8 @@ export default function BGVCaseWorkspacePage() {
     if (!id) return;
     setLoading(true); setError(null);
     try {
-      const [loadedCase, loadedChecks] = await Promise.all([getBGVCase(id, accessToken), listVerifications(id, accessToken)]);
-      setCaseData(loadedCase); setChecks(loadedChecks); setStatusDraft(loadedCase.status);
+      const [loadedCase, loadedChecks, loadedVerifiers] = await Promise.all([getBGVCase(id, accessToken), listVerifications(id, accessToken), listCompanyVerifiers(accessToken)]);
+      setCaseData(loadedCase); setChecks(loadedChecks); setVerifiers(loadedVerifiers); setStatusDraft(loadedCase.status);
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Failed to load case.'); }
     finally { setLoading(false); }
   }, [id, accessToken]);
@@ -77,15 +163,33 @@ export default function BGVCaseWorkspacePage() {
   const visibleTabs = tabs.filter((item) => item.key === 'overview' || checks.some((check) => check.type === item.key));
   const activeTab = visibleTabs.some((item) => item.key === tab) ? tab : 'overview';
   const selectedCheck = activeTab === 'overview' ? undefined : checks.find((check) => check.type === activeTab);
+  const workflow = getCaseWorkflow(caseData, checks);
   const downloadReport = async () => { setReporting(true); try { const blob = await downloadBGVReport(caseData.id, accessToken); const candidateName = `${caseData.candidate?.firstName || ''}_${caseData.candidate?.lastName || ''}`.replace(/^_+|_+$/g, '').replace(/\s+/g, '_') || 'Candidate'; const fileName = `${caseData.caseNumber}_${candidateName}_BGV_FinalReport.pdf`; const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = fileName; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); } catch (err) { setError(err instanceof ApiError ? err.message : 'Could not generate report.'); } finally { setReporting(false); } };
   const viewReport = async () => { const reportWindow = window.open('', '_blank'); if (!reportWindow) { setError('Allow pop-ups to view the report.'); return; } setReporting(true); setError(null); try { const blob = await downloadBGVReport(caseData.id, accessToken); const url = URL.createObjectURL(blob); reportWindow.location.href = url; setTimeout(() => URL.revokeObjectURL(url), 60000); } catch (err) { reportWindow.close(); setError(err instanceof ApiError ? err.message : 'Could not open report.'); } finally { setReporting(false); } };
   const addToReport = () => router.push(`/company/reports?case=${encodeURIComponent(caseData.caseNumber)}`);
-  const saveStatus = async () => {
-    if (statusDraft === caseData.status) return;
+  const saveStatus = async (nextStatus = statusDraft) => {
+    if (nextStatus === caseData.status) return;
     setSavingStatus(true); setError(null);
-    try { setCaseData(await transitionBGVCase(caseData.id, statusDraft, caseData.remarks ?? undefined, accessToken)); }
+    try { const updated = await transitionBGVCase(caseData.id, nextStatus, caseData.remarks ?? undefined, accessToken); setCaseData(updated); setStatusDraft(updated.status); }
     catch (err) { setStatusDraft(caseData.status); setError(err instanceof ApiError ? err.message : 'Could not update case status.'); }
     finally { setSavingStatus(false); }
+  };
+  const handleWorkflowAction = async () => {
+    if (workflow.action === 'candidate' || workflow.action === 'consent') {
+      router.push(`/company/candidate/${caseData.candidateId}`);
+    } else if (workflow.action === 'checks') {
+      const pending = checks.find((check) => check.status !== 'COMPLETED' && check.status !== 'CANCELLED');
+      if (pending) setTab(pending.type);
+      else openChecksEditor();
+    } else if (workflow.action === 'review') {
+      await saveStatus('UNDER_REVIEW');
+      const firstCheck = checks[0];
+      if (firstCheck) setTab(firstCheck.type);
+    } else if (workflow.action === 'complete') {
+      await saveStatus('COMPLETED');
+    } else if (workflow.action === 'resume') {
+      await saveStatus('IN_PROGRESS');
+    }
   };
   const saveCheck = (updated: VerificationCheck) => setChecks((current) => current.map((check) => check.id === updated.id ? updated : check));
   const openChecksEditor = () => { if (caseData.status === 'COMPLETED') return; setOriginalChecks(checks); setEditingChecks(true); };
@@ -106,17 +210,51 @@ export default function BGVCaseWorkspacePage() {
   return <div className="mx-auto max-w-5xl space-y-6">
     <button onClick={() => router.push('/company/bgv-cases')} className="inline-flex items-center gap-1.5 text-[13px] text-[var(--muted)]"><ArrowLeft size={14} /> Back to cases</button>
     <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><div><p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#3FDCC0]">{caseData.caseNumber}</p><h1 className="text-[20px] font-semibold">{caseData.candidate?.firstName} {caseData.candidate?.lastName}</h1><p className="text-[12.5px] text-[var(--muted)]">{caseData.client?.name}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => editingChecks ? cancelChecksEditor() : openChecksEditor()} disabled={caseData.status === 'COMPLETED'} title={caseData.status === 'COMPLETED' ? 'Change status before editing checks' : 'Edit required checks'} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3.5 py-2.5 text-[12.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"><ListChecks size={14} />{editingChecks ? 'Close checks' : 'Edit checks'}</button><button onClick={addToReport} disabled={caseData.status !== 'COMPLETED'} title={caseData.status === 'COMPLETED' ? 'Add this case to reports' : 'Only completed cases can be added to reports'} className="inline-flex items-center gap-1.5 rounded-lg border border-[#3FDCC0]/50 bg-[#3FDCC0]/10 px-3.5 py-2.5 text-[12.5px] font-semibold text-[#147A68] transition-colors hover:bg-[#3FDCC0]/20 disabled:cursor-not-allowed disabled:opacity-45"><FilePlus2 size={14} />Add to report</button><button onClick={viewReport} disabled={reporting} title="View report" className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3.5 py-2.5 text-[12.5px] font-semibold disabled:opacity-50"><Eye size={14} />View report</button><button onClick={downloadReport} disabled={reporting} title="Download report" className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3.5 py-2.5 text-[12.5px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><FileDown size={14} />{reporting ? 'Generating...' : 'Generate report'}</button></div></header>
-    <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">Candidate status</p><p className="mt-1 text-[12px] text-[var(--muted)]">Update the case workflow status at any time.</p></div><div className="flex items-center gap-2"><select value={statusDraft} onChange={(event) => setStatusDraft(event.target.value as BGVCaseStatus)} className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-[12.5px] font-semibold">{['DRAFT', 'INITIATED', 'CONSENT_PENDING', 'IN_PROGRESS', 'UNDER_REVIEW', 'COMPLETED', 'ON_HOLD', 'CANCELLED'].map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select><button type="button" onClick={saveStatus} disabled={savingStatus || statusDraft === caseData.status} className="rounded-lg bg-[var(--primary)] px-3.5 py-2 text-[12.5px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50">{savingStatus ? 'Updating...' : 'Update status'}</button></div></section>
+    <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">Candidate status</p><p className="mt-1 text-[12px] text-[var(--muted)]">Update the case workflow status at any time.</p></div><div className="flex items-center gap-2"><select value={statusDraft} onChange={(event) => setStatusDraft(event.target.value as BGVCaseStatus)} className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-[12.5px] font-semibold">{['DRAFT', 'INITIATED', 'CONSENT_PENDING', 'IN_PROGRESS', 'UNDER_REVIEW', 'COMPLETED', 'ON_HOLD', 'CANCELLED'].map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select><button type="button" onClick={() => void saveStatus()} disabled={savingStatus || statusDraft === caseData.status} className="rounded-lg bg-[var(--primary)] px-3.5 py-2 text-[12.5px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50">{savingStatus ? 'Updating...' : 'Update status'}</button></div></section>
+    <CaseProgressPanel workflow={workflow} onAction={() => void handleWorkflowAction()} />
     {caseData.status === 'COMPLETED' && <div className="rounded-lg border border-[#F2AE55]/40 bg-[#F2AE55]/10 px-4 py-3 text-[12.5px] text-[#8A5A12]">This case is completed, so verification details are view-only. Change the status to INITIATED or another editable status before updating checks.</div>}
     <nav className="flex gap-1 overflow-x-auto border-b border-[var(--border)]">{visibleTabs.map((item) => <button key={item.key} onClick={() => setTab(item.key)} className={`whitespace-nowrap border-b-2 px-4 py-2.5 text-[13px] font-medium ${activeTab === item.key ? 'border-[var(--primary)] text-[var(--foreground)]' : 'border-transparent text-[var(--muted)]'}`}>{item.label}</button>)}</nav>
     {editingChecks && <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><div className="mb-4"><h2 className="text-[15px] font-semibold">Required verification checks</h2><p className="mt-1 text-[12px] text-[var(--muted)]">Choose which checks belong to this case. Checks with saved work cannot be removed.</p></div><div className="grid gap-2 sm:grid-cols-5">{editableCheckTypes.map((item) => { const selected = checks.some((check) => check.type === item.type); const locked = checks.some((check) => check.type === item.type && (check.status !== 'PENDING' || check.resultData || check.remarks || check.documents?.length)); return <label key={item.type} className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-[12px] ${selected ? 'border-[#3FDCC0]/60 bg-[#3FDCC0]/10 text-[#3FDCC0]' : 'border-[var(--border)] text-[var(--muted)]'} ${locked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}><input type="checkbox" checked={selected} disabled={locked} onChange={() => toggleRequiredCheck(item.type)} className="accent-[#0E8C78]" />{item.label}{locked && <Lock size={12} />}</label>; })}</div><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={cancelChecksEditor} disabled={savingChecks} className="rounded-lg px-3.5 py-2.5 text-[12.5px] text-[var(--muted)]">Cancel</button><button type="button" onClick={saveRequiredChecks} disabled={savingChecks} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[12.5px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50">{savingChecks ? 'Saving...' : 'Save checks'}</button></div></section>}
-    {activeTab === 'overview' ? <CaseOverview caseData={caseData} token={accessToken} onSaved={setCaseData} readOnly={caseData.status === 'COMPLETED'} /> : selectedCheck ? <VerificationEditor key={selectedCheck.id} check={selectedCheck} candidateId={caseData.candidateId} token={accessToken} onSaved={saveCheck} readOnly={caseData.status === 'COMPLETED'} /> : <p className="text-[13px] text-[var(--muted)]">This verification is not included in this case.</p>}
+    {activeTab === 'overview' ? <CaseOverview caseData={caseData} token={accessToken} onSaved={setCaseData} readOnly={caseData.status === 'COMPLETED'} /> : selectedCheck ? <VerificationEditor key={selectedCheck.id} check={selectedCheck} candidateId={caseData.candidateId} token={accessToken} onSaved={saveCheck} verifiers={verifiers} readOnly={caseData.status === 'COMPLETED'} /> : <p className="text-[13px] text-[var(--muted)]">This verification is not included in this case.</p>}
   </div>;
 }
 
-const verifierOptions = ['Achal Turkar', 'Niraj Chaudhary', 'Prasanna Yadav', 'Suhas Birewar', 'Ruchita Narange', 'Neha Thakre', 'Prof. Pawar', 'Adv. Rishabh Vakharia', 'Nandini Deulkar'];
+function CaseProgressPanel({ workflow, onAction }: { workflow: ReturnType<typeof getCaseWorkflow>; onAction: () => void }) {
+  const [expanded, setExpanded] = useState(true);
+  return <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-4 sm:px-5">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--primary)]">Next action</p><h2 className="mt-1 text-[14px] font-semibold">{workflow.title}</h2><p className="mt-1 text-[12px] text-[var(--muted)]">{workflow.description}</p></div>
+      <div className="flex shrink-0 items-center gap-2">
+        {workflow.activeStage >= 0 && workflow.action !== 'none' && <span className="rounded-full bg-[var(--primary)]/10 px-2.5 py-1 text-[10px] font-semibold text-[var(--primary)]">Waiting on {workflow.stages[workflow.activeStage]?.label.toLowerCase()}</span>}
+        <button
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          aria-expanded={expanded}
+          aria-controls="case-progress-details"
+          aria-label={expanded ? 'Collapse case progress' : 'Expand case progress'}
+          title={expanded ? 'Collapse case progress' : 'Expand case progress'}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
+        >
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+      </div>
+    </div>
+    {expanded && <div id="case-progress-details">
+      <ol aria-label="Case progress" className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {workflow.stages.map((stage, index) => <li key={stage.label} aria-current={stage.active ? 'step' : undefined} className={`flex min-w-0 items-center gap-2 rounded-md px-2 py-2 ${stage.active ? 'bg-[var(--primary)]/[0.07]' : ''}`}>
+          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold ${stage.complete ? 'border-emerald-600 bg-emerald-600 text-white' : stage.active ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-[var(--border)] text-[var(--muted)]'}`}>{stage.complete ? <Check size={12} /> : index + 1}</span>
+          <span className={`truncate text-[10.5px] font-medium ${stage.active ? 'text-[var(--foreground)]' : 'text-[var(--muted)]'}`}>{stage.label}</span>
+        </li>)}
+      </ol>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-3">
+        {workflow.latestEvent ? <p className="text-[10.5px] text-[var(--muted)]">Latest update: {workflow.latestEvent.message || workflow.latestEvent.eventType} · {new Date(workflow.latestEvent.createdAt).toLocaleString()}</p> : <span />}
+        {workflow.action !== 'none' && <button type="button" onClick={onAction} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[11.5px] font-semibold text-[var(--primary)] hover:bg-[var(--primary)]/10">{workflow.actionLabel}<ChevronRight size={14} /></button>}
+      </div>
+    </div>}
+  </section>;
+}
 
-function Field({ label, value, onChange, disabled = false, type = 'text' }: { label: string; value: string; onChange?: (value: string) => void; disabled?: boolean; type?: string }) { const [manual, setManual] = useState(Boolean(value && !verifierOptions.includes(value))); return <label><span className="mb-1.5 block text-[12.5px] font-medium">{label}</span>{label === 'Verified by' ? <><select value={manual ? '__manual__' : value} disabled={disabled} onChange={(event) => { const selected = event.target.value; setManual(selected === '__manual__'); onChange?.(selected === '__manual__' ? '' : selected); }} className={inputClass}><option value="">Select verifier</option>{verifierOptions.map((name) => <option key={name} value={name}>{name}</option>)}<option value="__manual__">Other / enter manually</option></select>{manual && <input type="text" value={value} placeholder="Enter verifier name" disabled={disabled} onChange={(event) => onChange?.(event.target.value)} className={`${inputClass} mt-2`} />}</> : <input type={type} value={value} disabled={disabled} onChange={(event) => onChange?.(event.target.value)} className={inputClass} />}</label>; }
+function Field({ label, value, onChange, disabled = false, type = 'text', verifiers = [] }: { label: string; value: string; onChange?: (value: string) => void; disabled?: boolean; type?: string; verifiers?: CompanyVerifier[] }) { const [manual, setManual] = useState(Boolean(value && !verifiers.some((verifier) => verifier.name === value))); return <label><span className="mb-1.5 block text-[12.5px] font-medium">{label}</span>{label === 'Verified by' ? <><select value={manual ? '__manual__' : value} disabled={disabled} onChange={(event) => { const selected = event.target.value; setManual(selected === '__manual__'); onChange?.(selected === '__manual__' ? '' : selected); }} className={inputClass}><option value="">Select verifier</option>{verifiers.map((verifier) => <option key={verifier.id} value={verifier.name}>{verifier.name}</option>)}<option value="__manual__">Other / enter manually</option></select>{manual && <input type="text" value={value} placeholder="Enter verifier name" disabled={disabled} onChange={(event) => onChange?.(event.target.value)} className={`${inputClass} mt-2`} />}</> : <input type={type} value={value} disabled={disabled} onChange={(event) => onChange?.(event.target.value)} className={inputClass} />}</label>; }
 function TextArea({ label, value, onChange, disabled = false, rows = 3 }: { label: string; value: string; onChange?: (value: string) => void; disabled?: boolean; rows?: number }) { return <label className="block"><span className="mb-1.5 block text-[12.5px] font-medium">{label}</span><textarea value={value} disabled={disabled} rows={rows} onChange={(event) => onChange?.(event.target.value)} className={inputClass} /></label>; }
 
 function CaseOverview({ caseData, token, onSaved, readOnly = false }: { caseData: BGVCase; token: string | null; onSaved: (value: BGVCase) => void; readOnly?: boolean }) {
@@ -150,7 +288,7 @@ const defaultRemarks: Record<VerificationType, string> = {
 
 const initialData = (check: VerificationCheck) => { const value = check.resultData && typeof check.resultData === 'object' ? check.resultData as Record<string, unknown> : {}; return { ...value, verifierName: String(value.verifierName || value.verifiedBy || ''), remarks: String(value.remarks || check.remarks || defaultRemarks[check.type]), outcome: String(value.outcome || value.status || (check.result === 'VERIFIED' ? 'CLEAR' : '')) }; };
 
-function VerificationEditor({ check, candidateId, token, onSaved, readOnly = false }: { check: VerificationCheck; candidateId: string; token: string | null; onSaved: (value: VerificationCheck) => void; readOnly?: boolean }) {
+function VerificationEditor({ check, candidateId, token, onSaved, verifiers, readOnly = false }: { check: VerificationCheck; candidateId: string; token: string | null; onSaved: (value: VerificationCheck) => void; verifiers: CompanyVerifier[]; readOnly?: boolean }) {
   const initialFormData = initialData(check);
   const [data, setData] = useState<Record<string, unknown>>(initialFormData); const [savedData, setSavedData] = useState<Record<string, unknown>>(initialFormData); const [status, setStatus] = useState(check.status); const [savedStatus, setSavedStatus] = useState(check.status); const [saving, setSaving] = useState(false); const [locking, setLocking] = useState(false); const [error, setError] = useState<string | null>(null);
   const set = (key: string, value: string) => setData((current) => ({ ...current, [key]: value }));
@@ -159,7 +297,7 @@ function VerificationEditor({ check, candidateId, token, onSaved, readOnly = fal
   const save = async () => { setSaving(true); setError(null); try { const outcome = text('outcome'); const updated = await updateVerificationResult(check.id, { status, result: outcome === 'CLEAR' ? 'VERIFIED' : outcome === 'UNABLE_TO_VERIFY' ? 'UNABLE_TO_VERIFY' : outcome === 'MAJOR_DISCREPANCY' ? 'REQUIRES_REVIEW' : outcome === 'MINOR_DISCREPANCY' ? 'REQUIRES_REVIEW' : undefined, resultData: data, remarks: text('remarks') }, token); setSavedData(data); setSavedStatus(status); onSaved(updated); } catch (err) { setError(err instanceof ApiError ? err.message : 'Could not save verification.'); } finally { setSaving(false); } };
   const toggleLock = async () => { if (readOnly) return; setLocking(true); try { onSaved(await lockVerification(check.id, !check.isLocked, token)); } catch (err) { setError(err instanceof ApiError ? err.message : 'Could not update lock.'); } finally { setLocking(false); } };
   const locked = readOnly || !!check.isLocked;
-  const common = <><Field label="Verified by" value={text('verifierName')} onChange={(value) => set('verifierName', value)} disabled={locked} /><label><span className="mb-1.5 block text-[12.5px] font-medium">Mode of verification</span><select value={text('modeOfVerification')} disabled={locked} onChange={(event) => set('modeOfVerification', event.target.value)} className={inputClass}><option value="">Select mode</option>{verificationModes.map((value) => <option key={value} value={value}>{value}</option>)}</select></label><label><span className="mb-1.5 block text-[12.5px] font-medium">Processing status</span><select value={status} disabled={locked} onChange={(event) => setStatus(event.target.value as VerificationStatus)} className={inputClass}>{statuses.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select></label><label><span className="mb-1.5 block text-[12.5px] font-medium">Verification status</span><select value={text('outcome')} disabled={locked} onChange={(event) => set('outcome', event.target.value)} className={inputClass}><option value="">Select status</option>{outcomes.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select></label></>;
+  const common = <><Field label="Verified by" value={text('verifierName')} onChange={(value) => set('verifierName', value)} disabled={locked} verifiers={verifiers} /><label><span className="mb-1.5 block text-[12.5px] font-medium">Mode of verification</span><select value={text('modeOfVerification')} disabled={locked} onChange={(event) => set('modeOfVerification', event.target.value)} className={inputClass}><option value="">Select mode</option>{verificationModes.map((value) => <option key={value} value={value}>{value}</option>)}</select></label><label><span className="mb-1.5 block text-[12.5px] font-medium">Processing status</span><select value={status} disabled={locked} onChange={(event) => setStatus(event.target.value as VerificationStatus)} className={inputClass}>{statuses.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select></label><label><span className="mb-1.5 block text-[12.5px] font-medium">Verification status</span><select value={text('outcome')} disabled={locked} onChange={(event) => set('outcome', event.target.value)} className={inputClass}><option value="">Select status</option>{outcomes.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select></label></>;
   return <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><div className="mb-4 flex items-center justify-between"><h2 className="text-[15px] font-semibold">{check.type.replaceAll('_', ' ')} verification</h2><span className="text-[12px] text-[var(--muted)]">{readOnly ? 'View only' : locked ? 'Locked' : 'Editable'}</span></div>{hasUnsavedChanges && !readOnly && <p className="mb-3 rounded-md border border-[#FF6B6B]/30 bg-[#FF6B6B]/10 px-3 py-2 text-[12.5px] font-medium text-[#FF6B6B]">Unsaved changes</p>}{error && <p className="mb-3 text-[13px] text-[#FF6B6B]">{error}</p>}<div className="grid gap-4 sm:grid-cols-2">{common}{check.type === 'IDENTITY' && <Field label="Aadhaar card number" value={text('aadhaarNumber')} onChange={(value) => set('aadhaarNumber', value)} disabled={locked} />}{(check.type === 'ADDRESS' || check.type === 'ADDRESS_PHYSICAL') && <><TextArea label={check.type === 'ADDRESS_PHYSICAL' ? 'Physical address visited' : 'Current address'} value={text('currentAddress')} onChange={(value) => set('currentAddress', value)} disabled={locked} /><TextArea label={check.type === 'ADDRESS_PHYSICAL' ? 'Visit findings' : 'Permanent address (PAN card)'} value={text('permanentAddress')} onChange={(value) => set('permanentAddress', value)} disabled={locked} /></>}{check.type === 'UAN' && <Field label="UAN number" value={text('uanNumber') || text('uan')} onChange={(value) => set('uanNumber', value)} disabled={locked} />}{check.type === 'COURT' && <><Field label="Civil proceedings" value={text('civilProceedings')} onChange={(value) => set('civilProceedings', value)} disabled={locked} /><Field label="Criminal proceedings" value={text('criminalProceedings')} onChange={(value) => set('criminalProceedings', value)} disabled={locked} /></>}{check.type === 'EMPLOYMENT' && <RepeatableEntries data={data} setData={setData} disabled={locked} kind="Employment" />}{check.type === 'EDUCATION' && <RepeatableEntries data={data} setData={setData} disabled={locked} kind="Education" />}{['GAP', 'REFERENCE', 'CV', 'SOCIAL_MEDIA', 'CIBIL', 'TWENTY_SIX_AS', 'POLICE', 'POLICE_RECORD'].includes(check.type) && <DynamicCheckFields type={check.type} data={data} set={set} disabled={locked} />}<div className="sm:col-span-2"><TextArea label="Remarks" value={text('remarks')} onChange={(value) => set('remarks', value)} disabled={locked} /></div></div><FileUploadField check={check} candidateId={candidateId} token={token} onSaved={onSaved} readOnly={readOnly} /><div className="mt-4 flex gap-2"><button onClick={toggleLock} disabled={locking || readOnly} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3.5 py-2.5 text-[12.5px] font-semibold disabled:opacity-50">{locked ? <Unlock size={14} /> : <Lock size={14} />}{locked ? 'Unlock section' : 'Lock section'}</button><button onClick={save} disabled={saving || locked} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[13px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Save size={14} />{saving ? 'Saving...' : 'Save verification'}</button></div></section>;
 }
 

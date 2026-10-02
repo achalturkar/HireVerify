@@ -15,6 +15,7 @@ export interface InvoiceProfile {
   gstNumber: string;
   panNumber: string;
   city: string;
+  country: string;
   state: string;
   postalCode: string;
   bankAccountName: string;

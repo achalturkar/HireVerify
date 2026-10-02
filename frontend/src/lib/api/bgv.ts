@@ -7,6 +7,8 @@ export const resolveFileUrl = (fileUrl: string) => /^(https?:|blob:|data:)/i.tes
 
 export class ApiError extends Error { status: number; constructor(message: string, status: number) { super(message); this.status = status; } }
 
+export interface CompanyVerifier { id: string; companyId: string; name: string; isActive: boolean; }
+
 async function request<T>(path: string, token: string | null | undefined, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers ?? {}) } });
   const body = await response.json().catch(() => null);
@@ -33,6 +35,9 @@ export async function deleteBGVCase(id: string, token: string | null): Promise<v
 export async function transitionBGVCase(id: string, status: BGVCaseStatus, remarks: string | undefined, token: string | null): Promise<BGVCase> { const data = await request<{ data: BGVCase }>(`/bgv/cases/${id}/status`, token, { method: 'PATCH', body: JSON.stringify({ status, remarks }) }); return data.data; }
 
 export async function listVerifications(caseId: string | undefined, token: string | null, type?: VerificationType, status?: VerificationStatus): Promise<VerificationCheck[]> { const data = await request<{ data: VerificationCheck[] }>(`/bgv/verifications${query({ caseId, type, status })}`, token); return data.data; }
+export async function listCompanyVerifiers(token: string | null, includeInactive = false): Promise<CompanyVerifier[]> { const response = await request<{ data: CompanyVerifier[] }>(`/bgv/verifiers${query({ includeInactive: includeInactive ? 'true' : undefined })}`, token); return response.data; }
+export async function createCompanyVerifier(name: string, token: string | null): Promise<CompanyVerifier> { const response = await request<{ data: CompanyVerifier }>('/bgv/verifiers', token, { method: 'POST', body: JSON.stringify({ name }) }); return response.data; }
+export async function updateCompanyVerifier(id: string, payload: { name?: string; isActive?: boolean }, token: string | null): Promise<CompanyVerifier> { const response = await request<{ data: CompanyVerifier }>(`/bgv/verifiers/${id}`, token, { method: 'PATCH', body: JSON.stringify(payload) }); return response.data; }
 export async function retryVerification(id: string, token: string | null): Promise<VerificationCheck> { const data = await request<{ data: VerificationCheck }>(`/bgv/verifications/${id}/retry`, token, { method: 'POST' }); return data.data; }
 export async function createVerification(payload: { caseId: string; type: VerificationType; provider?: VerificationProvider; priority?: number; inputData?: Record<string, unknown> }, token: string | null): Promise<VerificationCheck> { const data = await request<{ data: VerificationCheck }>('/bgv/verifications', token, { method: 'POST', body: JSON.stringify(payload) }); return data.data; }
 export async function updateVerificationResult(id: string, payload: { status: VerificationStatus; result?: VerificationResult; resultData?: Record<string, unknown>; remarks?: string }, token: string | null): Promise<VerificationCheck> { const data = await request<{ data: VerificationCheck }>(`/bgv/verifications/${id}`, token, { method: 'PATCH', body: JSON.stringify(payload) }); return data.data; }

@@ -6,6 +6,7 @@ import { Building2, Camera, Mail, MapPin, Phone, Save, X, Loader2, PenTool, Stam
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getCompany, updateCompany } from '@/src/lib/api/companies';
 import { resolveLogoUrl } from '@/src/lib/logo';
+import GeoSelect from '@/src/components/common/GeoSelect';
 
 const MAX_IMAGE_SIZE_BYTES = 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];
@@ -335,6 +336,7 @@ export default function CompanyProfilePage() {
     gstNumber: '',
     panNumber: '',
     city: '',
+    country: '',
     state: '',
     postalCode: '',
     bankAccountName: '',
@@ -381,6 +383,7 @@ export default function CompanyProfilePage() {
           gstNumber: data.gstNumber ?? '',
           panNumber: data.panNumber ?? '',
           city: data.city ?? '',
+          country: data.country ?? '',
           state: data.state ?? '',
           postalCode: data.postalCode ?? '',
           bankAccountName: data.bankAccountName ?? '',
@@ -475,7 +478,7 @@ export default function CompanyProfilePage() {
       if (form.contactPhone.trim()) payload.append('contactPhone', form.contactPhone.trim());
       if (form.address.trim()) payload.append('address', form.address.trim());
       payload.append('primaryColor', form.primaryColor.trim().toUpperCase());
-      ['gstNumber', 'panNumber', 'city', 'state', 'postalCode'].forEach((key) => {
+      ['gstNumber', 'panNumber', 'city', 'country', 'state', 'postalCode'].forEach((key) => {
         payload.append(key, form[key as keyof typeof form].trim());
       });
       ['bankAccountName', 'bankName', 'bankAccountNumber', 'bankIfscCode', 'bankSwiftCode', 'bankBranch', 'upiId'].forEach((key) => {
@@ -511,6 +514,7 @@ export default function CompanyProfilePage() {
         gstNumber: updated.gstNumber ?? '',
         panNumber: updated.panNumber ?? '',
         city: updated.city ?? '',
+        country: updated.country ?? '',
         state: updated.state ?? '',
         postalCode: updated.postalCode ?? '',
         bankAccountName: updated.bankAccountName ?? '',
@@ -625,7 +629,7 @@ export default function CompanyProfilePage() {
         <SectionCard eyebrow="Location & tax" title="Registered details" t={t}>
           <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
             <div className="sm:col-span-2"><dt className="text-[11px]" style={{ color: t.textMuted }}>Street address</dt><dd className="mt-1 whitespace-pre-wrap text-[13px]" style={{ color: t.textPrimary }}>{form.address || 'Not set'}</dd></div>
-            {[['City', form.city], ['State', form.state], ['Postal code', form.postalCode], ['GSTIN', form.gstNumber], ['PAN', form.panNumber]].map(([label, value]) => <div key={label}><dt className="text-[11px]" style={{ color: t.textMuted }}>{label}</dt><dd className="mt-1 break-words text-[13px]" style={{ color: t.textPrimary }}>{value || 'Not set'}</dd></div>)}
+            {[['City', form.city], ['Country', form.country], ['State', form.state], ['Postal code', form.postalCode], ['GSTIN', form.gstNumber], ['PAN', form.panNumber]].map(([label, value]) => <div key={label}><dt className="text-[11px]" style={{ color: t.textMuted }}>{label}</dt><dd className="mt-1 break-words text-[13px]" style={{ color: t.textPrimary }}>{value || 'Not set'}</dd></div>)}
           </dl>
         </SectionCard>
       </div>}
@@ -793,7 +797,8 @@ export default function CompanyProfilePage() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2"><FieldLabel t={t}>Street address</FieldLabel><div className="relative"><MapPin size={14} className="pointer-events-none absolute left-3 top-3" style={{ color: t.textFaint }} /><textarea value={form.address} onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))} rows={3} className={`${inputClasses} pl-9`} disabled={loading} placeholder="Street address" /></div></div>
             <div><FieldLabel t={t}>City</FieldLabel><input value={form.city} onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))} className={inputClasses} disabled={loading} maxLength={120} /></div>
-            <div><FieldLabel t={t}>State</FieldLabel><input value={form.state} onChange={(event) => setForm((current) => ({ ...current, state: event.target.value }))} className={inputClasses} disabled={loading} maxLength={120} /></div>
+            <div><FieldLabel t={t}>Country</FieldLabel><GeoSelect kind="country" value={form.country} onChange={(value) => setForm((current) => ({ ...current, country: value, state: current.country === value ? current.state : '' }))} className={inputClasses} disabled={loading} /></div>
+            <div><FieldLabel t={t}>State</FieldLabel><GeoSelect kind="state" value={form.state} countryName={form.country} placeholder={form.country ? 'Select state' : 'Select a country first'} onChange={(value) => setForm((current) => ({ ...current, state: value }))} className={inputClasses} disabled={loading || !form.country} /></div>
             <div><FieldLabel t={t}>Postal code</FieldLabel><input value={form.postalCode} onChange={(event) => setForm((current) => ({ ...current, postalCode: event.target.value }))} className={inputClasses} disabled={loading} maxLength={20} /></div>
             <div><FieldLabel t={t}>GSTIN</FieldLabel><input value={form.gstNumber} onChange={(event) => setForm((current) => ({ ...current, gstNumber: event.target.value.toUpperCase() }))} className={inputClasses} disabled={loading} maxLength={30} /></div>
             <div><FieldLabel t={t}>PAN</FieldLabel><input value={form.panNumber} onChange={(event) => setForm((current) => ({ ...current, panNumber: event.target.value.toUpperCase() }))} className={inputClasses} disabled={loading} maxLength={20} /></div>

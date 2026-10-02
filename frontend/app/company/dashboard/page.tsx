@@ -26,6 +26,7 @@ import {
   Activity,
   ClipboardList,
   CalendarClock,
+  Receipt,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -41,6 +42,8 @@ import {
 } from 'recharts';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getCompanyStats } from '@/src/lib/api/companies';
+import { listBGVCases, listVerifications } from '@/src/lib/api/bgv';
+import { listInvoices } from '@/src/lib/api/invoices';
 
 /* ------------------------------------------------------------------
    Theme tokens
@@ -246,6 +249,14 @@ interface CompanyStats {
   recentActivity?: { id: string; label: string; actor: string; timestamp: string; kind: 'success' | 'info' | 'warning' }[];
 }
 
+interface ActionCounts {
+  awaitingReview: number | null;
+  checksInProgress: number | null;
+  completedReports: number | null;
+  outstandingInvoices: number | null;
+  overdueInvoices: number | null;
+}
+
 const QUICK_LINKS: { label: string; href: string; description: string; icon: LucideIcon; accent: string }[] = [
   { label: 'Clients', href: '/company/clients', description: 'Manage client accounts', icon: Contact, accent: ACCENTS.sky },
   { label: 'Users', href: '/company/users', description: 'Team members & roles', icon: Users, accent: ACCENTS.violet },
@@ -258,6 +269,9 @@ export default function CompanyDashboardPage() {
   const { user, accessToken } = useAuth();
   const [stats, setStats] = useState<CompanyStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [actionCounts, setActionCounts] = useState<ActionCounts | null>(null);
+  const [actionCountsLoading, setActionCountsLoading] = useState(true);
+  const [actionCountsError, setActionCountsError] = useState<string | null>(null);
   const isDark = useIsDarkMode();
   const t = useMemo(() => getTokens(isDark), [isDark]);
   const now = useNow();
@@ -277,6 +291,50 @@ export default function CompanyDashboardPage() {
       }
     };
     load();
+    return () => {
+      mounted = false;
+    };
+  }, [user?.company?.id, accessToken]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadActionCounts = async () => {
+      if (!user?.company?.id || !accessToken) {
+        setActionCountsLoading(false);
+        return;
+      }
+      setActionCountsLoading(true);
+      setActionCountsError(null);
+      try {
+        const [reviewCases, activeChecks, completedCases, sentInvoices, partialInvoices, overdueInvoices] = await Promise.allSettled([
+          listBGVCases({ page: 1, limit: 1, status: 'UNDER_REVIEW' }, accessToken),
+          listVerifications(undefined, accessToken, undefined, 'IN_PROGRESS'),
+          listBGVCases({ page: 1, limit: 1, status: 'COMPLETED' }, accessToken),
+          listInvoices({ page: 1, limit: 1, status: 'SENT' }, accessToken),
+          listInvoices({ page: 1, limit: 1, status: 'PARTIALLY_PAID' }, accessToken),
+          listInvoices({ page: 1, limit: 1, status: 'OVERDUE' }, accessToken),
+        ]);
+        if (mounted) {
+          const failures = [reviewCases, activeChecks, completedCases, sentInvoices, partialInvoices, overdueInvoices]
+            .filter((result) => result.status === 'rejected').length;
+          setActionCounts({
+            awaitingReview: reviewCases.status === 'fulfilled' ? reviewCases.value.meta.total : null,
+            checksInProgress: activeChecks.status === 'fulfilled' ? activeChecks.value.length : null,
+            completedReports: completedCases.status === 'fulfilled' ? completedCases.value.meta.total : null,
+            outstandingInvoices: sentInvoices.status === 'fulfilled' && partialInvoices.status === 'fulfilled'
+              ? sentInvoices.value.meta.total + partialInvoices.value.meta.total
+              : null,
+            overdueInvoices: overdueInvoices.status === 'fulfilled' ? overdueInvoices.value.meta.total : null,
+          });
+          if (failures) setActionCountsError('Some action counts could not be loaded. Check your access or try refreshing the dashboard.');
+        }
+      } catch (error) {
+        if (mounted) setActionCountsError(error instanceof Error ? error.message : 'Could not load dashboard actions.');
+      } finally {
+        if (mounted) setActionCountsLoading(false);
+      }
+    };
+    void loadActionCounts();
     return () => {
       mounted = false;
     };
@@ -435,6 +493,36 @@ export default function CompanyDashboardPage() {
         <StatCard title="Completed Cases" value={stats?.completedCases} icon={CheckCircle2} accent={ACCENTS.amber} loading={loading} t={t} />
         <StatCard title="Reports Generated" value={stats?.reports} icon={FileBarChart} accent={ACCENTS.rose} loading={loading} t={t} />
       </div>
+
+      <section aria-labelledby="action-queue-title" className="space-y-3">
+        <div>
+          <h2 id="action-queue-title" className="text-[16px] font-semibold" style={{ color: t.textPrimary }}>Action queue</h2>
+          <p className="mt-1 text-[12px]" style={{ color: t.textMuted }}>Open an item to continue work that needs attention.</p>
+        </div>
+        {actionCountsError && <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-600">{actionCountsError}</p>}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {[
+            { title: 'Cases awaiting review', value: actionCounts?.awaitingReview, description: 'Cases in review', href: '/company/bgv-cases?status=UNDER_REVIEW', icon: FileCheck2, accent: ACCENTS.amber },
+            { title: 'Checks in progress', value: actionCounts?.checksInProgress, description: 'Active verification checks', href: '/company/verifications', icon: Clock, accent: ACCENTS.sky },
+            { title: 'Completed reports', value: actionCounts?.completedReports, description: 'Open the report queue', href: '/company/reports', icon: FileBarChart, accent: ACCENTS.teal },
+            { title: 'Outstanding invoices', value: actionCounts?.outstandingInvoices, description: 'Sent or partially paid', href: '/company/invoices?tab=invoices', icon: Receipt, accent: ACCENTS.violet },
+            { title: 'Overdue invoices', value: actionCounts?.overdueInvoices, description: 'Past their due date', href: '/company/invoices?status=OVERDUE', icon: CalendarClock, accent: ACCENTS.rose },
+          ].map((item) => (
+            <Link key={item.title} href={item.href} className="group rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-md" style={cardStyle(t)}>
+              <div className="flex items-start justify-between gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg" style={chipStyle(item.accent)}><item.icon size={17} /></span>
+                <ArrowRight size={15} className="mt-1 opacity-50 transition group-hover:translate-x-0.5 group-hover:opacity-100" style={{ color: item.accent }} />
+              </div>
+              <p className="mt-4 text-[12px] font-medium" style={{ color: t.textMuted }}>{item.title}</p>
+              <p className="mt-1 text-[26px] font-semibold tabular-nums" style={{ color: t.textPrimary }}>
+                {actionCountsLoading ? <span className="inline-block h-7 w-10 animate-pulse rounded" style={{ background: t.skeleton }} /> : item.value ?? '—'}
+              </p>
+              <p className="mt-1 text-[10px]" style={{ color: t.textFaint }}>{item.description}</p>
+            </Link>
+          ))}
+        </div>
+        <p className="text-[11px]" style={{ color: t.textFaint }}>Overdue work tasks are not included yet because tasks do not currently have due dates; overdue invoices are tracked separately.</p>
+      </section>
 
       {/* Secondary metrics strip */}
       <div className="rounded-2xl px-5 py-4 flex flex-wrap items-center gap-x-8 gap-y-3" style={cardStyle(t)}>

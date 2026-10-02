@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useMemo, type SVGProps } from 'react';
 import { useAuth } from '../../auth/AuthProvider';
 import { buildAdminMenu } from '@/src/lib/permissions';
-import { FileCheck2, LayoutDashboard, ChevronLeft, Settings, X } from 'lucide-react';
+import { FileCheck2, LayoutDashboard, ChevronLeft, MapPin, Settings, X } from 'lucide-react';
 import BrandMark from '@/src/components/ui/BrandMark';
 
 interface SidebarProps {
@@ -98,6 +98,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
           {!collapsed && <p className="mb-2 px-3 text-[10.5px] font-medium uppercase tracking-[0.12em] text-[var(--muted)]" style={{ fontFamily: 'var(--font-mono)' }}>Operations</p>}
           <div className="space-y-1">
             <SidebarLink href="/super-admin/bgv" label="BGV Operations" icon={FileCheck2} active={pathname.startsWith('/super-admin/bgv')} collapsed={collapsed} onClick={onCloseMobile} />
+            <SidebarLink href="/super-admin/locations" label="Locations" icon={MapPin} active={pathname.startsWith('/super-admin/locations')} collapsed={collapsed} onClick={onCloseMobile} />
             <SidebarLink href="/super-admin/settings" label="Settings" icon={Settings} active={pathname.startsWith('/super-admin/settings')} collapsed={collapsed} onClick={onCloseMobile} />
           </div>
         </div>

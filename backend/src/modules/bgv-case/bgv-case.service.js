@@ -33,7 +33,7 @@ const create = async ({ payload, companyId, currentUser }) => {
   await assertOwnership({ companyId, clientId: payload.clientId, candidateId: payload.candidateId });
   const caseNumber = await nextCaseNumber(companyId);
   const created = await prisma.$transaction(async (tx) => {
-    const item = await tx.bGVCase.create({ data: { companyId, clientId: payload.clientId, candidateId: payload.candidateId, caseNumber, clientReference: payload.clientReference || null, packageName: payload.packageName || null, remarks: payload.remarks || null, createdById: currentUser?.id || null } });
+    const item = await tx.bGVCase.create({ data: { companyId, clientId: payload.clientId, candidateId: payload.candidateId, caseNumber, status: payload.status || 'DRAFT', initiatedAt: payload.status === 'INITIATED' ? new Date() : null, clientReference: payload.clientReference || null, packageName: payload.packageName || null, remarks: payload.remarks || null, createdById: currentUser?.id || null } });
     const checks = payload.checks || [];
     if (checks.length) await tx.verificationCheck.createMany({ data: checks.map((check) => ({ caseId: item.id, type: check.type, provider: check.provider || 'SUREPASS', priority: check.priority || 0 })) });
     await tx.verificationEvent.create({ data: { caseId: item.id, eventType: 'CREATED', message: 'BGV case created' } });

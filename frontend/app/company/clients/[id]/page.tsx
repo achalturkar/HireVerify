@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Globe, Pencil, Users, MapPin, Power, PowerOff,
+  ArrowLeft, ChevronRight, Globe, Mail, Pencil, Phone, Users, MapPin, Power, PowerOff,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getClient, updateClient, activateClient, inactivateClient, ApiError as ClientApiError } from '@/src/lib/api/clients';
@@ -179,17 +179,19 @@ export default function ClientDetailPage() {
         <ArrowLeft size={14} /> Back to clients
       </button>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+      <div className="overflow-hidden rounded-2xl border border-l-4 border-[var(--border)] border-l-[var(--primary)] bg-[var(--surface)]">
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
         <div className="flex items-center gap-4">
           {client.logoUrl ? (
-            <img src={client.logoUrl} alt="" className="w-14 h-14 rounded-full object-cover bg-[var(--surface-muted)]" />
+            <img src={client.logoUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] object-cover" />
           ) : (
-            <div className="w-14 h-14 rounded-full flex items-center justify-center text-[15px] font-semibold bg-[var(--primary)]/15 text-[var(--primary)]">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)]/15 text-[15px] font-semibold text-[var(--primary)]">
               {initials(client.name)}
             </div>
           )}
-          <div>
-            <h1 className="text-[22px] font-semibold text-[var(--foreground)]">{client.name}</h1>
+          <div className="min-w-0">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">Client profile</p>
+            <h1 className="truncate text-[22px] font-semibold text-[var(--foreground)]">{client.name}</h1>
             <p className="text-[12.5px] text-[var(--muted)] font-mono">
               {client.clientCode}{client.industry ? ` · ${client.industry}` : ''}
             </p>
@@ -199,19 +201,26 @@ export default function ClientDetailPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
           {client.website && (
-            <a href={client.website} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--muted)] hover:bg-[var(--surface-muted)]">
+            <a href={client.website} target="_blank" rel="noreferrer" aria-label="Open client website" title="Open website" className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]">
               <Globe size={15} />
             </a>
           )}
-          <button onClick={() => setStatusTarget(client.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')} className="w-8 h-8 rounded-md flex items-center justify-center text-[var(--muted)] hover:bg-[var(--surface-muted)]">
+          <button onClick={() => setStatusTarget(client.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')} aria-label={client.status === 'ACTIVE' ? 'Deactivate client' : 'Activate client'} title={client.status === 'ACTIVE' ? 'Deactivate client' : 'Activate client'} className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-muted)]">
             {client.status === 'ACTIVE' ? <PowerOff size={15} /> : <Power size={15} />}
           </button>
-          <button onClick={() => setEditOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13px] font-semibold px-3.5 py-2 hover:bg-[var(--primary)]/90">
-            <Pencil size={13} /> Edit
+          <button onClick={() => setEditOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3.5 py-2.5 text-[13px] font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90">
+            <Pencil size={13} /> Edit client
           </button>
         </div>
+        </div>
+        <div className="grid gap-3 border-t border-[var(--border)] bg-[var(--surface-muted)]/50 px-5 py-3 sm:grid-cols-2 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2.5 text-[12px]"><Users size={14} className="shrink-0 text-[var(--primary)]" /><span className="shrink-0 text-[var(--muted)]">Contact</span><span className="truncate font-medium">{client.contactName || 'Not provided'}</span></div>
+          <div className="flex min-w-0 items-center gap-2.5 text-[12px]"><Mail size={14} className="shrink-0 text-[var(--primary)]" /><span className="shrink-0 text-[var(--muted)]">Email</span><span className="truncate font-medium">{client.contactEmail || 'Not provided'}</span></div>
+          <div className="flex min-w-0 items-center gap-2.5 text-[12px]"><Phone size={14} className="shrink-0 text-[var(--primary)]" /><span className="shrink-0 text-[var(--muted)]">Phone</span><span className="truncate font-medium">{client.contactPhone || 'Not provided'}</span></div>
+          <div className="flex min-w-0 items-center gap-2.5 text-[12px]"><MapPin size={14} className="shrink-0 text-[var(--primary)]" /><span className="shrink-0 text-[var(--muted)]">Location</span><span className="truncate font-medium">{[client.city, client.state, client.country].filter(Boolean).join(', ') || 'Not provided'}</span></div>
+      </div>
       </div>
 
       <div className="border-b border-[var(--border)] flex items-center gap-1">
@@ -278,45 +287,52 @@ export default function ClientDetailPage() {
 
       {tab === 'candidates' && (
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border)]">
-            <p className="text-[13px] text-[var(--muted)]">Candidates linked to {client.name}</p>
-            <button onClick={() => setCandidateModalOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#3FDCC0] text-[#0B0F26] text-[12.5px] font-semibold px-3 py-2">
-              <Users size={13} /> Add candidate
+          <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">People</p>
+              <h2 className="mt-0.5 text-[15px] font-semibold">Candidate directory</h2>
+              <p className="mt-0.5 text-[12px] text-[var(--muted)]">{candidatesMeta.total} candidates linked to {client.name}</p>
+            </div>
+            <button onClick={() => setCandidateModalOpen(true)} className="inline-flex items-center justify-center gap-1.5 self-start rounded-lg bg-[var(--primary)] px-3.5 py-2.5 text-[12.5px] font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 sm:self-auto">
+              <Users size={14} /> Add candidate
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[13px]">
-              <thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wider text-[var(--muted)]">
+              <thead className="border-b border-[var(--border)] bg-[var(--surface-muted)]/60 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                 <tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Cases</th><th className="px-5 py-3">Status</th></tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {candidatesLoading ? (
-                  <tr><td colSpan={4} className="px-5 py-10 text-center text-[var(--muted)]">Loading candidates…</td></tr>
+                  <tr><td colSpan={4} className="px-5 py-12 text-center text-[var(--muted)]">Loading candidates…</td></tr>
                 ) : candidatesError ? (
-                  <tr><td colSpan={4} className="px-5 py-10 text-center text-[#FF6B6B]">{candidatesError}</td></tr>
+                  <tr><td colSpan={4} className="px-5 py-12 text-center text-[#FF6B6B]">{candidatesError}</td></tr>
                 ) : candidates.length === 0 ? (
-                  <tr><td colSpan={4} className="px-5 py-10 text-center text-[var(--muted)]">No candidates for this client yet.</td></tr>
+                  <tr><td colSpan={4} className="px-5 py-14 text-center"><div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]"><Users size={19} /></div><p className="mt-3 text-[13px] font-medium">No candidates yet</p><p className="mt-1 text-[12px] text-[var(--muted)]">Add a candidate to start a verification case for this client.</p></td></tr>
                 ) : candidates.map((c) => (
-                  <tr key={c.id}>
-                    <td className="px-5 py-3 font-mono text-[12px] text-[var(--muted)]">{c.candidateCode}</td>
-                    <td className="px-5 py-3">
-                      <p className="font-medium text-[var(--foreground)]">{c.firstName} {c.lastName}</p>
-                      <p className="text-[11px] text-[var(--muted)]">{c.email}</p>
+                  <tr key={c.id} role="link" tabIndex={0} aria-label={`Open ${c.firstName} ${c.lastName}`} onClick={() => router.push(`/company/candidate/${c.id}`)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); router.push(`/company/candidate/${c.id}`); } }} className="group cursor-pointer outline-none transition-colors hover:bg-[var(--surface-muted)]/70 focus-visible:bg-[var(--surface-muted)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]">
+                    <td className="whitespace-nowrap px-5 py-3.5 font-mono text-[11px] text-[var(--muted)]">{c.candidateCode}</td>
+                    <td className="min-w-[220px] px-5 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[11px] font-semibold text-[var(--primary)]">{initials(`${c.firstName} ${c.lastName}`)}</span>
+                        <span className="min-w-0"><span className="block truncate font-medium text-[var(--foreground)] group-hover:text-[var(--primary)]">{c.firstName} {c.lastName}</span><span className="block truncate text-[11px] text-[var(--muted)]">{c.email || 'No email provided'}</span></span>
+                      </div>
                     </td>
-                    <td className="px-5 py-3">{c.bgvCaseCount ?? 0}</td>
-                    <td className="px-5 py-3">
-                      <span className="rounded-full px-2.5 py-1 text-[11px] font-medium bg-[var(--surface-muted)] text-[var(--muted)]">{c.status.replaceAll('_', ' ')}</span>
+                    <td className="px-5 py-3.5"><span className="inline-flex min-w-8 justify-center rounded-md bg-[var(--surface-muted)] px-2 py-1 font-mono text-[11px] tabular-nums">{c.bgvCaseCount ?? 0}</span></td>
+                    <td className="whitespace-nowrap px-5 py-3.5">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${c.status === 'COMPLETED' ? 'bg-[#159A7A]/10 text-[#147A68]' : c.status === 'WITHDRAWN' ? 'bg-[#C94C4C]/10 text-[#B53D3D]' : c.status === 'ON_HOLD' || c.status.includes('PENDING') || c.status.includes('PROGRESS') || c.status === 'INVITED' ? 'bg-[#D88A22]/10 text-[#9B6414]' : 'bg-[var(--surface-muted)] text-[var(--muted)]'}`}>{c.status.replaceAll('_', ' ')}</span>
                     </td>
+                    <td className="px-4 py-3.5 text-right"><ChevronRight size={16} className="ml-auto text-[var(--muted)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--primary)]" /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border)] text-[12px] text-[var(--muted)]">
-            <span>{candidatesMeta.total} candidates</span>
+          <div className="flex flex-col gap-3 border-t border-[var(--border)] px-5 py-3 text-[12px] text-[var(--muted)] sm:flex-row sm:items-center sm:justify-between">
+            <span>Showing {candidatesMeta.total === 0 ? 0 : (candidatesPage - 1) * PAGE_SIZE + 1}–{Math.min(candidatesPage * PAGE_SIZE, candidatesMeta.total)} of {candidatesMeta.total}</span>
             <div className="flex gap-2">
-              <button disabled={candidatesPage <= 1} onClick={() => setCandidatesPage((p) => p - 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Previous</button>
-              <button disabled={candidatesPage >= candidatesMeta.totalPages} onClick={() => setCandidatesPage((p) => p + 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Next</button>
+              <button disabled={candidatesPage <= 1} onClick={() => setCandidatesPage((p) => p - 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 transition-colors hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
+              <button disabled={candidatesPage >= candidatesMeta.totalPages} onClick={() => setCandidatesPage((p) => p + 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 transition-colors hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-40">Next</button>
             </div>
           </div>
         </div>

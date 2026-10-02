@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Camera, X } from 'lucide-react';
 import type { Client, ClientFormValues, CompanyRef } from '@/src/types/client';
+import GeoSelect from '@/src/components/common/GeoSelect';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -365,23 +366,27 @@ export default function ClientFormModal({
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>State</label>
-                  <input
+                  <label className={labelClass}>Country</label>
+                  <GeoSelect
+                    kind="country"
                     className={inputClass}
-                    value={values.state}
-                    onChange={set('state')}
+                    value={values.country}
+                    onChange={(value) => setValues((current) => ({ ...current, country: value, state: current.country === value ? current.state : '' }))}
                     disabled={submitting}
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={labelClass}>Country</label>
-                  <input
+                  <label className={labelClass}>State</label>
+                  <GeoSelect
+                    kind="state"
                     className={inputClass}
-                    value={values.country}
-                    onChange={set('country')}
-                    disabled={submitting}
+                    value={values.state}
+                    countryName={values.country}
+                    placeholder={values.country ? 'Select state' : 'Select a country first'}
+                    onChange={(value) => setValues((current) => ({ ...current, state: value }))}
+                    disabled={submitting || !values.country}
                   />
                 </div>
                 <div>

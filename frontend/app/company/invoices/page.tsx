@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Check,
   ChevronLeft,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAuth } from '@/src/auth/AuthProvider';
+import GeoSelect from '@/src/components/common/GeoSelect';
 import { getClient, listClients } from '@/src/lib/api/clients';
 import type { Client } from '@/src/types/client';
 import {
@@ -140,6 +142,7 @@ function BillingProfileDialog({ profile, token, onClose, onSaved }: {
         gstNumber: values.gstNumber,
         panNumber: values.panNumber,
         city: values.city,
+        country: values.country,
         state: values.state,
         postalCode: values.postalCode,
         bankAccountName: values.bankAccountName,
@@ -170,7 +173,8 @@ function BillingProfileDialog({ profile, token, onClose, onSaved }: {
           <FormField label="Legal business name"><div className="rounded-md border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-sm">{profile.name}</div></FormField>
           <FormField label="GSTIN (optional)"><input className={fieldClass} value={values.gstNumber} onChange={(event) => update('gstNumber', event.target.value)} maxLength={30} /></FormField>
           <FormField label="PAN (optional)"><input className={fieldClass} value={values.panNumber} onChange={(event) => update('panNumber', event.target.value)} maxLength={20} /></FormField>
-          <FormField label="State"><input className={fieldClass} value={values.state} onChange={(event) => update('state', event.target.value)} maxLength={120} /></FormField>
+          <FormField label="Country"><GeoSelect kind="country" className={fieldClass} value={values.country} onChange={(value) => setValues((current) => ({ ...current, country: value, state: current.country === value ? current.state : '' }))} /></FormField>
+          <FormField label="State"><GeoSelect kind="state" className={fieldClass} value={values.state} countryName={values.country} placeholder={values.country ? 'Select state' : 'Select a country first'} disabled={!values.country} onChange={(value) => update('state', value)} /></FormField>
           <FormField label="City"><input className={fieldClass} value={values.city} onChange={(event) => update('city', event.target.value)} maxLength={120} /></FormField>
           <FormField label="Postal code"><input className={fieldClass} value={values.postalCode} onChange={(event) => update('postalCode', event.target.value)} maxLength={20} /></FormField>
           <FormField label="Registered address" className="sm:col-span-2"><textarea className={`${fieldClass} min-h-20 resize-y`} value={values.address} onChange={(event) => update('address', event.target.value)} maxLength={1000} /></FormField>
@@ -194,6 +198,9 @@ function BillingProfileDialog({ profile, token, onClose, onSaved }: {
 }
 
 export default function InvoicesPage() {
+  const searchParams = useSearchParams();
+  const initialStatus = statuses.find((value) => value === searchParams.get('status')) ?? '';
+  const initialTab = initialStatus || searchParams.get('tab') === 'invoices' ? 'invoices' : 'analytics';
   const { accessToken } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [profile, setProfile] = useState<InvoiceProfile | null>(null);
@@ -203,9 +210,9 @@ export default function InvoicesPage() {
   const [selectedCurrency, setSelectedCurrency] = useState('INR');
   const [meta, setMeta] = useState({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
   const [page, setPage] = useState(1);
-  const [activeTab, setActiveTab] = useState<'analytics' | 'invoices'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'invoices'>(initialTab);
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<InvoiceStatus | ''>('');
+  const [status, setStatus] = useState<InvoiceStatus | ''>(initialStatus);
   const [clientFilter, setClientFilter] = useState('');
   const [currencyFilter, setCurrencyFilter] = useState('');
   const [invoiceDateFrom, setInvoiceDateFrom] = useState('');
@@ -602,12 +609,12 @@ export default function InvoicesPage() {
               <FormField label="Invoice date"><input type="date" value={form.invoiceDate} onChange={(event) => setFormValue('invoiceDate', event.target.value)} required className={fieldClass} /></FormField>
               <FormField label="Due date"><input type="date" value={form.dueDate} min={form.invoiceDate} onChange={(event) => setFormValue('dueDate', event.target.value)} required className={fieldClass} /></FormField>
               <FormField label="Currency"><select value={form.currency} onChange={(event) => setFormValue('currency', event.target.value)} className={fieldClass}>{['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'].map((currency) => <option key={currency}>{currency}</option>)}</select></FormField>
-              <FormField label="Place of supply"><input value={form.placeOfSupply} onChange={(event) => setFormValue('placeOfSupply', event.target.value)} placeholder="Client state" className={fieldClass} /></FormField>
+              <FormField label="Place of supply"><GeoSelect kind="state" countryName={clients.find((client) => client.id === form.clientId)?.country || undefined} value={form.placeOfSupply} onChange={(value) => setFormValue('placeOfSupply', value)} className={fieldClass} /></FormField>
               <FormField label="Purchase order number"><input value={form.purchaseOrderNumber} onChange={(event) => setFormValue('purchaseOrderNumber', event.target.value)} placeholder="Optional" maxLength={100} className={fieldClass} /></FormField>
               <div className="flex items-end pb-1 lg:col-span-2"><div className="rounded-md border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-xs text-[var(--muted)]">{profile.gstNumber ? `Supplier GSTIN ${profile.gstNumber} · ${profile.state || 'State not set'}` : 'GST registration not configured'}<button type="button" onClick={() => setProfileOpen(true)} className="ml-2 font-semibold text-[var(--primary)] hover:underline">Edit billing details</button></div></div>
             </section>
 
-            {form.clientId && <section aria-label="Client billing details" className="border-l-2 border-[var(--primary)] py-2 pl-4"><div className="mb-3 flex flex-wrap items-baseline justify-between gap-2"><div><h3 className="text-sm font-semibold">Client billing details</h3><p className="mt-0.5 text-[11px] text-[var(--muted)]">Saved on this invoice; the client profile will not be changed.</p></div>{missingClientBillingFields.length > 0 && <p className="text-[11px] text-amber-700 dark:text-amber-300">Complete {missingClientBillingFields.join(', ')} for a more complete invoice</p>}</div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><FormField label="Billing address" className="sm:col-span-2"><textarea value={clientBilling.address} onChange={(event) => setClientBilling((current) => ({ ...current, address: event.target.value }))} maxLength={1000} placeholder="Street, city, postal code, country" className={`${fieldClass} min-h-16 resize-y`} /></FormField><FormField label="Contact person"><input value={clientBilling.contactName} onChange={(event) => setClientBilling((current) => ({ ...current, contactName: event.target.value }))} maxLength={150} className={fieldClass} /></FormField><FormField label="Contact phone"><input value={clientBilling.phone} onChange={(event) => setClientBilling((current) => ({ ...current, phone: event.target.value }))} maxLength={50} className={fieldClass} /></FormField><FormField label="State"><input value={clientBilling.state} onChange={(event) => { setClientBilling((current) => ({ ...current, state: event.target.value })); setForm((current) => ({ ...current, placeOfSupply: event.target.value })); }} maxLength={120} className={fieldClass} /></FormField><FormField label="GSTIN"><input value={clientBilling.gstNumber} onChange={(event) => setClientBilling((current) => ({ ...current, gstNumber: event.target.value }))} maxLength={30} className={fieldClass} /></FormField><FormField label="PAN"><input value={clientBilling.panNumber} onChange={(event) => setClientBilling((current) => ({ ...current, panNumber: event.target.value }))} maxLength={20} className={fieldClass} /></FormField><FormField label="Billing email"><input type="email" value={clientBilling.email} onChange={(event) => setClientBilling((current) => ({ ...current, email: event.target.value }))} maxLength={255} className={fieldClass} /></FormField></div></section>}
+            {form.clientId && <section aria-label="Client billing details" className="border-l-2 border-[var(--primary)] py-2 pl-4"><div className="mb-3 flex flex-wrap items-baseline justify-between gap-2"><div><h3 className="text-sm font-semibold">Client billing details</h3><p className="mt-0.5 text-[11px] text-[var(--muted)]">Saved on this invoice; the client profile will not be changed.</p></div>{missingClientBillingFields.length > 0 && <p className="text-[11px] text-amber-700 dark:text-amber-300">Complete {missingClientBillingFields.join(', ')} for a more complete invoice</p>}</div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><FormField label="Billing address" className="sm:col-span-2"><textarea value={clientBilling.address} onChange={(event) => setClientBilling((current) => ({ ...current, address: event.target.value }))} maxLength={1000} placeholder="Street, city, postal code, country" className={`${fieldClass} min-h-16 resize-y`} /></FormField><FormField label="Contact person"><input value={clientBilling.contactName} onChange={(event) => setClientBilling((current) => ({ ...current, contactName: event.target.value }))} maxLength={150} className={fieldClass} /></FormField><FormField label="Contact phone"><input value={clientBilling.phone} onChange={(event) => setClientBilling((current) => ({ ...current, phone: event.target.value }))} maxLength={50} className={fieldClass} /></FormField><FormField label="State"><GeoSelect kind="state" countryName={clients.find((client) => client.id === form.clientId)?.country || undefined} value={clientBilling.state} onChange={(value) => { setClientBilling((current) => ({ ...current, state: value })); setForm((current) => ({ ...current, placeOfSupply: value })); }} className={fieldClass} /></FormField><FormField label="GSTIN"><input value={clientBilling.gstNumber} onChange={(event) => setClientBilling((current) => ({ ...current, gstNumber: event.target.value }))} maxLength={30} className={fieldClass} /></FormField><FormField label="PAN"><input value={clientBilling.panNumber} onChange={(event) => setClientBilling((current) => ({ ...current, panNumber: event.target.value }))} maxLength={20} className={fieldClass} /></FormField><FormField label="Billing email"><input type="email" value={clientBilling.email} onChange={(event) => setClientBilling((current) => ({ ...current, email: event.target.value }))} maxLength={255} className={fieldClass} /></FormField></div></section>}
 
             <section>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold">Services and individuals</h3><p className="mt-0.5 text-xs text-[var(--muted)]">Link a BGV case or enter a service line manually. Rates and tax are editable per line.</p></div><button type="button" onClick={() => setLines((current) => [...current, newLine()])} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-muted)]"><Plus size={14} />Add line</button></div>

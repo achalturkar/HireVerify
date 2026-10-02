@@ -38,6 +38,7 @@ model Company {
   gstNumber    String? @map("gst_number") @db.VarChar(30)
   panNumber    String? @map("pan_number") @db.VarChar(20)
   city         String? @db.VarChar(120)
+  country      String? @db.VarChar(120)
   state        String? @db.VarChar(120)
   postalCode   String? @map("postal_code") @db.VarChar(20)
   bankAccountName   String? @map("bank_account_name") @db.VarChar(255)
@@ -69,6 +70,7 @@ model Company {
   invoices   Invoice[]
   invoiceSequences InvoiceSequence[]
   auditLogs  AuditLog[]
+  verifiers  Verifier[]
 
   @@index([status])
   @@index([isDeleted])
@@ -529,6 +531,46 @@ model VerificationCheck {
   @@index([provider])
   @@index([providerReferenceId])
   @@map("verification_checks")
+}
+
+model Verifier {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  name      String   @db.VarChar(100)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+  @@map("verifiers")
+}
+
+model GeoCountry {
+  id        String     @id @default(uuid()) @db.Uuid
+  name      String     @unique @db.VarChar(150)
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  states    GeoState[]
+
+  @@map("geo_countries")
+}
+
+model GeoState {
+  id        String     @id @default(uuid()) @db.Uuid
+  countryId String     @map("country_id") @db.Uuid
+  name      String     @db.VarChar(150)
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  country   GeoCountry @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  @@unique([countryId, name])
+  @@index([countryId, isActive])
+  @@map("geo_states")
 }
 
 // ============================================================

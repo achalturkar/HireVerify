@@ -48,6 +48,7 @@ const invoiceBody = [
 const profileValidator = [
   body('gstNumber').optional({ values: 'falsy' }).isString().trim().isLength({ max: 30 }),
   body('panNumber').optional({ values: 'falsy' }).isString().trim().isLength({ max: 20 }),
+  body('country').optional({ values: 'falsy' }).isString().trim().isLength({ max: 120 }),
   body('state').optional({ values: 'falsy' }).isString().trim().isLength({ max: 120 }),
   body('city').optional({ values: 'falsy' }).isString().trim().isLength({ max: 120 }),
   body('postalCode').optional({ values: 'falsy' }).isString().trim().isLength({ max: 20 }),

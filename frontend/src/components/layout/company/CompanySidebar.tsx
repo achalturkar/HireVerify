@@ -19,6 +19,7 @@ import {
   ClipboardList,
   BarChart3,
   Receipt,
+  UserRound,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { resolveLogoUrl } from '@/src/lib/logo';
@@ -76,6 +77,7 @@ const menuGroups: { label: string; items: CompanyMenuItem[] }[] = [
     label: 'Organization',
     items: [
       { name: 'Company Profile', href: '/company/profile', icon: UserCircle, permission: 'company.view' },
+      { name: 'Verifiers', href: '/company/verifiers', icon: UserRound, permission: 'company.update' },
       { name: 'Users', href: '/company/users', icon: Users, permission: 'users.view' },
       { name: 'Roles', href: '/company/roles', icon: ShieldCheck, permission: 'roles.view' },
       { name: 'Audit activity', href: '/company/audit', icon: ClipboardList, permission: 'audit.view' },

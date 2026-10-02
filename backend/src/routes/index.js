@@ -15,12 +15,14 @@ const platformCandidateRoutes = require('../modules/platform-candidate/platform-
 const platformClientRoutes = require('../modules/platform-client/platform-client.routes');
 const platformDashboardRoutes = require('../modules/platform-dashboard/platform-dashboard.routes');
 const platformBrandingRoutes = require('../modules/platform-branding/platform-branding.routes');
+const platformLocationsRoutes = require('../modules/platform-locations/platform-locations.routes');
 
 const candidateRoutes = require('../modules/candidate/candidate.routes');
 const bgvCaseRoutes = require('../modules/bgv-case/bgv-case.routes');
 const verificationRoutes = require('../modules/verification/verification.routes');
 const invoiceRoutes = require('../modules/invoice/invoice.routes');
 const candidatePortalRoutes = require('../modules/candidate-portal/candidate-portal.routes');
+const verifierRoutes = require('../modules/verifier/verifier.routes');
 
 const router = express.Router();
 
@@ -36,6 +38,7 @@ router.use('/platform/candidates', platformCandidateRoutes);
 router.use('/platform/clients', platformClientRoutes);
 router.use('/platform/dashboard', platformDashboardRoutes);
 router.use('/platform/branding', platformBrandingRoutes);
+router.use('/platform/locations', platformLocationsRoutes);
 router.use('/clients', clientRoutes);
 
 
@@ -45,6 +48,7 @@ router.use('/contact', contactRoutes);
 router.use('/candidates', candidateRoutes);
 router.use('/bgv/cases', bgvCaseRoutes);
 router.use('/bgv/verifications', verificationRoutes);
+router.use('/bgv/verifiers', verifierRoutes);
 router.use('/invoices', invoiceRoutes);
 router.use('/candidate-portal', candidatePortalRoutes);
 

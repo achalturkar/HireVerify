@@ -39,6 +39,7 @@ interface CompanyResponse {
   gstNumber: string | null;
   panNumber: string | null;
   city: string | null;
+  country: string | null;
   state: string | null;
   postalCode: string | null;
   bankAccountName: string | null;
