@@ -46,7 +46,7 @@ export default function CompanyDashboardShell({ children }: Props) {
 
       <div className="flex-1 min-w-0 flex flex-col">
         <CompanyNavbar onOpenMobileMenu={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-7">{children}</main>
+        <main className="flex-1 overflow-y-auto px-4 pt-4 pb-32 md:px-7 md:pt-7 md:pb-32">{children}</main>
       </div>
       <AchuHelpAssistant />
     </div>

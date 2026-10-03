@@ -77,6 +77,12 @@ const softDelete = (id) =>
     },
   });
 
+const restore = (id) =>
+  prisma.client.update({
+    where: { id },
+    data: { isDeleted: false, deletedAt: null, status: 'ACTIVE' },
+  });
+
 /**
  * Activate / Suspend
  */
@@ -98,15 +104,12 @@ const list = async ({
   sortBy,
   sortOrder,
   includeDeleted,
+  deletedOnly,
 }) => {
   const where = {
     companyId,
 
-    ...(includeDeleted
-      ? {}
-      : {
-          isDeleted: false,
-        }),
+    ...(deletedOnly ? { isDeleted: true } : includeDeleted ? {} : { isDeleted: false }),
 
     ...(status
       ? {
@@ -188,6 +191,7 @@ module.exports = {
   findByEmail,
   update,
   softDelete,
+  restore,
   setStatus,
   list,
 };

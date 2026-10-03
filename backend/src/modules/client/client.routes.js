@@ -185,4 +185,11 @@ router.post(
     controller.inactivateClient
 );
 
+router.post(
+    '/:id/restore',
+    authorize('client.update'),
+    validate(v.idParamValidator),
+    controller.restoreClient
+);
+
 module.exports = router;

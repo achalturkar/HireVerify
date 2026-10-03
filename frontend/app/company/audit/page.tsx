@@ -221,11 +221,11 @@ export default function CompanyAuditPage() {
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between border-t border-[var(--border)] px-5 py-3 text-[12px] text-[var(--muted)]">
+        <div className="flex flex-col items-center gap-2.5 border-t border-[var(--border)] px-5 py-3 text-[12px] text-[var(--muted)]">
             <span>
             Showing {items.length} of {meta.total} events · Page {meta.page} of {meta.totalPages}
           </span>
-          <div className="flex gap-2">
+          <div className="flex justify-center gap-2">
             <button
               type="button"
               onClick={() => setPage((value) => Math.max(1, value - 1))}

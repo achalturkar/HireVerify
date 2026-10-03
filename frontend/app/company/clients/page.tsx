@@ -14,6 +14,7 @@ import {
   Phone,
   Power,
   PowerOff,
+  RotateCcw,
   Globe,
   Eye,
   CheckCircle2,
@@ -30,6 +31,7 @@ import {
   createClient,
   updateClient,
   deleteClient,
+  restoreClient,
   activateClient,
   inactivateClient,
   ApiError,
@@ -89,6 +91,8 @@ export default function ClientsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<ClientStatus | ''>('');
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
   const [summaryCounts, setSummaryCounts] = useState<Record<string, number | null>>({ '': null, ACTIVE: null, INACTIVE: null });
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -126,6 +130,7 @@ export default function ClientsPage() {
           limit: PAGE_SIZE,
           search,
           status,
+          deletedOnly: showDeleted,
           sortBy: 'createdAt',
           sortOrder: 'desc',
         },
@@ -138,7 +143,7 @@ export default function ClientsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status, accessToken]);
+  }, [page, search, status, showDeleted, accessToken]);
 
   useEffect(() => {
     fetchClients();
@@ -270,6 +275,19 @@ export default function ClientsPage() {
       setDeleteTarget(null);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleRestore = async (client: Client) => {
+    setRestoringId(client.id);
+    try {
+      const restored = await restoreClient(client.id, accessToken);
+      setBanner({ text: `Client "${restored.name}" (${restored.clientCode}) was restored.`, tone: 'success' });
+      await fetchClients();
+    } catch (err) {
+      setBanner({ text: err instanceof ApiError ? err.message : 'Failed to restore client.', tone: 'error' });
+    } finally {
+      setRestoringId(null);
     }
   };
 
@@ -411,6 +429,14 @@ export default function ClientsPage() {
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
         </select>
+        <button
+          type="button"
+          aria-pressed={showDeleted}
+          onClick={() => { setShowDeleted((value) => !value); setStatus(''); setPage(1); }}
+          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2.5 text-[13px] font-medium transition-colors ${showDeleted ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]' : 'border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface-muted)]'}`}
+        >
+          <RotateCcw size={14} /> {showDeleted ? 'Viewing deleted clients' : 'Deleted clients'}
+        </button>
       </div>
 
       {/* Table */}
@@ -460,8 +486,8 @@ export default function ClientsPage() {
                 clients.map((c, i) => (
                   <tr
                     key={c.id}
-                    onClick={() => goToDetail(c)}
-                    className="border-t border-[var(--border)] hover:bg-[var(--surface-muted)] cursor-pointer"
+                    onClick={() => { if (!c.isDeleted) goToDetail(c); }}
+                    className={`border-t border-[var(--border)] hover:bg-[var(--surface-muted)] ${c.isDeleted ? 'bg-amber-500/[0.03]' : 'cursor-pointer'}`}
                   >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
@@ -515,7 +541,7 @@ export default function ClientsPage() {
                       </td>
                     )}
                     <td className="px-5 py-3">
-                      <StatusBadge status={c.status} />
+                      {c.isDeleted ? <span className="inline-flex rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700">Deleted · recoverable</span> : <StatusBadge status={c.status} />}
                     </td>
                     <td className="px-5 py-3 text-[12.5px] text-[var(--muted)]" style={{ fontFamily: 'var(--font-mono)' }}>
                       {new Date(c.createdAt).toLocaleDateString(undefined, {
@@ -526,6 +552,17 @@ export default function ClientsPage() {
                     </td>
                     <td className="px-5 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
+                        {c.isDeleted ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleRestore(c)}
+                            disabled={restoringId === c.id}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-1.5 text-[11px] font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50"
+                            aria-label={`Restore ${c.name}`}
+                          >
+                            <RotateCcw size={13} /> {restoringId === c.id ? 'Restoring…' : 'Restore'}
+                          </button>
+                        ) : <>
                         <button
                           onClick={() => goToDetail(c)}
                           className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-muted)] transition-colors"
@@ -573,6 +610,7 @@ export default function ClientsPage() {
                         >
                           <Trash2 size={13} />
                         </button>
+                        </>}
                       </div>
                     </td>
                   </tr>
@@ -582,11 +620,11 @@ export default function ClientsPage() {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-t border-[var(--border)]">
-          <p className="text-[12px] text-[var(--muted)]" style={{ fontFamily: 'var(--font-mono)' }}>
+        <div className="flex flex-col items-center gap-2.5 border-t border-[var(--border)] px-5 py-3.5">
+          <p className="text-center text-[12px] text-[var(--muted)]" style={{ fontFamily: 'var(--font-mono)' }}>
             {rangeLabel}
           </p>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center justify-center gap-1.5">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={meta.page <= 1 || loading}

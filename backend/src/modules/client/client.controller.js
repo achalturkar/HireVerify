@@ -61,6 +61,7 @@ const listClients = asyncHandler(async (req, res) => {
       ...pagination,
       status: req.query.status,
       includeDeleted: req.query.includeDeleted,
+      deletedOnly: req.query.deletedOnly,
     },
   });
 
@@ -165,6 +166,12 @@ const inactivateClient = asyncHandler(async (req, res) => {
   });
 });
 
+const restoreClient = asyncHandler(async (req, res) => {
+  const data = await service.restore({ id: req.params.id, companyId: req.user.companyId });
+  await writeAudit({ req, action: 'client.restore', entity: 'Client', entityId: req.params.id });
+  return success(res, { message: 'Client restored successfully.', data });
+});
+
 module.exports = {
   createClient,
   getClient,
@@ -173,4 +180,5 @@ module.exports = {
   deleteClient,
   activateClient,
   inactivateClient,
+  restoreClient,
 };

@@ -154,7 +154,7 @@ export default function AchuHelpAssistant() {
   };
 
   return (
-    <div className="fixed bottom-5 right-5 z-50">
+    <div className="fixed bottom-5 right-5 z-[100]">
       {open && (
         <section
           aria-label="ACHU HireVerify help assistant"

@@ -129,6 +129,7 @@ export async function listClients(
     search: params.search,
     status: params.status,
     includeDeleted: params.includeDeleted,
+    deletedOnly: params.deletedOnly,
     sortBy: params.sortBy,
     sortOrder: params.sortOrder,
   });
@@ -197,6 +198,16 @@ export async function deleteClient(
   await request<ApiResponse<{ message: string }>>(`/clients/${id}`, accessToken, {
     method: "DELETE",
   });
+}
+
+export async function restoreClient(
+  id: string,
+  accessToken: string | null
+): Promise<Client> {
+  const res = await request<Envelope<Client>>(`/clients/${id}/restore`, accessToken, {
+    method: 'POST',
+  });
+  return res.data.data;
 }
 
 /* -------------------------------------------------------------------------- */

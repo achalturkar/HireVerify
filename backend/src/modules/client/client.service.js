@@ -32,6 +32,7 @@ const toDto = (client) => ({
   country: client.country,
   postalCode: client.postalCode,
   status: client.status,
+  isDeleted: client.isDeleted,
   createdById: client.createdById,
   updatedById: client.updatedById,
   createdAt: client.createdAt,
@@ -89,14 +90,12 @@ const create = async ({ payload, currentUser, req }) => {
   }
 
   // Duplicate Code
-  const existingCode = await prisma.client.findFirst({
-    where: {
-      clientCode,
-      isDeleted: false,
-    },
-  });
+  const existingCode = await prisma.client.findUnique({ where: { clientCode } });
 
   if (existingCode) {
+    if (existingCode.isDeleted) {
+      throw new ConflictError(`Client code ${clientCode} belongs to a deleted client. Restore that client to reuse its existing record.`);
+    }
     throw new ConflictError('Client code already exists');
   }
 
@@ -177,6 +176,7 @@ const list = async ({ companyId, query }) => {
       : 'createdAt',
     sortOrder: query.sortOrder,
     includeDeleted: query.includeDeleted === 'true',
+    deletedOnly: query.deletedOnly === 'true',
   });
 
   return {
@@ -373,6 +373,21 @@ const inactivate = async ({ id, companyId }) => {
   return toDto(updated);
 };
 
+const restore = async ({ id, companyId }) => {
+  const existing = await repo.findById(id, companyId, { includeDeleted: true });
+  if (!existing) throw new NotFoundError('Client not found');
+  if (!existing.isDeleted) throw new BadRequestError('Client is already active.');
+
+  const duplicateName = await repo.findByName(companyId, existing.name);
+  if (duplicateName) throw new ConflictError('Another active client already uses this name. Resolve the duplicate before restoring this client.');
+  if (existing.contactEmail) {
+    const duplicateEmail = await repo.findByEmail(companyId, existing.contactEmail);
+    if (duplicateEmail) throw new ConflictError('Another active client already uses this email. Resolve the duplicate before restoring this client.');
+  }
+
+  return toDto(await repo.restore(id));
+};
+
 module.exports = {
   create,
   getById,
@@ -381,4 +396,5 @@ module.exports = {
   remove,
   activate,
   inactivate,
+  restore,
 };

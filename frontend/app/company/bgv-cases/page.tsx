@@ -393,9 +393,9 @@ export default function BGVCaseListPage() {
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between border-t border-[var(--border)] px-5 py-3 text-[12px] text-[var(--muted)]">
+        <div className="flex flex-col items-center gap-2.5 border-t border-[var(--border)] px-5 py-3 text-[12px] text-[var(--muted)]">
           <span>{meta.total} cases</span>
-          <div className="flex gap-2">
+          <div className="flex justify-center gap-2">
             <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">
               Previous
             </button>

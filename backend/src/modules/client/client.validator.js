@@ -200,6 +200,10 @@ const listValidator = [
     .optional()
     .isBoolean(),
 
+  query('deletedOnly')
+    .optional()
+    .isBoolean(),
+
   query('sortBy')
     .optional()
     .isIn([

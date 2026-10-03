@@ -13,11 +13,11 @@ export function Pagination({ page, limit, total, onPageChange }: PaginationProps
   const to = Math.min(page * limit, total);
 
   return (
-    <div className="flex items-center justify-between px-5 py-3.5 border-t border-[var(--border)]">
-      <p className="text-[12px] text-[var(--muted)]" style={{ fontFamily: 'var(--font-mono)' }}>
+    <div className="flex flex-col items-center gap-2.5 border-t border-[var(--border)] px-5 py-3.5 text-[var(--muted)]">
+      <p className="text-[12px]" style={{ fontFamily: 'var(--font-mono)' }}>
         {total === 0 ? 'No results' : `${from}–${to} of ${total}`}
       </p>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-center gap-1.5">
         <button
           type="button"
           onClick={() => onPageChange(page - 1)}

@@ -25,6 +25,7 @@ export interface Client {
   country: string | null;
   postalCode: string | null;
   status: ClientStatus;
+  isDeleted?: boolean;
   candidateCount?: number;
   bgvCaseCount?: number;
   createdById: string | null;
@@ -110,6 +111,7 @@ export interface ListClientsParams {
   status?: ClientStatus | '';
   companyId?: string;
   includeDeleted?: boolean;
+  deletedOnly?: boolean;
   sortBy?: 'name' | 'clientCode' | 'createdAt' | 'updatedAt' | 'status';
   sortOrder?: 'asc' | 'desc';
 }
