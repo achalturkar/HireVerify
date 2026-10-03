@@ -28,10 +28,13 @@ import {
   UserRound,
   Users,
   XCircle,
+  ArrowRight,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { ApiError, activateCandidatePortal, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, type CandidatePortalStatus } from '@/src/lib/api/candidates';
+import { ApiError, activateCandidatePortal, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
+import { listBGVCases } from '@/src/lib/api/bgv';
+import type { BGVCase } from '@/src/types/bgv';
 import type { Candidate } from '@/src/types/candidate';
 
 /* ------------------------------------------------------------------ */
@@ -296,6 +299,9 @@ export default function CandidateDetailPage() {
   const router = useRouter();
   const { accessToken } = useAuth();
   const [candidate, setCandidate] = useState<CandidateDetail | null>(null);
+  const [bgvCases, setBgvCases] = useState<BGVCase[]>([]);
+  const [casesLoading, setCasesLoading] = useState(false);
+  const [casesError, setCasesError] = useState('');
   const [portal, setPortal] = useState<CandidatePortalStatus | null>(null);
   const [daysInput, setDaysInput] = useState('7');
   const [tab, setTab] = useState<Tab>('summary');
@@ -310,15 +316,30 @@ export default function CandidateDetailPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setCasesLoading(true);
+    setCasesError('');
     setError('');
     try {
-      const [detail, status] = await Promise.all([getCandidate(id, accessToken), getCandidatePortalStatus(id, accessToken)]);
+      const casesRequest = listBGVCases({ page: 1, limit: 100, candidateId: id }, accessToken)
+        .then(({ items }) => ({ items, error: '' }))
+        .catch((requestError: unknown) => ({
+          items: [],
+          error: requestError instanceof Error ? requestError.message : 'Could not load this candidate’s BGV cases.',
+        }));
+      const [detail, status, casesResult] = await Promise.all([
+        getCandidate(id, accessToken),
+        getCandidatePortalStatus(id, accessToken),
+        casesRequest,
+      ]);
       setCandidate(detail as CandidateDetail);
       setPortal(status ?? (detail.portalInvitation ? { ...detail.portalInvitation, url: null } : null));
+      setBgvCases(casesResult.items);
+      setCasesError(casesResult.error);
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : 'Could not load candidate details.');
     } finally {
       setLoading(false);
+      setCasesLoading(false);
     }
   }, [id, accessToken]);
 
@@ -418,6 +439,14 @@ export default function CandidateDetailPage() {
     }, 'Could not send portal reminder.');
   };
 
+  const markCandidateCompleted = () => {
+    void run(async () => {
+      const updated = await updateCandidate(id, { status: 'COMPLETED' }, accessToken);
+      setCandidate((current) => current ? { ...current, status: updated.status, updatedAt: updated.updatedAt } : current);
+      setNotice('Candidate details marked as completed.');
+    }, 'Could not mark candidate details as completed.');
+  };
+
   const replacePortalLink = () => {
     setConfirmReplace(false);
     issueLink('resend');
@@ -492,6 +521,7 @@ export default function CandidateDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Pill className="bg-[var(--surface-muted)] text-[var(--muted)] ring-[var(--border)]">{humanize(candidate.status)}</Pill>
+            {overallPercent === 100 && candidate.status !== 'COMPLETED' && <button type="button" onClick={markCandidateCompleted} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3.5 py-2 text-sm font-semibold text-[var(--primary-foreground)] disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 size={15} aria-hidden="true" />{busy ? 'Updating...' : 'Mark as completed'}</button>}
             <button type="button" onClick={() => setTab('portal')} className="rounded-full" aria-label={`Portal link ${stateInfo.label}. Open portal access`}>
               <Pill className={stateInfo.badge} icon={StateIcon}>Portal {stateInfo.label.toLowerCase()}</Pill>
             </button>
@@ -507,6 +537,50 @@ export default function CandidateDetailPage() {
           </div>
         )}
       </div>
+
+      <Panel
+        title="BGV cases"
+        description="Open a case directly from this candidate profile."
+        action={bgvCases.length > 0 ? <span className="text-xs font-semibold text-[var(--muted)]">{bgvCases.length} found</span> : undefined}
+      >
+        {casesLoading ? (
+          <p className="text-sm text-[var(--muted)]">Loading candidate cases…</p>
+        ) : casesError ? (
+          <p role="alert" className="text-sm text-red-700">{casesError}</p>
+        ) : bgvCases.length > 0 ? (
+          <div className="space-y-2">
+            {bgvCases.map((bgvCase) => (
+              <div key={bgvCase.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] p-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{bgvCase.caseNumber}</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {bgvCase.client?.name || candidate.client?.name || 'Client'} · {humanize(bgvCase.status)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/company/bgv-cases/${bgvCase.id}`)}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold text-[var(--primary)] transition hover:bg-[var(--surface-muted)]"
+                >
+                  Open case <ArrowRight size={14} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-[var(--border)] px-4 py-4">
+            <p className="text-sm text-[var(--muted)]">No BGV cases are linked to this candidate yet.</p>
+            <button
+              type="button"
+              onClick={() => router.push(`/company/bgv-cases?createCandidateId=${encodeURIComponent(candidate.id)}`)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3.5 py-2.5 text-xs font-semibold text-[var(--primary-foreground)] transition hover:opacity-90"
+            >
+              <ArrowRight size={14} aria-hidden="true" /> Create BGV case
+            </button>
+          </div>
+        )}
+      </Panel>
+
       <nav aria-label="Candidate sections">
         <div role="tablist" className="flex gap-1 overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1">
           {tabs.map(({ key, label, icon: Icon, count }) => (

@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Activity, CheckCircle2, ChevronRight, Download, FileCheck2, FileSpreadsheet, Layers3, Loader2, Pencil, Plus, Search, Send, Trash2 } from 'lucide-react';
+import { Activity, CheckCircle2, ChevronRight, Download, FileCheck2, FileSpreadsheet, Layers3, Loader2, Pencil, Plus, Search, Send } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { listClients } from '@/src/lib/api/clients';
-import { createBGVCase, deleteBGVCase, downloadBGVReport, exportBGVCases, getBGVCase, listBGVCases, transitionBGVCase, updateBGVCaseChecks, updateBGVCaseMeta, ApiError } from '@/src/lib/api/bgv';
+import { createBGVCase, downloadBGVReport, exportBGVCases, getBGVCase, listBGVCases, transitionBGVCase, updateBGVCaseChecks, updateBGVCaseMeta, ApiError } from '@/src/lib/api/bgv';
 import BGVCaseWizardModal from '@/src/components/layout/company/bgv/BGVCaseWizardModal';
-import CandidateConfirmDialog from '@/src/components/layout/company/candidate/CandidateConfirmDialog';
 import type { BGVCase, BGVCaseStatus, BGVOverallResult } from '@/src/types/bgv';
 import type { CreateBGVCasePayload } from '@/src/types/bgv';
 import type { Client } from '@/src/types/client';
@@ -27,6 +26,8 @@ export default function BGVCaseListPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialStatus = statuses.find((value) => value === searchParams.get('status')) ?? '';
+  const initialCandidateId = searchParams.get('candidateId') || '';
+  const initialCreateCandidateId = searchParams.get('createCandidateId') || '';
   const { accessToken } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [clientsLoading, setClientsLoading] = useState(true);
@@ -36,6 +37,7 @@ export default function BGVCaseListPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [clientId, setClientId] = useState('');
+  const [candidateId, setCandidateId] = useState(initialCreateCandidateId || initialCandidateId);
   const [status, setStatus] = useState<BGVCaseStatus | ''>(initialStatus);
   const [initiatedFrom, setInitiatedFrom] = useState('');
   const [initiatedTo, setInitiatedTo] = useState('');
@@ -44,16 +46,16 @@ export default function BGVCaseListPage() {
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(Boolean(initialCreateCandidateId));
+  const [preselectedCandidateId, setPreselectedCandidateId] = useState(initialCreateCandidateId);
   const [draftToResume, setDraftToResume] = useState<BGVCase | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<BGVCase | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listBGVCases({ page, limit: 20, search, clientId: clientId || undefined, status, initiatedFrom, initiatedTo }, accessToken);
+      const data = await listBGVCases({ page, limit: 20, search, clientId: clientId || undefined, candidateId: candidateId || undefined, status, initiatedFrom, initiatedTo }, accessToken);
       setItems(data.items);
       setMeta(data.meta);
     } catch (err) {
@@ -61,7 +63,7 @@ export default function BGVCaseListPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, page, search, clientId, status, initiatedFrom, initiatedTo]);
+  }, [accessToken, page, search, clientId, candidateId, status, initiatedFrom, initiatedTo]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -93,6 +95,7 @@ export default function BGVCaseListPage() {
           page: 1,
           limit: 1,
           clientId: clientId || undefined,
+          candidateId: candidateId || undefined,
           status: cardStatus || undefined,
           initiatedFrom: initiatedFrom || undefined,
           initiatedTo: initiatedTo || undefined,
@@ -108,7 +111,7 @@ export default function BGVCaseListPage() {
     };
     void loadSummary();
     return () => { active = false; };
-  }, [accessToken, clientId, initiatedFrom, initiatedTo]);
+  }, [accessToken, candidateId, clientId, initiatedFrom, initiatedTo]);
 
   const move = async (item: BGVCase, next: BGVCaseStatus) => {
     try {
@@ -132,6 +135,8 @@ export default function BGVCaseListPage() {
       }
       setShowCreate(false);
       setDraftToResume(null);
+      setPreselectedCandidateId('');
+      if (initialCreateCandidateId) router.replace('/company/bgv-cases');
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create BGV case.');
@@ -166,21 +171,6 @@ export default function BGVCaseListPage() {
       URL.revokeObjectURL(link.href);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not download report.');
-    } finally {
-      setActionId(null);
-    }
-  };
-
-  const deleteCase = async () => {
-    if (!deleteTarget) return;
-    setActionId(`delete-${deleteTarget.id}`);
-    setError(null);
-    try {
-      await deleteBGVCase(deleteTarget.id, accessToken);
-      setDeleteTarget(null);
-      await load();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not delete case.');
     } finally {
       setActionId(null);
     }
@@ -227,10 +217,10 @@ export default function BGVCaseListPage() {
             <h2 className="text-[15px] font-semibold">Case overview</h2>
             <p className="mt-0.5 text-[11px] text-[var(--muted)]">Choose a stage to filter the case list. Counts follow the selected initiation dates.</p>
           </div>
-          {(status || clientId || initiatedFrom || initiatedTo) && (
+          {(status || clientId || candidateId || initiatedFrom || initiatedTo) && (
             <button
               type="button"
-              onClick={() => { setPage(1); setStatus(''); setClientId(''); setInitiatedFrom(''); setInitiatedTo(''); }}
+              onClick={() => { setPage(1); setStatus(''); setClientId(''); setCandidateId(''); setInitiatedFrom(''); setInitiatedTo(''); }}
               className="text-[11px] font-semibold text-[var(--primary)] hover:underline"
             >
               Clear overview filters
@@ -276,6 +266,14 @@ export default function BGVCaseListPage() {
         </div>
       </section>
       {summaryError && <p role="alert" className="text-[12px] text-[#FF6B6B]">{summaryError}</p>}
+      {candidateId && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--primary)]/20 bg-[var(--primary)]/5 px-4 py-3 text-sm">
+          <span className="font-medium">Showing BGV cases for the selected candidate.</span>
+          <button type="button" onClick={() => { setPage(1); setCandidateId(''); }} className="text-xs font-semibold text-[var(--primary)] hover:underline">
+            Show all cases
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <label className="relative flex-1">
@@ -387,7 +385,6 @@ export default function BGVCaseListPage() {
                         <button type="button" onClick={() => downloadReport(item)} disabled={actionId !== null} className="rounded-md p-2 text-[var(--muted)] hover:bg-[var(--primary)]/10 hover:text-[var(--primary)] disabled:opacity-40" aria-label={`Download report for ${item.caseNumber}`} title="Download report">
                           {actionId === `download-${item.id}` ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
                         </button>
-                        {(item.status === 'DRAFT' || item.status === 'CANCELLED') && <button type="button" onClick={() => setDeleteTarget(item)} disabled={actionId !== null} className="rounded-md p-2 text-[var(--muted)] hover:bg-[#FF6B6B]/10 hover:text-[#FF6B6B] disabled:opacity-40" aria-label={`Delete case ${item.caseNumber}`} title="Delete case"><Trash2 size={15} /></button>}
                       </div>
                     </td>
                   </tr>
@@ -415,11 +412,11 @@ export default function BGVCaseListPage() {
           submitting={submitting}
           error={error}
           initialDraft={draftToResume}
-          onClose={() => { if (!submitting) { setShowCreate(false); setDraftToResume(null); } }}
+          preselectedCandidateId={preselectedCandidateId}
+          onClose={() => { if (!submitting) { setShowCreate(false); setDraftToResume(null); setPreselectedCandidateId(''); if (initialCreateCandidateId) router.replace('/company/bgv-cases'); } }}
           onSubmit={saveCase}
         />
       )}
-      {deleteTarget && <CandidateConfirmDialog title="Delete this BGV case?" description={`This permanently removes ${deleteTarget.caseNumber} and its checks. Only draft or cancelled cases can be deleted.`} confirmLabel="Delete case" submitting={actionId === `delete-${deleteTarget.id}`} onConfirm={deleteCase} onCancel={() => setDeleteTarget(null)} />}
     </div>
   );
 }

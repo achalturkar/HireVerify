@@ -3,11 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, ChevronRight, Globe, Mail, Pencil, Phone, Users, MapPin, Power, PowerOff,
+  ArrowLeft, ChevronLeft, ChevronRight, Download, FileCheck2, FileText, Globe, Mail, Pencil, Phone, Receipt, Users, MapPin, Power, PowerOff,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getClient, updateClient, activateClient, inactivateClient, ApiError as ClientApiError } from '@/src/lib/api/clients';
 import { listCandidates, createCandidate, ApiError as CandidateApiError } from '@/src/lib/api/candidates';
+import { ApiError as BGVApiError, downloadBGVReport, listBGVCases } from '@/src/lib/api/bgv';
+import type { BGVCase } from '@/src/types/bgv';
+import { downloadInvoicePdf, InvoiceApiError, listInvoices } from '@/src/lib/api/invoices';
+import type { Invoice } from '@/src/lib/api/invoices';
 import ClientFormModal from '@/src/components/layout/company/client/ClientFormModal';
 import ClientConfirmDialog from '@/src/components/layout/company/client/ClientConfirmDialog';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
@@ -15,12 +19,19 @@ import type { Client, ClientFormValues } from '@/src/types/client';
 import type { Candidate, CandidateFormValues, PaginationMeta } from '@/src/types/candidate';
 
 const PAGE_SIZE = 10;
-type TabKey = 'overview' | 'billing' | 'candidates';
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'billing', label: 'Billing details' },
-  { key: 'candidates', label: 'Candidates' },
+type TabKey = 'overview' | 'billing' | 'candidates' | 'cases' | 'reports' | 'invoices';
+const TABS: { key: TabKey; label: string; icon: typeof Users }[] = [
+  { key: 'overview', label: 'Overview', icon: Users },
+  { key: 'billing', label: 'Billing details', icon: Receipt },
+  { key: 'candidates', label: 'Candidates', icon: Users },
+  { key: 'cases', label: 'BGV cases', icon: FileCheck2 },
+  { key: 'reports', label: 'Reports', icon: FileText },
+  { key: 'invoices', label: 'Invoices', icon: Receipt },
 ];
+const RECORD_PAGE_SIZE = 10;
+const currencyLabel = (value: number | string, currency: string) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(Number(value || 0));
+const dateLabel = (value?: string | null) => value ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
 function initials(name: string) {
   return name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
@@ -49,6 +60,22 @@ export default function ClientDetailPage() {
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
   const [candidateModalOpen, setCandidateModalOpen] = useState(false);
   const [candidateSubmitting, setCandidateSubmitting] = useState(false);
+  const [cases, setCases] = useState<BGVCase[]>([]);
+  const [casesTotal, setCasesTotal] = useState(0);
+  const [casesPage, setCasesPage] = useState(1);
+  const [casesLoading, setCasesLoading] = useState(false);
+  const [casesError, setCasesError] = useState<string | null>(null);
+  const [reports, setReports] = useState<BGVCase[]>([]);
+  const [reportsTotal, setReportsTotal] = useState(0);
+  const [reportsPage, setReportsPage] = useState(1);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsError, setReportsError] = useState<string | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoicesTotal, setInvoicesTotal] = useState(0);
+  const [invoicesPage, setInvoicesPage] = useState(1);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoicesError, setInvoicesError] = useState<string | null>(null);
+  const [recordAction, setRecordAction] = useState<string | null>(null);
 
   const loadClient = useCallback(async () => {
     if (!id) return;
@@ -84,6 +111,100 @@ export default function ClientDetailPage() {
   }, [id, candidatesPage, accessToken]);
 
   useEffect(() => { if (tab === 'candidates') loadCandidates(); }, [tab, loadCandidates]);
+
+  const loadCases = useCallback(async () => {
+    setCasesLoading(true);
+    setCasesError(null);
+    try {
+      const result = await listBGVCases({ page: casesPage, limit: RECORD_PAGE_SIZE, clientId: id }, accessToken);
+      setCases(result.items);
+      setCasesTotal(result.meta.total);
+    } catch (err) {
+      setCasesError(err instanceof BGVApiError ? err.message : 'Could not load BGV cases.');
+    } finally {
+      setCasesLoading(false);
+    }
+  }, [accessToken, casesPage, id]);
+
+  const loadReports = useCallback(async () => {
+    setReportsLoading(true);
+    setReportsError(null);
+    try {
+      const result = await listBGVCases({ page: reportsPage, limit: RECORD_PAGE_SIZE, clientId: id, status: 'COMPLETED' }, accessToken);
+      setReports(result.items);
+      setReportsTotal(result.meta.total);
+    } catch (err) {
+      setReportsError(err instanceof BGVApiError ? err.message : 'Could not load reports.');
+    } finally {
+      setReportsLoading(false);
+    }
+  }, [accessToken, id, reportsPage]);
+
+  const loadInvoices = useCallback(async () => {
+    setInvoicesLoading(true);
+    setInvoicesError(null);
+    try {
+      const result = await listInvoices({ page: invoicesPage, limit: RECORD_PAGE_SIZE, clientId: id }, accessToken);
+      setInvoices(result.items);
+      setInvoicesTotal(result.meta.total);
+    } catch (err) {
+      setInvoicesError(err instanceof InvoiceApiError ? err.message : 'Could not load invoices.');
+    } finally {
+      setInvoicesLoading(false);
+    }
+  }, [accessToken, id, invoicesPage]);
+
+  useEffect(() => {
+    if (tab !== 'cases') return undefined;
+    const timer = window.setTimeout(() => { void loadCases(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadCases, tab]);
+  useEffect(() => {
+    if (tab !== 'reports') return undefined;
+    const timer = window.setTimeout(() => { void loadReports(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadReports, tab]);
+  useEffect(() => {
+    if (tab !== 'invoices') return undefined;
+    const timer = window.setTimeout(() => { void loadInvoices(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadInvoices, tab]);
+
+  const downloadReport = async (item: BGVCase) => {
+    setRecordAction(`report-${item.id}`);
+    setReportsError(null);
+    try {
+      const blob = await downloadBGVReport(item.id, accessToken);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${item.caseNumber}_${item.candidate ? `${item.candidate.firstName}_${item.candidate.lastName}` : 'Candidate'}_BGV_FinalReport.pdf`.replace(/\s+/g, '_');
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setReportsError(err instanceof BGVApiError ? err.message : 'Could not download this report.');
+    } finally {
+      setRecordAction(null);
+    }
+  };
+
+  const downloadInvoice = async (invoice: Invoice) => {
+    setRecordAction(`invoice-${invoice.id}`);
+    setInvoicesError(null);
+    try {
+      const blob = await downloadInvoicePdf(invoice.id, accessToken);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${invoice.invoiceNumber}.pdf`;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setInvoicesError(err instanceof InvoiceApiError ? err.message : 'Could not download this invoice.');
+    } finally {
+      setRecordAction(null);
+    }
+  };
 
   const handleToggleStatus = async () => {
     if (!client || !statusTarget) return;
@@ -228,14 +349,16 @@ export default function ClientDetailPage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors ${
+            className={`inline-flex items-center gap-2 whitespace-nowrap px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors ${
               tab === t.key ? 'border-[var(--primary)] text-[var(--foreground)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'
             }`}
           >
+            <t.icon size={14} />
             {t.label}
-            {t.key === 'candidates' && candidatesMeta.total > 0 && (
-              <span className="ml-1.5 text-[11px] text-[var(--muted)]">({candidatesMeta.total})</span>
-            )}
+            {t.key === 'candidates' && candidatesMeta.total > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px]">{candidatesMeta.total}</span>}
+            {t.key === 'cases' && casesTotal > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px]">{casesTotal}</span>}
+            {t.key === 'reports' && reportsTotal > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px]">{reportsTotal}</span>}
+            {t.key === 'invoices' && invoicesTotal > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px]">{invoicesTotal}</span>}
           </button>
         ))}
       </div>
@@ -336,6 +459,80 @@ export default function ClientDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {(tab === 'cases' || tab === 'reports') && (() => {
+        const isReports = tab === 'reports';
+        const rows = isReports ? reports : cases;
+        const loadingRows = isReports ? reportsLoading : casesLoading;
+        const loadError = isReports ? reportsError : casesError;
+        const total = isReports ? reportsTotal : casesTotal;
+        const currentPage = isReports ? reportsPage : casesPage;
+        const setCurrentPage = isReports ? setReportsPage : setCasesPage;
+        const title = isReports ? 'Completed verification reports' : 'Background verification cases';
+        return (
+          <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+            <div className="flex flex-col gap-3 border-b border-[var(--border)] bg-gradient-to-r from-[var(--primary)]/10 via-[var(--surface)] to-[var(--surface)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--primary)]/15 text-[var(--primary)]">{isReports ? <FileText size={19} /> : <FileCheck2 size={19} />}</span>
+                <div><h2 className="text-[15px] font-semibold">{title}</h2><p className="mt-0.5 text-[12px] text-[var(--muted)]">{total} record{total === 1 ? '' : 's'} for {client.name}</p></div>
+              </div>
+              <button type="button" onClick={() => router.push(isReports ? '/company/reports' : `/company/bgv-cases?clientId=${encodeURIComponent(client.id)}`)} className="inline-flex items-center justify-center gap-1.5 self-start rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[12px] font-semibold text-[var(--foreground)] transition-colors hover:bg-[var(--surface-muted)] sm:self-auto">
+                Open {isReports ? 'reports' : 'all cases'} <ChevronRight size={14} />
+              </button>
+            </div>
+            {loadError && <p role="alert" className="border-b border-[#FF6B6B]/20 bg-[#FF6B6B]/10 px-5 py-3 text-[12px] text-[#FF6B6B]">{loadError}</p>}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[680px] text-left text-[13px]">
+                <thead className="border-b border-[var(--border)] bg-[var(--surface-muted)]/60 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                  <tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">{isReports ? 'Completed' : 'Created'}</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Result</th><th className="px-5 py-3 text-right">Action</th></tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {loadingRows ? <tr><td colSpan={6} className="px-5 py-14 text-center text-[var(--muted)]">Loading {isReports ? 'reports' : 'cases'}…</td></tr>
+                    : rows.length === 0 ? <tr><td colSpan={6} className="px-5 py-16 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">{isReports ? <FileText size={21} /> : <FileCheck2 size={21} />}</span><p className="mt-3 text-[13px] font-semibold">{isReports ? 'No completed reports yet' : 'No BGV cases yet'}</p><p className="mt-1 text-[12px] text-[var(--muted)]">{isReports ? 'Reports appear here when a case is completed.' : 'Cases created for this client will appear here.'}</p></td></tr>
+                      : rows.map((item) => (
+                        <tr key={item.id} className="transition-colors hover:bg-[var(--surface-muted)]/60">
+                          <td className="px-5 py-3.5"><button type="button" onClick={() => router.push(`/company/bgv-cases/${item.id}`)} className="font-mono text-[12px] font-semibold text-[var(--primary)] hover:underline">{item.caseNumber}</button>{item.packageName && <p className="mt-0.5 text-[11px] text-[var(--muted)]">{item.packageName}</p>}</td>
+                          <td className="px-5 py-3.5"><p className="font-medium">{item.candidate ? `${item.candidate.firstName} ${item.candidate.lastName}` : 'Candidate'}</p><p className="text-[11px] text-[var(--muted)]">{item.candidate?.candidateCode || '—'}</p></td>
+                          <td className="px-5 py-3.5 text-[12px] text-[var(--muted)]">{dateLabel(isReports ? item.completedAt : item.createdAt)}</td>
+                          <td className="px-5 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${item.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-700' : item.status === 'CANCELLED' || item.status === 'ON_HOLD' ? 'bg-amber-500/10 text-amber-700' : 'bg-sky-500/10 text-sky-700'}`}>{item.status.replaceAll('_', ' ')}</span></td>
+                          <td className="px-5 py-3.5 text-[12px] text-[var(--muted)]">{item.overallResult.replaceAll('_', ' ')}</td>
+                          <td className="px-5 py-3.5 text-right">{isReports && <button type="button" onClick={() => void downloadReport(item)} disabled={recordAction === `report-${item.id}`} title="Download report" aria-label={`Download report for ${item.caseNumber}`} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-semibold hover:bg-[var(--surface-muted)] disabled:opacity-50"><Download size={13} />{recordAction === `report-${item.id}` ? 'Preparing…' : 'PDF'}</button>}</td>
+                        </tr>
+                      ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between border-t border-[var(--border)] px-5 py-3 text-[11px] text-[var(--muted)]"><span>{total ? `${(currentPage - 1) * RECORD_PAGE_SIZE + 1}–${Math.min(currentPage * RECORD_PAGE_SIZE, total)} of ${total}` : '0 records'}</span><div className="flex gap-2"><button type="button" disabled={currentPage <= 1 || loadingRows} onClick={() => setCurrentPage((value) => Math.max(1, value - 1))} className="rounded-md border border-[var(--border)] p-1.5 hover:bg-[var(--surface-muted)] disabled:opacity-40" aria-label="Previous page"><ChevronLeft size={14} /></button><button type="button" disabled={currentPage >= Math.ceil(total / RECORD_PAGE_SIZE) || loadingRows} onClick={() => setCurrentPage((value) => value + 1)} className="rounded-md border border-[var(--border)] p-1.5 hover:bg-[var(--surface-muted)] disabled:opacity-40" aria-label="Next page"><ChevronRight size={14} /></button></div></div>
+          </section>
+        );
+      })()}
+
+      {tab === 'invoices' && (
+        <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-[var(--border)] bg-gradient-to-r from-[#E7A83E]/15 via-[var(--surface)] to-[var(--surface)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E7A83E]/15 text-[#B87512]"><Receipt size={19} /></span><div><h2 className="text-[15px] font-semibold">Client invoices</h2><p className="mt-0.5 text-[12px] text-[var(--muted)]">{invoicesTotal} invoice{invoicesTotal === 1 ? '' : 's'} for {client.name}</p></div></div>
+            <button type="button" onClick={() => router.push('/company/invoices')} className="inline-flex items-center justify-center gap-1.5 self-start rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[12px] font-semibold hover:bg-[var(--surface-muted)] sm:self-auto">Open invoices <ChevronRight size={14} /></button>
+          </div>
+          {invoicesError && <p role="alert" className="border-b border-[#FF6B6B]/20 bg-[#FF6B6B]/10 px-5 py-3 text-[12px] text-[#FF6B6B]">{invoicesError}</p>}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-[13px]">
+              <thead className="border-b border-[var(--border)] bg-[var(--surface-muted)]/60 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]"><tr><th className="px-5 py-3">Invoice</th><th className="px-5 py-3">Issued / due</th><th className="px-5 py-3 text-right">Total</th><th className="px-5 py-3 text-right">Balance</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Action</th></tr></thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {invoicesLoading ? <tr><td colSpan={6} className="px-5 py-14 text-center text-[var(--muted)]">Loading invoices…</td></tr>
+                  : invoices.length === 0 ? <tr><td colSpan={6} className="px-5 py-16 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E7A83E]/15 text-[#B87512]"><Receipt size={21} /></span><p className="mt-3 text-[13px] font-semibold">No invoices yet</p><p className="mt-1 text-[12px] text-[var(--muted)]">Invoices issued to this client will appear here.</p></td></tr>
+                    : invoices.map((invoice) => <tr key={invoice.id} className="transition-colors hover:bg-[var(--surface-muted)]/60">
+                      <td className="px-5 py-3.5"><p className="font-mono text-[12px] font-semibold text-[var(--foreground)]">{invoice.invoiceNumber}</p>{invoice.purchaseOrderNumber && <p className="mt-0.5 text-[11px] text-[var(--muted)]">PO {invoice.purchaseOrderNumber}</p>}</td>
+                      <td className="px-5 py-3.5 text-[12px]"><p>{dateLabel(invoice.invoiceDate)}</p><p className="mt-0.5 text-[11px] text-[var(--muted)]">Due {dateLabel(invoice.dueDate)}</p></td>
+                      <td className="px-5 py-3.5 text-right font-medium">{currencyLabel(invoice.total, invoice.currency)}</td><td className="px-5 py-3.5 text-right text-[var(--muted)]">{currencyLabel(invoice.balanceDue, invoice.currency)}</td>
+                      <td className="px-5 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${invoice.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-700' : invoice.status === 'OVERDUE' || invoice.status === 'VOID' ? 'bg-rose-500/10 text-rose-700' : invoice.status === 'DRAFT' ? 'bg-slate-500/10 text-slate-600' : 'bg-sky-500/10 text-sky-700'}`}>{invoice.status.replaceAll('_', ' ')}</span></td>
+                      <td className="px-5 py-3.5 text-right"><button type="button" onClick={() => void downloadInvoice(invoice)} disabled={recordAction === `invoice-${invoice.id}`} title="Download invoice PDF" aria-label={`Download ${invoice.invoiceNumber}`} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-semibold hover:bg-[var(--surface-muted)] disabled:opacity-50"><Download size={13} />PDF</button></td>
+                    </tr>)}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between border-t border-[var(--border)] px-5 py-3 text-[11px] text-[var(--muted)]"><span>{invoicesTotal ? `${(invoicesPage - 1) * RECORD_PAGE_SIZE + 1}–${Math.min(invoicesPage * RECORD_PAGE_SIZE, invoicesTotal)} of ${invoicesTotal}` : '0 invoices'}</span><div className="flex gap-2"><button type="button" disabled={invoicesPage <= 1 || invoicesLoading} onClick={() => setInvoicesPage((value) => Math.max(1, value - 1))} className="rounded-md border border-[var(--border)] p-1.5 hover:bg-[var(--surface-muted)] disabled:opacity-40" aria-label="Previous page"><ChevronLeft size={14} /></button><button type="button" disabled={invoicesPage >= Math.ceil(invoicesTotal / RECORD_PAGE_SIZE) || invoicesLoading} onClick={() => setInvoicesPage((value) => value + 1)} className="rounded-md border border-[var(--border)] p-1.5 hover:bg-[var(--surface-muted)] disabled:opacity-40" aria-label="Next page"><ChevronRight size={14} /></button></div></div>
+        </section>
       )}
 
       {statusTarget && (

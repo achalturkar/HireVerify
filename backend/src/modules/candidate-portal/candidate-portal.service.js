@@ -165,6 +165,9 @@ const issue = async ({ candidateId, companyId, expiresInDays = MAX_INVITATION_DA
   const emailSent = await sendInvitationEmail({ candidate: invitation.candidate, token, reminder: false, pendingCount: status.pending.length });
   const lastSentAt = emailSent ? new Date() : invitation.lastSentAt;
   if (emailSent) await prisma.candidatePortalInvitation.update({ where: { candidateId }, data: { lastSentAt } });
+  if (emailSent && invitation.candidate.status === 'PENDING') {
+    await prisma.candidate.update({ where: { id: candidateId }, data: { status: 'INVITED' } });
+  }
   return { ...toStaffStatus({ ...invitation, lastSentAt }), emailSent, status: toDto(invitation) };
 };
 
@@ -231,7 +234,12 @@ const updateProfile = async (token, payload) => {
     }
   }
   if (!Object.keys(data).length) throw new BadRequestError('Provide at least one detail to update.');
-  await prisma.candidate.update({ where: { id: invitation.candidateId }, data });
+  const candidateAfterUpdate = { ...invitation.candidate, ...data };
+  const { profileComplete } = pendingFor(candidateAfterUpdate);
+  const nextStatus = ['PENDING', 'INVITED', 'IN_PROGRESS', 'COMPLETED'].includes(invitation.candidate.status)
+    ? profileComplete ? 'COMPLETED' : 'IN_PROGRESS'
+    : invitation.candidate.status;
+  await prisma.candidate.update({ where: { id: invitation.candidateId }, data: { ...data, status: nextStatus } });
   return getPortal(token);
 };
 

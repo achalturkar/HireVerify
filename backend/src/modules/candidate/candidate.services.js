@@ -198,6 +198,9 @@ const update = async ({ id, companyId, payload, currentUser }) => {
 const remove = async ({ id, companyId }) => {
   const existing = await repo.findById(id, companyId);
   if (!existing) throw new NotFoundError('Candidate not found');
+  if ((existing._count?.bgvCases || 0) > 0) {
+    throw new ConflictError('Candidates with BGV cases cannot be deleted.');
+  }
   await repo.softDelete(id);
 };
 

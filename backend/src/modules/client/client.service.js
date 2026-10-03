@@ -180,7 +180,11 @@ const list = async ({ companyId, query }) => {
   });
 
   return {
-    items: result.items.map(toDto),
+    items: result.items.map((client) => ({
+      ...toDto(client),
+      candidateCount: client._count?.candidates ?? 0,
+      bgvCaseCount: client._count?.bgvCases ?? 0,
+    })),
     total: result.total,
   };
 };
@@ -306,6 +310,14 @@ const remove = async ({ id, companyId }) => {
 
   if (!existing) {
     throw new NotFoundError('Client not found');
+  }
+
+  const candidateCount = existing._count?.candidates ?? 0;
+  const bgvCaseCount = existing._count?.bgvCases ?? 0;
+  if (candidateCount > 0 || bgvCaseCount > 0) {
+    throw new ConflictError(
+      `Cannot delete this client while it has ${candidateCount} candidate${candidateCount === 1 ? '' : 's'} and ${bgvCaseCount} BGV case${bgvCaseCount === 1 ? '' : 's'}. Remove its candidates and cases first.`,
+    );
   }
 
   await repo.softDelete(id);

@@ -179,7 +179,7 @@ export async function createCandidate(
 
 export async function updateCandidate(
   id: string,
-  payload: Partial<Omit<CandidatePayload, 'clientId'>> & { clientId?: string },
+  payload: Partial<Omit<CandidatePayload, 'clientId'>> & { clientId?: string; status?: CandidateStatus },
   accessToken?: string | null
 ): Promise<Candidate> {
   const json = await authFetch(`/candidates/${id}`, accessToken, {

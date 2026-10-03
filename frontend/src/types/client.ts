@@ -25,6 +25,8 @@ export interface Client {
   country: string | null;
   postalCode: string | null;
   status: ClientStatus;
+  candidateCount?: number;
+  bgvCaseCount?: number;
   createdById: string | null;
   updatedById: string | null;
   createdAt: string;

@@ -15,6 +15,7 @@ interface Props {
   submitting: boolean;
   error: string | null;
   initialDraft?: BGVCase | null;
+  preselectedCandidateId?: string;
   onClose: () => void;
   onSubmit: (payload: CreateBGVCasePayload, intent: 'draft' | 'create', draftId?: string) => void;
 }
@@ -48,17 +49,17 @@ const checkTypes: { type: VerificationType; label: string; provider: Verificatio
 
 const inputClass = 'mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]';
 
-export default function BGVCaseWizardModal({ token, submitting, error, initialDraft, onClose, onSubmit }: Props) {
+export default function BGVCaseWizardModal({ token, submitting, error, initialDraft, preselectedCandidateId = '', onClose, onSubmit }: Props) {
   const { user } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [clientId, setClientId] = useState(initialDraft?.clientId || '');
-  const [candidateId, setCandidateId] = useState(initialDraft?.candidateId || '');
+  const [candidateId, setCandidateId] = useState(initialDraft?.candidateId || preselectedCandidateId);
   const [clientReference, setClientReference] = useState(initialDraft?.clientReference || '');
   const [packageName, setPackageName] = useState(initialDraft?.packageName || 'Standard BGV');
   const [remarks, setRemarks] = useState(initialDraft?.remarks || '');
   const [selectedChecks, setSelectedChecks] = useState<VerificationType[]>(initialDraft?.checks?.map((check) => check.type) || ['PAN', 'UAN', 'COURT']);
-  const [step, setStep] = useState(initialDraft ? 4 : 1);
+  const [step, setStep] = useState(initialDraft ? 4 : preselectedCandidateId ? 3 : 1);
   const [loading, setLoading] = useState(true);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [candidateModalOpen, setCandidateModalOpen] = useState(false);
@@ -70,7 +71,9 @@ export default function BGVCaseWizardModal({ token, submitting, error, initialDr
     Promise.all([
       listClients({ page: 1, limit: 200, status: 'ACTIVE', sortBy: 'name', sortOrder: 'asc' }, token),
       listCandidates({ page: 1, limit: 200, sortBy: 'createdAt', sortOrder: 'desc' }, token),
-      initialDraft ? getCandidate(initialDraft.candidateId, token) : Promise.resolve(null),
+      (initialDraft?.candidateId || preselectedCandidateId)
+        ? getCandidate(initialDraft?.candidateId || preselectedCandidateId, token)
+        : Promise.resolve(null),
     ]).then(async ([clientResult, candidateResult, savedCandidate]) => {
       let availableClients = clientResult.items;
       const individual = availableClients.find((client) => client.name === 'Individual / Direct Candidate');
@@ -86,6 +89,10 @@ export default function BGVCaseWizardModal({ token, submitting, error, initialDr
         setCandidates(savedCandidate && !candidateResult.items.some((candidate) => candidate.id === savedCandidate.id)
           ? [savedCandidate, ...candidateResult.items]
           : candidateResult.items);
+        if (savedCandidate && preselectedCandidateId) {
+          setClientId(savedCandidate.clientId);
+          setCandidateId(savedCandidate.id);
+        }
       }
     }).catch((cause) => {
       if (!cancelled) setValidationError(cause instanceof Error ? cause.message : 'Could not load clients and candidates.');
@@ -93,10 +100,11 @@ export default function BGVCaseWizardModal({ token, submitting, error, initialDr
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [initialDraft, token, user?.companyId]);
+  }, [initialDraft, preselectedCandidateId, token, user?.companyId]);
 
   const selectedClient = clients.find((client) => client.id === clientId);
   const selectedCandidate = candidates.find((candidate) => candidate.id === candidateId);
+  const selectedCandidateHasCase = (selectedCandidate?.bgvCaseCount ?? 0) > 0;
   const availableCandidates = candidates.filter((candidate) => candidate.clientId === clientId);
   const toggleCheck = (type: VerificationType) => setSelectedChecks((current) => current.includes(type)
     ? current.filter((item) => item !== type)
@@ -119,6 +127,7 @@ export default function BGVCaseWizardModal({ token, submitting, error, initialDr
     setValidationError(null);
     if (!clientId) return setValidationError('Choose a client first.');
     if (!candidateId) return setValidationError('Choose or add a candidate first.');
+    if (selectedCandidateHasCase) return setValidationError('This candidate already has a BGV case. Select a different candidate.');
     if (intent === 'create' && selectedChecks.length === 0) return setValidationError('Select at least one check before creating the case.');
     onSubmit(makePayload(intent === 'draft' ? 'DRAFT' : 'INITIATED'), intent, initialDraft?.id);
   };
@@ -165,8 +174,13 @@ export default function BGVCaseWizardModal({ token, submitting, error, initialDr
 
     if (step === 2) return <div className="space-y-5">
       <div><h3 className="text-[16px] font-semibold">Choose or add a candidate</h3><p className="mt-1 text-[12px] text-[var(--muted)]">Candidates are filtered to {selectedClient?.name || 'the selected client'}.</p></div>
-      <label className="block text-[12px] font-medium text-[var(--muted)]">Candidate<select value={candidateId} onChange={(event) => setCandidateId(event.target.value)} disabled={loading || Boolean(initialDraft)} className={inputClass}><option value="">Select candidate</option>{availableCandidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.firstName} {candidate.lastName} ({candidate.candidateCode})</option>)}</select></label>
-      {selectedCandidate ? <div className="flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><UserRound size={18} /></span><div className="min-w-0"><p className="truncate text-[13px] font-semibold">{selectedCandidate.firstName} {selectedCandidate.lastName}</p><p className="truncate text-[11px] text-[var(--muted)]">{selectedCandidate.email || 'No email on file'} · {selectedCandidate.phone || 'No phone on file'}</p></div></div> : !loading && <div className="rounded-lg border border-dashed border-[var(--border)] px-4 py-6 text-center"><p className="text-[12px] text-[var(--muted)]">No candidate selected yet.</p></div>}
+      <label className="block text-[12px] font-medium text-[var(--muted)]">Candidate<select value={candidateId} onChange={(event) => setCandidateId(event.target.value)} disabled={loading || Boolean(initialDraft)} className={inputClass}><option value="">Select candidate</option>{availableCandidates.map((candidate) => <option key={candidate.id} value={candidate.id} disabled={(candidate.bgvCaseCount ?? 0) > 0}>{candidate.firstName} {candidate.lastName} ({candidate.candidateCode}){(candidate.bgvCaseCount ?? 0) > 0 ? ' — Already has a BGV case' : ''}</option>)}</select></label>
+      {selectedCandidate && (selectedCandidate.bgvCaseCount ?? 0) > 0 ? (
+        <div role="status" className="rounded-lg border border-[var(--primary)]/25 bg-[var(--primary)]/[0.06] p-4">
+          <p className="text-[13px] font-semibold">{selectedCandidate.firstName} {selectedCandidate.lastName} already has a BGV case.</p>
+          <p className="mt-1 text-[11px] text-[var(--muted)]">Select a different candidate. Only one BGV case can be created per candidate.</p>
+        </div>
+      ) : selectedCandidate ? <div className="flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><UserRound size={18} /></span><div className="min-w-0"><p className="truncate text-[13px] font-semibold">{selectedCandidate.firstName} {selectedCandidate.lastName}</p><p className="truncate text-[11px] text-[var(--muted)]">{selectedCandidate.email || 'No email on file'} · {selectedCandidate.phone || 'No phone on file'}</p></div></div> : !loading && <div className="rounded-lg border border-dashed border-[var(--border)] px-4 py-6 text-center"><p className="text-[12px] text-[var(--muted)]">No candidate selected yet.</p></div>}
       {!initialDraft && <button type="button" onClick={() => { setCandidateError(null); setCandidateModalOpen(true); }} disabled={!clientId || loading} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3.5 py-2.5 text-[12px] font-semibold hover:border-[var(--primary)] disabled:opacity-50"><Plus size={15} />Add candidate for this client</button>}
       {candidateError && <p role="alert" className="text-[12px] text-rose-600">{candidateError}</p>}
       <div className="grid gap-3 sm:grid-cols-2"><label className="text-[11px] text-[var(--muted)]">Client reference<input value={clientReference} onChange={(event) => setClientReference(event.target.value)} maxLength={100} placeholder="Optional" className={inputClass} /></label><label className="text-[11px] text-[var(--muted)]">Package name<input value={packageName} onChange={(event) => setPackageName(event.target.value)} maxLength={150} className={inputClass} /></label></div>
@@ -216,10 +230,10 @@ export default function BGVCaseWizardModal({ token, submitting, error, initialDr
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-2">
           {step > 1 && <button type="button" disabled={submitting} onClick={() => { setValidationError(null); setStep((current) => Math.max(1, current - 1)); }} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-[11.5px] font-medium"><ArrowLeft size={14} />Back</button>}
-          {!initialDraft && <button type="button" disabled={submitting || !clientId || !candidateId} onClick={() => save('draft')} className="rounded-lg px-3 py-2 text-[11.5px] font-semibold text-[var(--muted)] hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-40">Save draft</button>}
+          {!initialDraft && <button type="button" disabled={submitting || !clientId || !candidateId || selectedCandidateHasCase} onClick={() => save('draft')} className="rounded-lg px-3 py-2 text-[11.5px] font-semibold text-[var(--muted)] hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-40">Save draft</button>}
           {initialDraft && <span className="text-[10px] text-[var(--muted)]">Draft {initialDraft.caseNumber}</span>}
         </div>
-        {step < 4 ? <button type="button" disabled={loading || submitting} onClick={continueStep} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50">Continue<ArrowRight size={14} /></button> : <div className="flex gap-2"><button type="button" disabled={submitting} onClick={() => save('draft')} className="rounded-lg border border-[var(--border)] px-3.5 py-2.5 text-[11.5px] font-semibold disabled:opacity-50">{submitting ? 'Saving...' : 'Save draft'}</button><button type="button" disabled={submitting || loading || !selectedChecks.length} onClick={() => save('create')} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50">{submitting && <Loader2 size={14} className="animate-spin" />}{submitting ? 'Creating...' : 'Create case'}</button></div>}
+        {step < 4 ? <button type="button" disabled={loading || submitting || selectedCandidateHasCase} onClick={continueStep} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50">Continue<ArrowRight size={14} /></button> : <div className="flex gap-2"><button type="button" disabled={submitting || selectedCandidateHasCase} onClick={() => save('draft')} className="rounded-lg border border-[var(--border)] px-3.5 py-2.5 text-[11.5px] font-semibold disabled:opacity-50">{submitting ? 'Saving...' : 'Save draft'}</button><button type="button" disabled={submitting || loading || !selectedChecks.length || selectedCandidateHasCase} onClick={() => save('create')} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50">{submitting && <Loader2 size={14} className="animate-spin" />}{submitting ? 'Creating...' : 'Create case'}</button></div>}
       </footer>
     </div>
 

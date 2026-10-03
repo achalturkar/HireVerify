@@ -23,6 +23,7 @@ const verificationRoutes = require('../modules/verification/verification.routes'
 const invoiceRoutes = require('../modules/invoice/invoice.routes');
 const candidatePortalRoutes = require('../modules/candidate-portal/candidate-portal.routes');
 const verifierRoutes = require('../modules/verifier/verifier.routes');
+const verificationModeRoutes = require('../modules/verification-mode/verification-mode.routes');
 const marketingRoutes = require('../modules/marketing/marketing.routes');
 
 const router = express.Router();
@@ -50,6 +51,7 @@ router.use('/candidates', candidateRoutes);
 router.use('/bgv/cases', bgvCaseRoutes);
 router.use('/bgv/verifications', verificationRoutes);
 router.use('/bgv/verifiers', verifierRoutes);
+router.use('/bgv/verification-modes', verificationModeRoutes);
 router.use('/invoices', invoiceRoutes);
 router.use('/candidate-portal', candidatePortalRoutes);
 router.use('/marketing', marketingRoutes);

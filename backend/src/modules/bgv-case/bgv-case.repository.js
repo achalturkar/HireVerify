@@ -21,7 +21,6 @@ const findById = (id, companyId) => prisma.bGVCase.findFirst({
 });
 
 const findByCaseNumber = (caseNumber) => prisma.bGVCase.findUnique({ where: { caseNumber } });
-const countByCompany = (companyId) => prisma.bGVCase.count({ where: { companyId } });
 
 const list = async ({ companyId, clientId, candidateId, status, overallResult, search, initiatedFrom, initiatedTo, completedFrom, completedTo, skip, limit, sortBy, sortOrder }) => {
   const where = {
@@ -55,4 +54,4 @@ const remove = (id) => prisma.bGVCase.delete({ where: { id } });
 
 const createEvent = (data) => prisma.verificationEvent.create({ data });
 
-module.exports = { create, findById, findByCaseNumber, countByCompany, list, update, updateMeta, remove, createEvent };
+module.exports = { create, findById, findByCaseNumber, list, update, updateMeta, remove, createEvent };

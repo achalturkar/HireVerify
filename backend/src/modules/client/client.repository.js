@@ -24,6 +24,7 @@ const findById = (
       companyId,
       ...(includeDeleted ? {} : { isDeleted: false }),
     },
+    include: { _count: { select: { candidates: true, bgvCases: true } } },
   });
 
 /**
@@ -165,6 +166,7 @@ const list = async ({
     orderBy: {
       [sortBy]: sortOrder,
     },
+    include: { _count: { select: { candidates: true, bgvCases: true } } },
   }),
 
   prisma.client.count({

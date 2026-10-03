@@ -13,13 +13,6 @@ const TRANSITIONS = Object.fromEntries(CASE_STATUSES.map((status) => [
 
 const toDto = (item) => item;
 
-const nextCaseNumber = async (companyId) => {
-  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { shortCode: true } });
-  const shortCode = company?.shortCode || 'BGV';
-  const count = await repo.countByCompany(companyId);
-  return `${shortCode}-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
-};
-
 const assertOwnership = async ({ companyId, clientId, candidateId }) => {
   const [client, candidate] = await Promise.all([
     prisma.client.findFirst({ where: { id: clientId, companyId, isDeleted: false }, select: { id: true } }),
@@ -31,14 +24,40 @@ const assertOwnership = async ({ companyId, clientId, candidateId }) => {
 
 const create = async ({ payload, companyId, currentUser }) => {
   await assertOwnership({ companyId, clientId: payload.clientId, candidateId: payload.candidateId });
-  const caseNumber = await nextCaseNumber(companyId);
-  const created = await prisma.$transaction(async (tx) => {
-    const item = await tx.bGVCase.create({ data: { companyId, clientId: payload.clientId, candidateId: payload.candidateId, caseNumber, status: payload.status || 'DRAFT', initiatedAt: payload.status === 'INITIATED' ? new Date() : null, clientReference: payload.clientReference || null, packageName: payload.packageName || null, remarks: payload.remarks || null, createdById: currentUser?.id || null } });
-    const checks = payload.checks || [];
-    if (checks.length) await tx.verificationCheck.createMany({ data: checks.map((check) => ({ caseId: item.id, type: check.type, provider: check.provider || 'SUREPASS', priority: check.priority || 0 })) });
-    await tx.verificationEvent.create({ data: { caseId: item.id, eventType: 'CREATED', message: 'BGV case created' } });
-    return item;
-  });
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { shortCode: true } });
+  const numberPrefix = `${company?.shortCode || 'BGV'}-${new Date().getFullYear()}`;
+  let created;
+  try {
+    created = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${numberPrefix}))`;
+
+      const existingCase = await tx.bGVCase.findFirst({
+        where: { companyId, candidateId: payload.candidateId },
+        select: { id: true },
+      });
+      if (existingCase) throw new ConflictError('This candidate already has a BGV case.');
+
+      const existingNumbers = await tx.bGVCase.findMany({
+        where: { caseNumber: { startsWith: `${numberPrefix}-` } },
+        select: { caseNumber: true },
+      });
+      const highestSequence = existingNumbers.reduce((highest, item) => {
+        const suffix = item.caseNumber.slice(numberPrefix.length + 1);
+        if (!/^\d+$/.test(suffix)) return highest;
+        return Math.max(highest, Number(suffix));
+      }, 0);
+      const caseNumber = `${numberPrefix}-${String(highestSequence + 1).padStart(4, '0')}`;
+
+      const item = await tx.bGVCase.create({ data: { companyId, clientId: payload.clientId, candidateId: payload.candidateId, caseNumber, status: payload.status || 'DRAFT', initiatedAt: payload.status === 'INITIATED' ? new Date() : null, clientReference: payload.clientReference || null, packageName: payload.packageName || null, remarks: payload.remarks || null, createdById: currentUser?.id || null } });
+      const checks = payload.checks || [];
+      if (checks.length) await tx.verificationCheck.createMany({ data: checks.map((check) => ({ caseId: item.id, type: check.type, provider: check.provider || 'SUREPASS', priority: check.priority || 0 })) });
+      await tx.verificationEvent.create({ data: { caseId: item.id, eventType: 'CREATED', message: 'BGV case created' } });
+      return item;
+    }, { isolationLevel: 'Serializable' });
+  } catch (error) {
+    if (error.code === 'P2034') throw new ConflictError('A BGV case was just created for this candidate. Refresh and try again.');
+    throw error;
+  }
   return repo.findById(created.id, companyId);
 };
 
@@ -107,8 +126,8 @@ const updateChecks = async ({ id, companyId, checks, currentUser }) => {
 const remove = async ({ id, companyId }) => {
   const current = await repo.findById(id, companyId);
   if (!current) throw new NotFoundError('BGV case not found');
-  if (!['DRAFT', 'CANCELLED'].includes(current.status)) {
-    throw new ConflictError('Only draft or cancelled BGV cases can be deleted.');
+  if (current.status !== 'CANCELLED') {
+    throw new ConflictError('Only cancelled BGV cases can be deleted.');
   }
   await repo.remove(id);
 };

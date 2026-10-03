@@ -566,8 +566,10 @@ export default function ClientsPage() {
                         </button>
                         <button
                           onClick={() => setDeleteTarget(c)}
-                          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[#FF6B6B] hover:bg-[#FF6B6B]/10 transition-colors"
-                          aria-label={`Delete ${c.name}`}
+                          disabled={(c.candidateCount ?? 0) > 0 || (c.bgvCaseCount ?? 0) > 0}
+                          className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[#FF6B6B] hover:bg-[#FF6B6B]/10 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label={(c.candidateCount ?? 0) > 0 || (c.bgvCaseCount ?? 0) > 0 ? `Cannot delete ${c.name}: linked candidates or BGV cases exist` : `Delete ${c.name}`}
+                          title={(c.candidateCount ?? 0) > 0 || (c.bgvCaseCount ?? 0) > 0 ? 'Cannot delete a client with candidates or BGV cases' : `Delete ${c.name}`}
                         >
                           <Trash2 size={13} />
                         </button>
