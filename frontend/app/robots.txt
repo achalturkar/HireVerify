@@ -1,5 +1,12 @@
 User-agent: *
 
 Allow: /
+Disallow: /company/
+Disallow: /super-admin/
+Disallow: /candidate-portal/
+Disallow: /candidate/
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /api/
 
 Sitemap: https://hireverify.brainhuntventures.com/sitemap.xml

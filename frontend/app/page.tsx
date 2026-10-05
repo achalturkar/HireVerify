@@ -48,7 +48,9 @@ import BrandMark from '@/src/components/ui/BrandMark';
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Background Verification Platform | HireVerify",
+  title: {
+    absolute: "HireVerify | BGV Platform by Brainhunt Ventures",
+  },
 
   description:
     "HireVerify is a secure, multi-tenant background verification (BGV) platform. Run PAN, UAN, court and identity checks, manage candidates and clients, and deliver confidential verification reports — all from one dashboard.",
@@ -73,15 +75,28 @@ export const metadata: Metadata = {
   },
 
   openGraph: {
-    title: "HireVerify — Background Verification Platform",
+    title: "HireVerify | Background Verification Platform by Brainhunt Ventures",
     description:
-      "Run PAN, UAN, court and identity checks, manage candidates and clients, and deliver confidential BGV reports from one secure platform.",
+      "HireVerify by Brainhunt Ventures helps Indian employers manage candidate background verification, PAN, UAN and court checks, and confidential reports in one secure platform.",
     url: "https://hireverify.brainhuntventures.com",
+    siteName: "HireVerify by Brainhunt Ventures",
+    locale: "en_IN",
+    type: "website",
     images: [
       {
-        url: "/og-home.png",
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "HireVerify background verification platform by Brainhunt Ventures",
       },
     ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "HireVerify | BGV Platform by Brainhunt Ventures",
+    description:
+      "Manage candidate background verification, checks and client reports with HireVerify.",
+    images: ["/opengraph-image"],
   },
 };
 
@@ -344,11 +359,11 @@ export default function HomePage() {
                   className="text-[42px] sm:text-[60px] font-bold tracking-tight leading-[1.04] text-[var(--foreground)]"
                   style={{ fontFamily: 'var(--font-display)' }}
                 >
-                  Verify smarter.
+                  Background verification
                   <br />
-                  Hire with{' '}
+                  for confident{' '}
                   <span className="relative whitespace-nowrap">
-                    <span className="relative z-10">confidence.</span>
+                    <span className="relative z-10">hiring.</span>
                     <span
                       className="absolute left-0 right-0 bottom-[0.1em] h-[0.3em] rounded-sm -z-0"
                       style={{ background: 'linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 55%, white))', opacity: 0.25 }}
@@ -358,13 +373,13 @@ export default function HomePage() {
                 </h1>
 
                 <p className="text-[16px] text-[var(--muted)] mt-6 max-w-xl mx-auto lg:mx-0 leading-relaxed">
-                  Verify candidates with secure PAN, UAN, court and other background checks — all from one
-                  centralized BGV platform built for companies and their clients.
+                  HireVerify by Brainhunt Ventures helps employers and screening teams manage candidate
+                  background verification, PAN, UAN, court and other checks in one secure BGV platform.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 mt-8">
                   <Link
-                    href="/login"
+                    href="/signup"
                     className="flex items-center gap-2 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] text-[13.5px] font-semibold px-6 py-3 hover:opacity-90 transition-opacity"
                   >
                     <LogIn size={16} />
@@ -927,7 +942,7 @@ export default function HomePage() {
                 Get a quotation
               </Link>
               <Link
-                href="/login"
+                href="/signup"
                 className="flex items-center gap-2 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] text-[13.5px] font-semibold px-5 py-3 hover:opacity-90 transition-opacity"
               >
                 Get started

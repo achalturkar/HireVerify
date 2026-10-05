@@ -20,8 +20,8 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://hireverify.brainhuntventures.com"),
 
   title: {
-    default: "HireVerify | Background Verification Platform",
-    template: "%s | HireVerify",
+    default: "HireVerify | BGV Platform by Brainhunt Ventures",
+    template: "%s | HireVerify by Brainhunt Ventures",
   },
 
   description:
@@ -41,15 +41,11 @@ export const metadata: Metadata = {
     "Client Reports",
   ],
 
-  authors: [
-    {
-      name: "HireVerify",
-    },
-  ],
+  authors: [{ name: "Brainhunt Ventures" }],
 
-  creator: "HireVerify",
+  creator: "Brainhunt Ventures",
 
-  publisher: "HireVerify",
+  publisher: "Brainhunt Ventures",
 
   robots: {
     index: true,
@@ -64,22 +60,18 @@ export const metadata: Metadata = {
     },
   },
 
-  alternates: {
-    canonical: "/",
-  },
-
   openGraph: {
-    title: "HireVerify | Background Verification Platform",
+    title: "HireVerify | BGV Platform by Brainhunt Ventures",
     description:
-      "Manage background verification cases, checks, consent, documents, and secure client reports with HireVerify.",
+      "Manage candidate background verification, checks, consent, documents, and client reports with HireVerify by Brainhunt Ventures.",
     url: "https://hireverify.brainhuntventures.com",
-    siteName: "HireVerify",
-    locale: "en_US",
+    siteName: "HireVerify by Brainhunt Ventures",
+    locale: "en_IN",
     type: "website",
 
     images: [
       {
-        url: "/og-image.png",
+        url: "/opengraph-image",
         width: 1200,
         height: 630,
         alt: "HireVerify",
@@ -89,10 +81,9 @@ export const metadata: Metadata = {
 
   twitter: {
     card: "summary_large_image",
-    title: "HireVerify | Background Verification Platform",
-    description:
-      "Background verification platform for companies and authorized clients.",
-    images: ["/og-image.png"],
+    title: "HireVerify | BGV Platform by Brainhunt Ventures",
+    description: "Background verification platform for companies and authorized clients.",
+    images: ["/opengraph-image"],
   },
 
   icons: {
@@ -100,6 +91,44 @@ export const metadata: Metadata = {
     shortcut: "/favicon.ico",
     apple: "/apple-touch-icon.png",
   },
+};
+
+const organizationStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": "https://hireverify.brainhuntventures.com/#organization",
+  name: "Brainhunt Ventures",
+  alternateName: "HireVerify",
+  url: "https://hireverify.brainhuntventures.com/",
+  brand: {
+    "@type": "Brand",
+    name: "HireVerify",
+  },
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: "Plot No.3, 2nd Floor, Indraprastha Apartment, Dronacharya Nagar, Trimurti Nagar",
+    addressLocality: "Nagpur",
+    postalCode: "440022",
+    addressCountry: "IN",
+  },
+  contactPoint: [
+    {
+      "@type": "ContactPoint",
+      telephone: "+91 96890 03720",
+      email: "contact@brainhuntventures.com",
+      contactType: "sales",
+      areaServed: "IN",
+      availableLanguage: "English",
+    },
+    {
+      "@type": "ContactPoint",
+      telephone: "+91 83903 24344",
+      email: "suhas@brainhuntventures.com",
+      contactType: "technical support",
+      areaServed: "IN",
+      availableLanguage: "English",
+    },
+  ],
 };
 
 export default function RootLayout({
@@ -110,6 +139,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationStructuredData) }}
+        />
         <PlatformBrandingProvider>
           <ThemeProvider>
             <AuthProvider>{children}</AuthProvider>

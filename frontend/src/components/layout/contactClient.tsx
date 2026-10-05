@@ -273,7 +273,10 @@ export default function ContactClient() {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="rounded-3xl border border-[var(--border)] bg-[var(--surface)]/70 p-8 shadow-sm">
+            <form id="contact-form" aria-labelledby="contact-form-heading" onSubmit={handleSubmit} className="rounded-3xl border border-[var(--border)] bg-[var(--surface)]/70 p-8 shadow-sm">
+              <h2 id="contact-form-heading" className="mb-5 text-xl font-semibold text-[var(--foreground)]">
+                Contact HireVerify about your background verification needs
+              </h2>
               {status && (
                 <div
                   className={`mb-5 flex items-start gap-2.5 rounded-2xl border px-4 py-3 text-sm ${
