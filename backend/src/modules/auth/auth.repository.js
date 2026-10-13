@@ -8,6 +8,7 @@ const findUserByEmail = (email) =>
     include: {
       role: { include: { rolePermissions: { include: { permission: true } } } },
       company: true,
+      client: true,
     },
   });
 
@@ -17,6 +18,7 @@ const findUserById = (id) =>
     include: {
       role: { include: { rolePermissions: { include: { permission: true } } } },
       company: true,
+      client: true,
     },
   });
 

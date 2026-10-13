@@ -45,12 +45,16 @@ const authenticate = async (req, _res, next) => {
             },
           },
           company: true,
+          client: true,
         },
       });
       if (!user || user.isDeleted) throw new UnauthorizedError('User not found');
       if (user.status !== 'ACTIVE') throw new ForbiddenError('User account is not active');
       if (user.company && (user.company.isDeleted || user.company.status !== 'ACTIVE') && !user.role.isSuperAdmin) {
         throw new ForbiddenError('Company is not active');
+      }
+      if (user.role.isClientUser && (!user.client || user.client.isDeleted || user.client.status !== 'ACTIVE' || user.client.companyId !== user.companyId)) {
+        throw new ForbiddenError('Client account is not active');
       }
 
       userAuth = {
@@ -59,14 +63,20 @@ const authenticate = async (req, _res, next) => {
         firstName: user.firstName,
         lastName: user.lastName,
         companyId: user.companyId,
+        clientId: user.clientId,
+        client: user.client ? { id: user.client.id, name: user.client.name, logoUrl: user.client.logoUrl } : null,
+        clientPermissions: user.clientPermissions || [],
         mustChangePassword: user.mustChangePassword,
         role: {
           id: user.role.id,
           name: user.role.name,
           isSuperAdmin: user.role.isSuperAdmin,
           isCompanyAdmin: user.role.isCompanyAdmin,
+          isClientUser: user.role.isClientUser,
         },
-        permissions: user.role.rolePermissions.map((rp) => rp.permission.key),
+        permissions: user.role.isClientUser
+          ? (user.clientPermissions || [])
+          : user.role.rolePermissions.map((rp) => rp.permission.key),
       };
       // cache for 60s to keep permissions fresh but reduce DB hits
       await redis.set(cacheKey, JSON.stringify(userAuth), 'EX', 60);

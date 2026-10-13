@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Clock3, FileCheck2, Mail, Pencil, Plus, Search, Trash2, UserRound, Users } from 'lucide-react';
+import { CheckCircle2, Clock3, Copy, FileCheck2, Mail, Pencil, Plus, Search, Trash2, UserRound, Users } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import CandidateConfirmDialog from '@/src/components/layout/company/candidate/CandidateConfirmDialog';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
-import { ApiError, createCandidate, deleteCandidate, listCandidates, updateCandidate } from '@/src/lib/api/candidates';
+import { ApiError, createCandidate, deleteCandidate, listCandidates, sendCandidatePortalLink, updateCandidate } from '@/src/lib/api/candidates';
 import { listClients } from '@/src/lib/api/clients';
 import type { Candidate, CandidateFormValues, CandidateStatus, PaginationMeta } from '@/src/types/candidate';
 import type { Client } from '@/src/types/client';
@@ -39,7 +39,7 @@ const statusStyle: Record<CandidateStatus, string> = {
 };
 
 export default function CandidatesPage() {
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const [items, setItems] = useState<Candidate[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
@@ -56,6 +56,9 @@ export default function CandidatesPage() {
   const [active, setActive] = useState<Candidate | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Candidate | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [candidateNotice, setCandidateNotice] = useState<string | null>(null);
+  const [candidateInviteUrl, setCandidateInviteUrl] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -67,7 +70,10 @@ export default function CandidatesPage() {
     } finally { setLoading(false); }
   }, [accessToken, page, search, clientId, status]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   useEffect(() => {
     let active = true;
@@ -104,12 +110,58 @@ export default function CandidatesPage() {
 
   const submit = async (values: CandidateFormValues) => {
     setSubmitting(true);
+    setFormError(null);
+    setCandidateNotice(null);
+    setCandidateInviteUrl(null);
     try {
-      const payload = { ...values, firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim(), phone: values.phone.trim() || undefined };
-      if (modal === 'create') await createCandidate(payload, accessToken);
-      else if (active) await updateCandidate(active.id, payload, accessToken);
-      setModal(null); setActive(null); await load();
+      const payload = modal === 'create'
+        ? {
+          clientId: values.clientId,
+          firstName: values.firstName.trim(),
+          lastName: values.lastName.trim(),
+          email: values.email.trim(),
+          phone: values.phone.trim() || undefined,
+          dateOfBirth: values.dateOfBirth || null,
+          gender: values.gender || null,
+        }
+        : { ...values, firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim(), phone: values.phone.trim() || undefined };
+      if (modal === 'create') {
+        const created = await createCandidate(payload, accessToken);
+        setModal(null);
+        setActive(null);
+        await load();
+        if (user?.role.isCompanyAdmin || user?.role.isSuperAdmin) {
+          try {
+            const invitation = await sendCandidatePortalLink(created.id, accessToken);
+            setCandidateInviteUrl(invitation.url);
+            setCandidateNotice(invitation.emailSent
+              ? `Candidate added and portal invitation sent to ${created.email}.`
+              : 'Candidate added, but the invitation email could not be delivered. Copy the link to share it.');
+          } catch (inviteError) {
+            setCandidateNotice(`Candidate added, but the invitation failed: ${inviteError instanceof Error ? inviteError.message : 'Please retry from the candidate profile.'}`);
+          }
+        } else {
+          setCandidateNotice('Candidate added. A company admin can send the portal invitation.');
+        }
+      } else if (active) {
+        await updateCandidate(active.id, payload, accessToken);
+        setModal(null);
+        setActive(null);
+        await load();
+      }
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : 'Could not save candidate.');
     } finally { setSubmitting(false); }
+  };
+
+  const copyCandidateInvite = async () => {
+    if (!candidateInviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(candidateInviteUrl);
+      setCandidateNotice('Candidate invitation link copied.');
+    } catch {
+      setCandidateNotice('Could not copy the invitation link. Check clipboard permissions and try again.');
+    }
   };
 
   const remove = async () => {
@@ -123,7 +175,8 @@ export default function CandidatesPage() {
   const clientMap = new Map(clients.map((client) => [client.id, client.name]));
 
   return <div className="mx-auto max-w-6xl space-y-6">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[11px] uppercase tracking-[0.14em] text-[var(--primary)]">Verification subjects</p><h1 className="text-[26px] font-semibold">Candidates</h1><p className="mt-1 text-[13px] text-[var(--muted)]">People linked to background verification cases.</p></div><button onClick={() => { setActive(null); setModal('create'); }} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[13px] font-semibold text-[var(--primary-foreground)]"><Plus size={15} />Add candidate</button></div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[11px] uppercase tracking-[0.14em] text-[var(--primary)]">Verification subjects</p><h1 className="text-[26px] font-semibold">Candidates</h1><p className="mt-1 text-[13px] text-[var(--muted)]">People linked to background verification cases.</p></div><button onClick={() => { setActive(null); setFormError(null); setModal('create'); }} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[13px] font-semibold text-[var(--primary-foreground)]"><Plus size={15} />Add candidate</button></div>
+    {candidateNotice && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-[12px] text-emerald-700"><span>{candidateNotice}</span>{candidateInviteUrl && <button type="button" onClick={copyCandidateInvite} className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 px-2.5 py-1.5 font-semibold"><Copy size={13} />Copy invitation link</button>}</div>}
     <section aria-label="Candidate summary" className="space-y-3">
       <div>
         <h2 className="text-[15px] font-semibold text-[var(--foreground)]">Candidate overview</h2>
@@ -150,6 +203,6 @@ export default function CandidatesPage() {
       {loading ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]">Loading candidates...</td></tr> : error ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[#FF6B6B]">{error}</td></tr> : items.length === 0 ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]"><Users size={24} className="mx-auto mb-2" />No candidates found.</td></tr> : items.map((candidate) => <tr key={candidate.id} onClick={() => { window.location.href = `/company/candidate/${candidate.id}`; }} className="cursor-pointer transition-colors hover:bg-[var(--surface-muted)]"><td className="px-5 py-4 font-mono text-[12px] text-[var(--muted)]">{candidate.candidateCode}</td><td className="px-5 py-4"><Link href={`/company/candidate/${candidate.id}`} className="font-medium hover:text-[var(--primary)]">{candidate.firstName} {candidate.lastName}</Link><p className="text-[11px] text-[var(--muted)]">{candidate.email}</p></td><td className="px-5 py-4 text-[var(--muted)]">{clientMap.get(candidate.clientId) ?? '—'}</td><td className="px-5 py-4">{candidate.bgvCaseCount ?? 0}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${statusStyle[candidate.status]}`}>{statusLabel[candidate.status]}</span></td><td className="px-5 py-4 text-right"><div className="inline-flex items-center gap-1">
         {(candidate.bgvCaseCount ?? 0) > 0 && <Link href={`/company/bgv-cases?candidateId=${encodeURIComponent(candidate.id)}`} aria-label={`View ${candidate.bgvCaseCount} BGV cases for ${candidate.firstName} ${candidate.lastName}`} title="Open this candidate's BGV cases" onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-1 rounded-md px-2 py-2 text-xs font-semibold text-[var(--primary)] hover:bg-[var(--surface-muted)]"><FileCheck2 size={15} /><span>Cases</span></Link>}
         <button aria-label="Send candidate portal link" title="Send or resend candidate portal link" onClick={(event) => { event.stopPropagation(); setActive(candidate); setModal('edit'); }} className="rounded-md p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)]"><Mail size={15} /></button><button aria-label="Edit candidate" onClick={(event) => { event.stopPropagation(); setActive(candidate); setModal('edit'); }} className="rounded-md p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)]"><Pencil size={15} /></button><button aria-label={(candidate.bgvCaseCount ?? 0) > 0 ? `Cannot delete ${candidate.firstName} ${candidate.lastName}: candidate has a BGV case` : `Delete candidate ${candidate.firstName} ${candidate.lastName}`} title={(candidate.bgvCaseCount ?? 0) > 0 ? 'Candidates with BGV cases cannot be deleted' : 'Delete candidate'} disabled={(candidate.bgvCaseCount ?? 0) > 0} onClick={(event) => { event.stopPropagation(); setDeleteTarget(candidate); }} className="rounded-md p-2 text-[#FF6B6B] hover:bg-[#FF6B6B]/10 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={15} /></button></div></td></tr>)}</tbody></table></div>        <div className="flex flex-col items-center gap-2.5 border-t border-[var(--border)] px-5 py-3 text-[12px] text-[var(--muted)]"><span>{meta.total} candidates</span><div className="flex justify-center gap-2"><button disabled={page <= 1} onClick={() => setPage((current) => current - 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Previous</button><button disabled={page >= meta.totalPages} onClick={() => setPage((current) => current + 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Next</button></div></div></div>
-    {modal && <CandidateFormModal mode={modal} candidate={active} submitting={submitting} error={null} onClose={() => { setModal(null); setActive(null); }} onSubmit={submit} />}{deleteTarget && <CandidateConfirmDialog title="Delete candidate?" description="This hides the candidate from active BGV workflows." confirmLabel="Delete" submitting={submitting} onConfirm={remove} onCancel={() => setDeleteTarget(null)} />}
+    {modal && <CandidateFormModal mode={modal} candidate={active} submitting={submitting} error={formError} onClose={() => { setModal(null); setActive(null); }} onSubmit={submit} />}{deleteTarget && <CandidateConfirmDialog title="Delete candidate?" description="This hides the candidate from active BGV workflows." confirmLabel="Delete" submitting={submitting} onConfirm={remove} onCancel={() => setDeleteTarget(null)} />}
   </div>;
 }

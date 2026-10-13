@@ -185,6 +185,31 @@ router.post(
     controller.inactivateClient
 );
 
+router.get(
+    '/:id/portal-users',
+    authorize('client.update'),
+    validate(v.portalUsersValidator),
+    controller.listPortalUsers
+);
+router.post(
+    '/:id/portal-users',
+    authorize('client.update'),
+    validate(v.invitePortalUserValidator),
+    controller.invitePortalUser
+);
+router.put(
+    '/:id/portal-users/:userId',
+    authorize('client.update'),
+    validate(v.updatePortalUserValidator),
+    controller.updatePortalUser
+);
+router.delete(
+    '/:id/portal-users/:userId',
+    authorize('client.update'),
+    validate(v.portalUserIdValidator),
+    controller.removePortalUser
+);
+
 router.post(
     '/:id/restore',
     authorize('client.update'),

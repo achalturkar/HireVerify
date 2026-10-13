@@ -22,11 +22,14 @@ import {
   Loader2,
   Lock,
   Mail,
+  Pencil,
+  Save,
   Send,
   ShieldCheck,
   Unlock,
   UserRound,
   Users,
+  X,
   XCircle,
   ArrowRight,
 } from 'lucide-react';
@@ -43,6 +46,8 @@ import type { Candidate } from '@/src/types/candidate';
 type CandidateDocument = { id: string; documentType: string; documentNumber?: string | null; fileName: string; fileUrl: string; verificationStatus: string; uploadedAt: string };
 type CandidateDetail = Candidate & { documents?: CandidateDocument[] };
 type Tab = 'summary' | 'personal' | 'family' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal';
+type ProfileKey = keyof Pick<Candidate, 'firstName' | 'lastName' | 'email' | 'phone' | 'dateOfBirth' | 'gender' | 'fatherName' | 'motherName' | 'aadhaarNumber' | 'panNumber' | 'uanNumber' | 'passportNumber' | 'drivingLicenseNumber' | 'voterIdNumber' | 'highestQualification' | 'courseName' | 'institutionName' | 'universityName' | 'yearOfPassing' | 'gradeOrPercentage' | 'employeeId' | 'employeeDesignation' | 'employeeDepartment' | 'employmentType' | 'joiningDate' | 'workLocation' | 'currentEmployer' | 'currentAddress' | 'permanentAddress'>;
+type ProfileDraft = Record<ProfileKey, string>;
 type PortalState = 'none' | 'active' | 'expiring' | 'expired' | 'locked';
 type Category = 'identity' | 'education' | 'employment' | 'address' | 'other';
 
@@ -90,6 +95,16 @@ const PORTAL_STATES: Record<PortalState, { label: string; badge: string; panel: 
 const humanize = (value: string) => value.replaceAll('_', ' ').toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
 const isFilled = (value: unknown) => value !== null && value !== undefined && String(value).trim() !== '';
 const valueOrDash = (value: unknown) => (isFilled(value) ? String(value) : 'Not provided');
+const editableProfileFields: ProfileKey[] = [
+  'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName',
+  'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber',
+  'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage',
+  'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation',
+  'currentEmployer', 'currentAddress', 'permanentAddress',
+];
+const toProfileDraft = (candidate: CandidateDetail): ProfileDraft => Object.fromEntries(
+  editableProfileFields.map((key) => [key, ['dateOfBirth', 'joiningDate'].includes(key) ? String(candidate[key] || '').slice(0, 10) : String(candidate[key] ?? '')]),
+) as ProfileDraft;
 
 const parseDate = (value: unknown): Date | null => {
   if (!value) return null;
@@ -177,6 +192,46 @@ function InfoGrid({ rows }: { rows: [string, unknown][] }) {
   );
 }
 
+function EditableFields({
+  rows,
+  editing,
+  values,
+  onChange,
+}: {
+  rows: { key: ProfileKey; label: string; type?: 'text' | 'email' | 'date' | 'number' | 'textarea' | 'gender' }[];
+  editing: boolean;
+  values: ProfileDraft;
+  onChange: (key: ProfileKey, value: string) => void;
+}) {
+  return (
+    <dl className="grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+      {rows.map(({ key, label, type = 'text' }) => (
+        <div key={key} className={type === 'textarea' ? 'sm:col-span-2 lg:col-span-3' : ''}>
+          {editing ? (
+            <label className="block text-xs font-medium text-[var(--muted)]">
+              {label}
+              {type === 'textarea' ? (
+                <textarea rows={3} value={values[key]} onChange={(event) => onChange(key, event.target.value)} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm text-[var(--foreground)]" />
+              ) : type === 'gender' ? (
+                <select value={values[key]} onChange={(event) => onChange(key, event.target.value)} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm text-[var(--foreground)]">
+                  <option value="">Prefer not to say</option><option value="FEMALE">Female</option><option value="MALE">Male</option><option value="NON_BINARY">Non-binary</option><option value="OTHER">Other</option>
+                </select>
+              ) : (
+                <input type={type} value={values[key]} onChange={(event) => onChange(key, event.target.value)} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm text-[var(--foreground)]" />
+              )}
+            </label>
+          ) : (
+            <>
+              <dt className="text-xs font-medium text-[var(--muted)]">{label}</dt>
+              <dd className="mt-1 break-words text-sm">{type === 'date' ? formatDate(values[key]) || 'Not provided' : valueOrDash(values[key])}</dd>
+            </>
+          )}
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function ProgressBar({ percent }: { percent: number }) {
   return (
     <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-muted)]" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
@@ -222,7 +277,7 @@ function DocumentList({ documents, origin, emptyText, showCategory }: { document
   );
 }
 
-function IdentityCard({ title, value, documents, origin }: { title: string; value: unknown; documents: CandidateDocument[]; origin: string }) {
+function IdentityCard({ title, value, documents, origin, editing, onChange }: { title: string; value: unknown; documents: CandidateDocument[]; origin: string; editing?: boolean; onChange?: (value: string) => void }) {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
   const text = isFilled(value) ? String(value) : '';
@@ -250,9 +305,9 @@ function IdentityCard({ title, value, documents, origin }: { title: string; valu
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--surface-muted)] px-4 py-3">
         <div>
           <p className="text-xs text-[var(--muted)]">Number</p>
-          <p className={`mt-0.5 font-mono text-sm ${text ? 'font-semibold tracking-wide' : 'font-sans text-[var(--muted)]'}`}>{text ? (revealed ? text : maskValue(text)) : 'Not provided'}</p>
+          {editing ? <input aria-label={`${title} number`} value={text} onChange={(event) => onChange?.(event.target.value)} className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 font-mono text-sm" /> : <p className={`mt-0.5 font-mono text-sm ${text ? 'font-semibold tracking-wide' : 'font-sans text-[var(--muted)]'}`}>{text ? (revealed ? text : maskValue(text)) : 'Not provided'}</p>}
         </div>
-        {text && (
+        {!editing && text && (
           <div className="flex items-center gap-1">
             <button type="button" onClick={() => setRevealed((previous) => !previous)} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[var(--muted)] hover:bg-[var(--surface)]" aria-pressed={revealed}>
               {revealed ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
@@ -297,12 +352,16 @@ function DurationPicker({ value, onChange, valid }: { value: string; onChange: (
 export default function CandidateDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { accessToken } = useAuth();
+  const { accessToken, permissions } = useAuth();
+  const canUpdateCandidate = permissions.includes('candidate.update');
   const [candidate, setCandidate] = useState<CandidateDetail | null>(null);
   const [bgvCases, setBgvCases] = useState<BGVCase[]>([]);
   const [casesLoading, setCasesLoading] = useState(false);
   const [casesError, setCasesError] = useState('');
   const [portal, setPortal] = useState<CandidatePortalStatus | null>(null);
+  const [profileValues, setProfileValues] = useState<ProfileDraft | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [daysInput, setDaysInput] = useState('7');
   const [tab, setTab] = useState<Tab>('summary');
   const [docFilter, setDocFilter] = useState<Category | 'all'>('all');
@@ -331,7 +390,9 @@ export default function CandidateDetailPage() {
         getCandidatePortalStatus(id, accessToken),
         casesRequest,
       ]);
-      setCandidate(detail as CandidateDetail);
+      const candidateDetail = detail as CandidateDetail;
+      setCandidate(candidateDetail);
+      setProfileValues(toProfileDraft(candidateDetail));
       setPortal(status ?? (detail.portalInvitation ? { ...detail.portalInvitation, url: null } : null));
       setBgvCases(casesResult.items);
       setCasesError(casesResult.error);
@@ -343,7 +404,29 @@ export default function CandidateDetailPage() {
     }
   }, [id, accessToken]);
 
-  useEffect(() => { if (id) void load(); }, [id, load]);
+  const saveProfile = async () => {
+    if (!profileValues) return;
+    setSavingProfile(true);
+    setError('');
+    setNotice('');
+    try {
+      const payload = Object.fromEntries(editableProfileFields.map((key) => [key, profileValues[key].trim() || null]));
+      await updateCandidate(id, payload, accessToken);
+      setEditingProfile(false);
+      setNotice('Candidate details saved.');
+      await load();
+    } catch (saveError) {
+      setError(saveError instanceof ApiError ? saveError.message : 'Could not save candidate details.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!id) return;
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [id, load]);
 
   useEffect(() => {
     if (!id) return;
@@ -439,12 +522,13 @@ export default function CandidateDetailPage() {
     }, 'Could not send portal reminder.');
   };
 
-  const markCandidateCompleted = () => {
+  const changeCandidateStatus = (status: Candidate['status']) => {
+    if (!candidate || status === candidate.status) return;
     void run(async () => {
-      const updated = await updateCandidate(id, { status: 'COMPLETED' }, accessToken);
+      const updated = await updateCandidate(id, { status }, accessToken);
       setCandidate((current) => current ? { ...current, status: updated.status, updatedAt: updated.updatedAt } : current);
-      setNotice('Candidate details marked as completed.');
-    }, 'Could not mark candidate details as completed.');
+      setNotice(`Candidate status changed to ${humanize(status)}.`);
+    }, 'Could not update candidate status.');
   };
 
   const replacePortalLink = () => {
@@ -520,8 +604,16 @@ export default function CandidateDetailPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Pill className="bg-[var(--surface-muted)] text-[var(--muted)] ring-[var(--border)]">{humanize(candidate.status)}</Pill>
-            {overallPercent === 100 && candidate.status !== 'COMPLETED' && <button type="button" onClick={markCandidateCompleted} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3.5 py-2 text-sm font-semibold text-[var(--primary-foreground)] disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 size={15} aria-hidden="true" />{busy ? 'Updating...' : 'Mark as completed'}</button>}
+            {canUpdateCandidate ? (
+              <label className="sr-only" htmlFor="candidate-status">Candidate status</label>
+            ) : null}
+            {canUpdateCandidate ? (
+              <select id="candidate-status" aria-label="Candidate status" value={candidate.status} onChange={(event) => changeCandidateStatus(event.target.value as Candidate['status'])} disabled={busy} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium disabled:opacity-50">
+                {(['PENDING', 'INVITED', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'ON_HOLD'] as Candidate['status'][]).map((status) => <option key={status} value={status}>{humanize(status)}</option>)}
+              </select>
+            ) : (
+              <Pill className="bg-[var(--surface-muted)] text-[var(--muted)] ring-[var(--border)]">{humanize(candidate.status)}</Pill>
+            )}
             <button type="button" onClick={() => setTab('portal')} className="rounded-full" aria-label={`Portal link ${stateInfo.label}. Open portal access`}>
               <Pill className={stateInfo.badge} icon={StateIcon}>Portal {stateInfo.label.toLowerCase()}</Pill>
             </button>
@@ -593,6 +685,19 @@ export default function CandidateDetailPage() {
         </div>
       </nav>
 
+      {profileValues && ['personal', 'family', 'identity', 'education', 'employment', 'addresses'].includes(tab) && (
+        <div className="flex justify-end gap-2">
+          {editingProfile ? (
+            <>
+              <button type="button" onClick={() => { setProfileValues(toProfileDraft(candidate)); setEditingProfile(false); setError(''); }} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold"><X size={14} />Cancel</button>
+              <button type="button" onClick={() => void saveProfile()} disabled={savingProfile} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Save size={14} />{savingProfile ? 'Saving…' : 'Save changes'}</button>
+            </>
+          ) : (
+            <button type="button" onClick={() => { setEditingProfile(true); setNotice(''); }} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-muted)]"><Pencil size={14} />Edit details</button>
+          )}
+        </div>
+      )}
+
       {tab === 'summary' && (
         <div className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -661,13 +766,16 @@ export default function CandidateDetailPage() {
 
       {tab === 'personal' && (
         <Panel title="Personal information" description="Contact and identity details submitted by the candidate.">
-          <InfoGrid rows={[['First name', candidate.firstName], ['Last name', candidate.lastName], ['Email', candidate.email], ['Phone', candidate.phone], ['Date of birth', formatDate(candidate.dateOfBirth)], ['Gender', candidate.gender]]} />
+          {profileValues && <EditableFields rows={[
+            { key: 'firstName', label: 'First name' }, { key: 'lastName', label: 'Last name' }, { key: 'email', label: 'Email', type: 'email' },
+            { key: 'phone', label: 'Phone' }, { key: 'dateOfBirth', label: 'Date of birth', type: 'date' }, { key: 'gender', label: 'Gender', type: 'gender' },
+          ]} editing={editingProfile} values={profileValues} onChange={(key, value) => setProfileValues((current) => current ? { ...current, [key]: value } : current)} />}
         </Panel>
       )}
 
       {tab === 'family' && (
         <Panel title="Family details" description="Parent names provided by the candidate.">
-          <InfoGrid rows={[["Father's name", candidate.fatherName], ["Mother's name", candidate.motherName]]} />
+          {profileValues && <EditableFields rows={[{ key: 'fatherName', label: "Father's name" }, { key: 'motherName', label: "Mother's name" }]} editing={editingProfile} values={profileValues} onChange={(key, value) => setProfileValues((current) => current ? { ...current, [key]: value } : current)} />}
         </Panel>
       )}
 
@@ -675,7 +783,7 @@ export default function CandidateDetailPage() {
         <div className="space-y-4">
           <p className="px-1 text-sm text-[var(--muted)]">Numbers are hidden by default. Show a number to compare it with the uploaded copy.</p>
           {IDENTITY_ITEMS.map((item) => (
-            <IdentityCard key={item.docType} title={item.title} value={field(item.fieldKey)} documents={documents.filter((document) => document.documentType === item.docType)} origin={origin} />
+            <IdentityCard key={item.docType} title={item.title} value={profileValues?.[item.fieldKey as ProfileKey] ?? field(item.fieldKey)} documents={documents.filter((document) => document.documentType === item.docType)} origin={origin} editing={editingProfile} onChange={(value) => setProfileValues((current) => current ? { ...current, [item.fieldKey as ProfileKey]: value } : current)} />
           ))}
         </div>
       )}
@@ -683,7 +791,10 @@ export default function CandidateDetailPage() {
       {tab === 'education' && (
         <div className="space-y-5">
           <Panel title="Education information" description="Education details submitted for verification.">
-            <InfoGrid rows={[['Highest qualification', field('highestQualification')], ['Course or degree', field('courseName')], ['College or school', field('institutionName')], ['University or board', field('universityName')], ['Year of passing', field('yearOfPassing')], ['Percentage or CGPA', field('gradeOrPercentage')]]} />
+            {profileValues && <EditableFields rows={[
+              { key: 'highestQualification', label: 'Highest qualification' }, { key: 'courseName', label: 'Course or degree' }, { key: 'institutionName', label: 'College or school' },
+              { key: 'universityName', label: 'University or board' }, { key: 'yearOfPassing', label: 'Year of passing', type: 'number' }, { key: 'gradeOrPercentage', label: 'Percentage or CGPA' },
+            ]} editing={editingProfile} values={profileValues} onChange={(key, value) => setProfileValues((current) => current ? { ...current, [key]: value } : current)} />}
           </Panel>
           <Panel title="Education documents" description="Certificates and marksheets uploaded by the candidate.">
             <DocumentList documents={docsOf('education')} origin={origin} emptyText="No education documents uploaded yet." />
@@ -694,7 +805,11 @@ export default function CandidateDetailPage() {
       {tab === 'employment' && (
         <div className="space-y-5">
           <Panel title="Employment information" description="Employment details submitted for verification.">
-            <InfoGrid rows={[['Current employer', field('currentEmployer')], ['Employee ID', field('employeeId')], ['Designation', field('employeeDesignation')], ['Department', field('employeeDepartment')], ['Employment type', field('employmentType')], ['Joining date', formatDate(field('joiningDate'))], ['Work location', field('workLocation')]]} />
+            {profileValues && <EditableFields rows={[
+              { key: 'currentEmployer', label: 'Current employer' }, { key: 'employeeId', label: 'Employee ID' }, { key: 'employeeDesignation', label: 'Designation' },
+              { key: 'employeeDepartment', label: 'Department' }, { key: 'employmentType', label: 'Employment type' }, { key: 'joiningDate', label: 'Joining date', type: 'date' },
+              { key: 'workLocation', label: 'Work location' },
+            ]} editing={editingProfile} values={profileValues} onChange={(key, value) => setProfileValues((current) => current ? { ...current, [key]: value } : current)} />}
           </Panel>
           <Panel title="Employment documents" description="Experience letters and salary slips uploaded by the candidate.">
             <DocumentList documents={docsOf('employment')} origin={origin} emptyText="No employment documents uploaded yet." />
@@ -709,7 +824,7 @@ export default function CandidateDetailPage() {
               {([['Current address', field('currentAddress')], ['Permanent address', field('permanentAddress')]] as [string, unknown][]).map(([label, value]) => (
                 <div key={label} className="min-h-32 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
                   <h3 className="text-sm font-semibold">{label}</h3>
-                  <p className={`mt-2 whitespace-pre-wrap text-sm leading-6 ${isFilled(value) ? '' : 'text-[var(--muted)]'}`}>{valueOrDash(value)}</p>
+                  {editingProfile && profileValues ? <textarea rows={3} aria-label={label} value={profileValues[label.startsWith('Current') ? 'currentAddress' : 'permanentAddress']} onChange={(event) => setProfileValues((current) => current ? { ...current, [label.startsWith('Current') ? 'currentAddress' : 'permanentAddress']: event.target.value } : current)} className="mt-2 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm" /> : <p className={`mt-2 whitespace-pre-wrap text-sm leading-6 ${isFilled(value) ? '' : 'text-[var(--muted)]'}`}>{valueOrDash(value)}</p>}
                 </div>
               ))}
             </div>

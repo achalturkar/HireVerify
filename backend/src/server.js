@@ -47,6 +47,19 @@ const ensureDefaultSuperAdmin = async () => {
       });
     }
 
+    let clientUserRole = await prisma.role.findFirst({ where: { companyId: null, isClientUser: true } });
+    if (!clientUserRole) {
+      clientUserRole = await prisma.role.create({
+        data: {
+          companyId: null,
+          name: 'Client Portal User',
+          description: 'Restricted client portal account; access is granted per user',
+          isSystem: true,
+          isClientUser: true,
+        },
+      });
+    }
+
     const allPermissions = await prisma.permission.findMany();
     await prisma.rolePermission.createMany({
       data: allPermissions.map((permission) => ({ roleId: superAdminRole.id, permissionId: permission.id })),

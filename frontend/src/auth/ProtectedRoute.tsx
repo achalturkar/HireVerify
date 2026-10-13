@@ -36,6 +36,10 @@ export default function ProtectedRoute({
 
       router.replace("/login");
 
+    } else if (user.role.isClientUser) {
+
+      router.replace("/client-portal");
+
     }
 
   }, [loading, user, router]);
@@ -50,7 +54,7 @@ export default function ProtectedRoute({
 
   }
 
-  if (!user) {
+  if (!user || user.role.isClientUser) {
 
     return null;
 

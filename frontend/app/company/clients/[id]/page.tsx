@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, Download, FileCheck2, FileText, Globe, Mail, Pencil, Phone, Receipt, Users, MapPin, Power, PowerOff,
+  ArrowLeft, ChevronLeft, ChevronRight, Download, FileCheck2, FileText, Globe, Mail, Pencil, Phone, Receipt, Users, MapPin, Power, PowerOff, ShieldCheck, UserPlus, Trash2, Building2, SlidersHorizontal,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { getClient, updateClient, activateClient, inactivateClient, ApiError as ClientApiError } from '@/src/lib/api/clients';
+import { getClient, updateClient, activateClient, inactivateClient, listClientPortalUsers, inviteClientPortalUser, updateClientPortalUser, revokeClientPortalUser, ApiError as ClientApiError } from '@/src/lib/api/clients';
 import { listCandidates, createCandidate, ApiError as CandidateApiError } from '@/src/lib/api/candidates';
 import { ApiError as BGVApiError, downloadBGVReport, listBGVCases } from '@/src/lib/api/bgv';
 import type { BGVCase } from '@/src/types/bgv';
@@ -15,11 +16,12 @@ import type { Invoice } from '@/src/lib/api/invoices';
 import ClientFormModal from '@/src/components/layout/company/client/ClientFormModal';
 import ClientConfirmDialog from '@/src/components/layout/company/client/ClientConfirmDialog';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
-import type { Client, ClientFormValues } from '@/src/types/client';
+import { CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
+import type { CandidateFormConfig, Client, ClientFormValues, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
 import type { Candidate, CandidateFormValues, PaginationMeta } from '@/src/types/candidate';
 
 const PAGE_SIZE = 10;
-type TabKey = 'overview' | 'billing' | 'candidates' | 'cases' | 'reports' | 'invoices';
+type TabKey = 'overview' | 'billing' | 'candidates' | 'cases' | 'reports' | 'invoices' | 'report-branding' | 'candidate-form' | 'portal-access';
 const TABS: { key: TabKey; label: string; icon: typeof Users }[] = [
   { key: 'overview', label: 'Overview', icon: Users },
   { key: 'billing', label: 'Billing details', icon: Receipt },
@@ -27,7 +29,40 @@ const TABS: { key: TabKey; label: string; icon: typeof Users }[] = [
   { key: 'cases', label: 'BGV cases', icon: FileCheck2 },
   { key: 'reports', label: 'Reports', icon: FileText },
   { key: 'invoices', label: 'Invoices', icon: Receipt },
+  { key: 'report-branding', label: 'Report branding', icon: Building2 },
+  { key: 'candidate-form', label: 'Candidate form', icon: SlidersHorizontal },
+  { key: 'portal-access', label: 'Portal access', icon: ShieldCheck },
 ];
+const PORTAL_PERMISSION_OPTIONS: { key: ClientPortalPermission; label: string; description: string }[] = [
+  { key: 'clientportal.candidates.view', label: 'View candidates', description: 'View candidate names, references and contact details.' },
+  { key: 'clientportal.candidates.create', label: 'Create candidates', description: 'Add candidate records. Also enables candidate viewing.' },
+  { key: 'clientportal.candidates.update', label: 'Update candidates', description: 'Edit candidate contact details. Also enables candidate viewing.' },
+  { key: 'clientportal.candidates.invite', label: 'Invite candidates', description: 'Send candidates a secure link to complete their profile. Also enables candidate viewing.' },
+  { key: 'clientportal.candidates.portal.manage', label: 'Manage candidate portal access', description: 'Lock and unlock candidate portal links. Also enables candidate viewing.' },
+  { key: 'clientportal.cases.view', label: 'View case progress', description: 'View BGV case numbers, statuses and outcomes.' },
+  { key: 'clientportal.reports.view', label: 'View completed reports', description: 'View completed report listings.' },
+  { key: 'clientportal.reports.download', label: 'Download reports', description: 'Download completed PDFs. Also enables report listing.' },
+];
+
+function togglePermissionSelection(current: ClientPortalPermission[], permission: ClientPortalPermission) {
+  if (current.includes(permission)) {
+    const removed = new Set([permission]);
+    if (permission === 'clientportal.candidates.view') {
+      removed.add('clientportal.candidates.create');
+      removed.add('clientportal.candidates.update');
+      removed.add('clientportal.candidates.invite');
+      removed.add('clientportal.candidates.portal.manage');
+    }
+    if (permission === 'clientportal.reports.view') removed.add('clientportal.reports.download');
+    return current.filter((item) => !removed.has(item));
+  }
+  const next = [...current, permission];
+  if (permission === 'clientportal.candidates.create' || permission === 'clientportal.candidates.update' || permission === 'clientportal.candidates.invite' || permission === 'clientportal.candidates.portal.manage') {
+    next.push('clientportal.candidates.view');
+  }
+  if (permission === 'clientportal.reports.download') next.push('clientportal.reports.view');
+  return [...new Set(next)];
+}
 const RECORD_PAGE_SIZE = 10;
 const currencyLabel = (value: number | string, currency: string) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(Number(value || 0));
@@ -40,7 +75,8 @@ function initials(name: string) {
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { accessToken } = useAuth();
+  const { accessToken, permissions, user } = useAuth();
+  const canManageAccess = permissions.includes('client.update') || user?.role.isSuperAdmin === true;
 
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,13 +112,33 @@ export default function ClientDetailPage() {
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [invoicesError, setInvoicesError] = useState<string | null>(null);
   const [recordAction, setRecordAction] = useState<string | null>(null);
+  const [portalUsers, setPortalUsers] = useState<ClientPortalUser[]>([]);
+  const [portalUsersLoading, setPortalUsersLoading] = useState(false);
+  const [portalUsersError, setPortalUsersError] = useState<string | null>(null);
+  const [portalUserPermissionDrafts, setPortalUserPermissionDrafts] = useState<Record<string, ClientPortalPermission[]>>({});
+  const [portalInviteSubmitting, setPortalInviteSubmitting] = useState(false);
+  const [portalInviteError, setPortalInviteError] = useState<string | null>(null);
+  const [portalInvite, setPortalInvite] = useState({ firstName: '', lastName: '', email: '' });
+  const [portalInvitePermissions, setPortalInvitePermissions] = useState<ClientPortalPermission[]>([
+    'clientportal.reports.view',
+    'clientportal.reports.download',
+  ]);
+  const [reportBrandingSaving, setReportBrandingSaving] = useState(false);
+  const [reportBrandingError, setReportBrandingError] = useState<string | null>(null);
+  const [reportBrandingSaved, setReportBrandingSaved] = useState(false);
+  const [candidateFormConfig, setCandidateFormConfig] = useState<CandidateFormConfig>(DEFAULT_CANDIDATE_FORM_CONFIG);
+  const [candidateFormSaving, setCandidateFormSaving] = useState(false);
+  const [candidateFormError, setCandidateFormError] = useState<string | null>(null);
+  const [candidateFormSaved, setCandidateFormSaved] = useState(false);
 
   const loadClient = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
     try {
-      setClient(await getClient(id, accessToken));
+      const loaded = await getClient(id, accessToken);
+      setClient(loaded);
+      setCandidateFormConfig(loaded.candidateFormConfig ?? DEFAULT_CANDIDATE_FORM_CONFIG);
     } catch (err) {
       setError(err instanceof ClientApiError ? err.message : 'Failed to load client.');
     } finally {
@@ -90,7 +146,147 @@ export default function ClientDetailPage() {
     }
   }, [id, accessToken]);
 
-  useEffect(() => { loadClient(); }, [loadClient]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadClient(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadClient]);
+
+  const loadPortalUsers = useCallback(async () => {
+    if (!id || !canManageAccess) return;
+    setPortalUsersLoading(true);
+    setPortalUsersError(null);
+    try {
+      setPortalUsers(await listClientPortalUsers(id, accessToken));
+    } catch (err) {
+      setPortalUsersError(err instanceof ClientApiError ? err.message : 'Could not load client portal users.');
+    } finally {
+      setPortalUsersLoading(false);
+    }
+  }, [id, accessToken, canManageAccess]);
+
+  useEffect(() => {
+    if (tab !== 'portal-access') return;
+    const timer = window.setTimeout(() => { void loadPortalUsers(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [tab, loadPortalUsers]);
+
+  const saveReportBranding = async (showCompany: boolean, showClient: boolean) => {
+    if (!client) return;
+    setReportBrandingSaving(true);
+    setReportBrandingError(null);
+    setReportBrandingSaved(false);
+    try {
+      const updated = await updateClient(client.id, {
+        reportShowCompanyBranding: showCompany,
+        reportShowClientBranding: showClient,
+      }, accessToken);
+      setClient(updated);
+      setReportBrandingSaved(true);
+    } catch (err) {
+      setReportBrandingError(err instanceof ClientApiError ? err.message : 'Could not save report branding.');
+    } finally {
+      setReportBrandingSaving(false);
+    }
+  };
+
+  const saveCandidateForm = async () => {
+    if (!client) return;
+    setCandidateFormSaving(true);
+    setCandidateFormError(null);
+    setCandidateFormSaved(false);
+    try {
+      const updated = await updateClient(client.id, { candidateFormConfig }, accessToken);
+      setClient(updated);
+      setCandidateFormConfig(updated.candidateFormConfig);
+      setCandidateFormSaved(true);
+    } catch (saveError) {
+      setCandidateFormError(saveError instanceof ClientApiError ? saveError.message : 'Could not save candidate form settings.');
+    } finally {
+      setCandidateFormSaving(false);
+    }
+  };
+
+  const updateCandidateFormField = (key: keyof CandidateFormConfig, property: 'enabled' | 'required' | 'documentRequired', value: boolean) => {
+    setCandidateFormSaved(false);
+    setCandidateFormConfig((current) => {
+      const existing = current[key];
+      if (property === 'enabled' && !value) {
+        return { ...current, [key]: { enabled: false, required: false, documentRequired: false } };
+      }
+      return { ...current, [key]: { ...existing, [property]: value } };
+    });
+  };
+
+  const togglePortalInvitePermission = (permission: ClientPortalPermission) => {
+    setPortalInvitePermissions((current) => togglePermissionSelection(current, permission));
+  };
+
+  const submitPortalInvite = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!client) return;
+    setPortalInviteError(null);
+    setPortalInviteSubmitting(true);
+    try {
+      await inviteClientPortalUser(client.id, { ...portalInvite, permissions: portalInvitePermissions }, accessToken);
+      setPortalInvite({ firstName: '', lastName: '', email: '' });
+      setPortalInvitePermissions(['clientportal.reports.view', 'clientportal.reports.download']);
+      await loadPortalUsers();
+    } catch (err) {
+      setPortalInviteError(err instanceof ClientApiError ? err.message : 'Could not send the invitation email.');
+    } finally {
+      setPortalInviteSubmitting(false);
+    }
+  };
+
+  const togglePortalUserStatus = async (user: ClientPortalUser) => {
+    if (!client) return;
+    try {
+      const updated = await updateClientPortalUser(client.id, user.id, {
+        status: user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE',
+      }, accessToken);
+      setPortalUsers((current) => current.map((item) => item.id === updated.id ? updated : item));
+    } catch (err) {
+      setPortalUsersError(err instanceof ClientApiError ? err.message : 'Could not update portal user.');
+    }
+  };
+
+  const togglePortalUserPermission = (userId: string, permission: ClientPortalPermission) => {
+    setPortalUserPermissionDrafts((current) => {
+      const existing = current[userId] ?? portalUsers.find((user) => user.id === userId)?.permissions ?? [];
+      return {
+        ...current,
+        [userId]: togglePermissionSelection(existing, permission),
+      };
+    });
+  };
+
+  const savePortalUserPermissions = async (user: ClientPortalUser) => {
+    if (!client) return;
+    const permissions = portalUserPermissionDrafts[user.id];
+    if (!permissions) return;
+    try {
+      const updated = await updateClientPortalUser(client.id, user.id, { permissions }, accessToken);
+      setPortalUsers((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setPortalUserPermissionDrafts((current) => {
+        const next = { ...current };
+        delete next[user.id];
+        return next;
+      });
+    } catch (err) {
+      setPortalUsersError(err instanceof ClientApiError ? err.message : 'Could not update portal permissions.');
+    }
+  };
+
+  const revokePortalUser = async (user: ClientPortalUser) => {
+    if (!client) return;
+    if (!window.confirm(`Revoke portal access for ${user.email}?`)) return;
+    try {
+      await revokeClientPortalUser(client.id, user.id, accessToken);
+      setPortalUsers((current) => current.filter((item) => item.id !== user.id));
+    } catch (err) {
+      setPortalUsersError(err instanceof ClientApiError ? err.message : 'Could not revoke portal access.');
+    }
+  };
 
   const loadCandidates = useCallback(async () => {
     if (!id) return;
@@ -110,7 +306,11 @@ export default function ClientDetailPage() {
     }
   }, [id, candidatesPage, accessToken]);
 
-  useEffect(() => { if (tab === 'candidates') loadCandidates(); }, [tab, loadCandidates]);
+  useEffect(() => {
+    if (tab !== 'candidates') return undefined;
+    const timer = window.setTimeout(() => { void loadCandidates(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [tab, loadCandidates]);
 
   const loadCases = useCallback(async () => {
     setCasesLoading(true);
@@ -269,6 +469,12 @@ export default function ClientDetailPage() {
           phone: values.phone.trim() || undefined,
           dateOfBirth: values.dateOfBirth || undefined,
           gender: values.gender || undefined,
+          aadhaarNumber: values.aadhaarNumber || undefined,
+          panNumber: values.panNumber || undefined,
+          uanNumber: values.uanNumber || undefined,
+          passportNumber: values.passportNumber || undefined,
+          drivingLicenseNumber: values.drivingLicenseNumber || undefined,
+          voterIdNumber: values.voterIdNumber || undefined,
           currentAddress: values.currentAddress || undefined,
           permanentAddress: values.permanentAddress || undefined,
         },
@@ -345,7 +551,7 @@ export default function ClientDetailPage() {
       </div>
 
       <div className="border-b border-[var(--border)] flex items-center gap-1">
-        {TABS.map((t) => (
+        {TABS.filter((t) => canManageAccess || (t.key !== 'portal-access' && t.key !== 'report-branding' && t.key !== 'candidate-form')).map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -404,6 +610,140 @@ export default function ClientDetailPage() {
               <div><dt className="text-[11px] text-[var(--muted)]">GSTIN</dt><dd className="mt-0.5 font-medium">{client.gstNumber || 'Not provided'}</dd></div>
               <div><dt className="text-[11px] text-[var(--muted)]">PAN</dt><dd className="mt-0.5 font-medium">{client.panNumber || 'Not provided'}</dd></div>
             </dl>
+          </section>
+        </div>
+      )}
+
+      {tab === 'report-branding' && (
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
+          <div className="max-w-3xl">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">PDF report settings</p>
+            <h2 className="mt-1 text-[16px] font-semibold">Choose which identity appears on this client’s BGV reports</h2>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--muted)]">Company branding is enabled by default. The selected names and logos are applied to newly generated reports; existing PDFs are not changed.</p>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {[
+              { company: true, title: 'Your company', name: user?.company?.name ?? 'Company name and logo', logo: user?.company?.logoUrl ?? null, enabled: client.reportShowCompanyBranding },
+              { company: false, title: client.name, name: 'Client name and logo', logo: client.logoUrl, enabled: client.reportShowClientBranding },
+            ].map((item) => (
+              <label key={item.company ? 'company' : 'client'} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${item.enabled ? 'border-[var(--primary)]/50 bg-[var(--primary)]/5' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'}`}>
+                <input
+                  type="checkbox"
+                  checked={item.enabled}
+                  disabled={!canManageAccess || reportBrandingSaving || (item.enabled && !(item.company ? client.reportShowClientBranding : client.reportShowCompanyBranding))}
+                  onChange={(event) => void saveReportBranding(
+                    item.company ? event.target.checked : client.reportShowCompanyBranding,
+                    item.company ? client.reportShowClientBranding : event.target.checked,
+                  )}
+                  className="mt-1 accent-[var(--primary)]"
+                />
+                <span className="flex min-w-0 flex-1 items-center gap-3">
+                  {item.logo ? (
+                    <Image src={item.logo} alt="" width={40} height={40} unoptimized className="h-10 w-10 shrink-0 rounded-lg border border-[var(--border)] object-cover" />
+                  ) : item.company ? (
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-muted)] text-[var(--primary)]"><Building2 size={19} /></span>
+                  ) : (
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-xs font-semibold text-[var(--primary)]">{initials(client.name)}</span>
+                  )}
+                  <span className="min-w-0"><span className="block truncate text-[13px] font-semibold">{item.name}</span><span className="mt-0.5 block text-[11px] text-[var(--muted)]">{item.title}</span></span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {!client.logoUrl && <p className="mt-3 text-[11px] text-[var(--muted)]">No client logo is set. Add one when editing the client profile to include it in reports.</p>}
+          {reportBrandingError && <p role="alert" className="mt-3 text-[12px] text-[#FF6B6B]">{reportBrandingError}</p>}
+          {reportBrandingSaved && <p role="status" className="mt-3 text-[12px] text-emerald-700">Report branding saved.</p>}
+          {reportBrandingSaving && <p role="status" className="mt-3 text-[12px] text-[var(--muted)]">Saving report branding…</p>}
+          <p className="mt-5 border-t border-[var(--border)] pt-4 text-[11px] leading-5 text-[var(--muted)]">At least one identity must remain enabled. If both are selected, the report shows both identities.</p>
+        </section>
+      )}
+
+      {tab === 'candidate-form' && (
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
+          <div className="max-w-3xl">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">Candidate intake</p>
+            <h2 className="mt-1 text-[16px] font-semibold">Configure identity fields for {client.name}</h2>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--muted)]">Enabled fields appear when company admins and client users create candidates and in the candidate’s secure portal. Required documents are tracked in the portal checklist. Aadhaar, PAN, UAN and other ID formats are validated by the server.</p>
+          </div>
+          <div className="mt-5 space-y-3">
+            {CANDIDATE_IDENTITY_FIELDS.map((field) => {
+              const config = candidateFormConfig[field.key];
+              return (
+                <div key={field.key} className="grid gap-3 rounded-xl border border-[var(--border)] p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+                  <label className="flex items-start gap-3">
+                    <input type="checkbox" checked={config.enabled} onChange={(event) => updateCandidateFormField(field.key, 'enabled', event.target.checked)} disabled={!canManageAccess || candidateFormSaving} className="mt-1 accent-[var(--primary)]" />
+                    <span><span className="block text-[13px] font-semibold">{field.label}</span><span className="mt-0.5 block text-[11px] text-[var(--muted)]">Candidate number field and {field.documentType.replaceAll('_', ' ').toLowerCase()} upload</span></span>
+                  </label>
+                  <label className={`flex items-center gap-2 text-[12px] ${!config.enabled ? 'opacity-50' : ''}`}><input type="checkbox" checked={config.required} onChange={(event) => updateCandidateFormField(field.key, 'required', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !config.enabled} className="accent-[var(--primary)]" />Number required</label>
+                  <label className={`flex items-center gap-2 text-[12px] ${!config.enabled ? 'opacity-50' : ''}`}><input type="checkbox" checked={config.documentRequired} onChange={(event) => updateCandidateFormField(field.key, 'documentRequired', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !config.enabled} className="accent-[var(--primary)]" />Document required</label>
+                </div>
+              );
+            })}
+          </div>
+          {candidateFormError && <p role="alert" className="mt-3 text-[12px] text-[#FF6B6B]">{candidateFormError}</p>}
+          {candidateFormSaved && <p role="status" className="mt-3 text-[12px] text-emerald-700">Candidate form settings saved.</p>}
+          <button type="button" onClick={() => void saveCandidateForm()} disabled={!canManageAccess || candidateFormSaving} className="mt-5 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50">{candidateFormSaving ? 'Saving…' : 'Save candidate form'}</button>
+        </section>
+      )}
+
+      {tab === 'portal-access' && (
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]"><UserPlus size={18} /></span>
+              <div><h2 className="text-[15px] font-semibold">Invite a client portal user</h2><p className="mt-1 text-[12px] leading-5 text-[var(--muted)]">We’ll email a secure password-setup link. Access is limited to this client and the permissions you select.</p></div>
+            </div>
+            <form onSubmit={submitPortalInvite} className="mt-5 space-y-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="text-[11px] font-medium text-[var(--muted)]">First name<input required value={portalInvite.firstName} onChange={(event) => setPortalInvite((current) => ({ ...current, firstName: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                <label className="text-[11px] font-medium text-[var(--muted)]">Last name<input required value={portalInvite.lastName} onChange={(event) => setPortalInvite((current) => ({ ...current, lastName: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                <label className="text-[11px] font-medium text-[var(--muted)]">Email address<input required type="email" value={portalInvite.email} onChange={(event) => setPortalInvite((current) => ({ ...current, email: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+              </div>
+              <fieldset>
+                <legend className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Portal permissions</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {PORTAL_PERMISSION_OPTIONS.map((option) => (
+                    <label key={option.key} className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[var(--border)] p-3 hover:bg-[var(--surface-muted)]">
+                      <input type="checkbox" checked={portalInvitePermissions.includes(option.key)} onChange={() => togglePortalInvitePermission(option.key)} className="mt-0.5 accent-[var(--primary)]" />
+                      <span><span className="block text-[12px] font-medium text-[var(--foreground)]">{option.label}</span><span className="mt-0.5 block text-[10px] leading-4 text-[var(--muted)]">{option.description}</span></span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              {portalInviteError && <p role="alert" className="text-[12px] text-[#FF6B6B]">{portalInviteError}</p>}
+              <button type="submit" disabled={portalInviteSubmitting || portalInvitePermissions.length === 0} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary-foreground)] disabled:cursor-not-allowed disabled:opacity-50"><Mail size={14} />{portalInviteSubmitting ? 'Sending invitation…' : 'Send invitation'}</button>
+            </form>
+          </section>
+
+          <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+            <div className="border-b border-[var(--border)] px-5 py-4"><h2 className="text-[14px] font-semibold">Client portal accounts</h2><p className="mt-1 text-[11px] text-[var(--muted)]">Manage each person’s access to {client.name}.</p></div>
+            {portalUsersLoading ? <p className="px-5 py-10 text-center text-[12px] text-[var(--muted)]">Loading portal users…</p>
+              : portalUsersError ? <p role="alert" className="px-5 py-8 text-center text-[12px] text-[#FF6B6B]">{portalUsersError}</p>
+                : portalUsers.length === 0 ? <p className="px-5 py-10 text-center text-[12px] text-[var(--muted)]">No portal accounts have been invited yet.</p>
+                  : <div className="divide-y divide-[var(--border)]">
+                    {portalUsers.map((user) => {
+                      const draft = portalUserPermissionDrafts[user.id] ?? user.permissions;
+                      const dirty = portalUserPermissionDrafts[user.id] !== undefined;
+                      return (
+                        <article key={user.id} className="px-5 py-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0"><p className="truncate text-[13px] font-semibold">{user.firstName} {user.lastName}</p><p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">{user.email}</p><span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${user.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-700' : 'bg-[var(--surface-muted)] text-[var(--muted)]'}`}>{user.status}</span></div>
+                            <div className="flex shrink-0 gap-2">
+                              <button type="button" onClick={() => void togglePortalUserStatus(user)} className="rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-medium hover:bg-[var(--surface-muted)]">{user.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</button>
+                              <button type="button" onClick={() => void revokePortalUser(user)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/30 px-3 py-2 text-[11px] font-medium text-rose-700 hover:bg-rose-500/5"><Trash2 size={12} />Revoke</button>
+                            </div>
+                          </div>
+                          <details className="mt-3">
+                            <summary className="cursor-pointer text-[11px] font-medium text-[var(--primary)]">Edit permissions ({user.permissions.length})</summary>
+                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                              {PORTAL_PERMISSION_OPTIONS.map((option) => <label key={option.key} className="flex cursor-pointer items-center gap-2 text-[11px] text-[var(--foreground)]"><input type="checkbox" checked={draft.includes(option.key)} onChange={() => togglePortalUserPermission(user.id, option.key)} className="accent-[var(--primary)]" />{option.label}</label>)}
+                            </div>
+                            {dirty && <button type="button" onClick={() => void savePortalUserPermissions(user)} className="mt-3 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)]">Save permissions</button>}
+                          </details>
+                        </article>
+                      );
+                    })}
+                  </div>}
           </section>
         </div>
       )}
@@ -551,6 +891,7 @@ export default function ClientDetailPage() {
         <CandidateFormModal
           mode="create"
           candidate={null}
+          defaultClientId={client.id}
           submitting={candidateSubmitting}
           error={null}
           onClose={() => setCandidateModalOpen(false)}

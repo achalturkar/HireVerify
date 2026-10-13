@@ -89,7 +89,8 @@ function LoginContent() {
       const session = await login(email, password);
 
       let target = '/dashboard';
-      if (session.user.role.isSuperAdmin) target = '/super-admin/dashboard';
+      if (session.user.role.isClientUser) target = '/client-portal';
+      else if (session.user.role.isSuperAdmin) target = '/super-admin/dashboard';
       else if (session.user.role.isCompanyAdmin) target = '/company/dashboard';
       else target = '/company/dashboard';
 

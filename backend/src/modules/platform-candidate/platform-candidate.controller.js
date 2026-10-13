@@ -3,6 +3,7 @@
 const asyncHandler = require('../../utils/asyncHandler');
 const { success } = require('../../utils/response');
 const { parsePagination, buildMeta } = require('../../utils/pagination');
+const { writeAudit } = require('../../utils/audit');
 const service = require('./platform-candidate.service');
 
 const listCandidates = asyncHandler(async (req, res) => {
@@ -22,4 +23,15 @@ const listCandidates = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { listCandidates };
+const getCandidate = asyncHandler(async (req, res) => {
+  const data = await service.getById(req.params.id);
+  return success(res, { message: 'Platform candidate', data });
+});
+
+const updateCandidate = asyncHandler(async (req, res) => {
+  const data = await service.update({ id: req.params.id, payload: req.body, currentUser: req.user });
+  await writeAudit({ req, action: 'CANDIDATE_UPDATED', entity: 'Candidate', entityId: req.params.id });
+  return success(res, { message: 'Candidate updated successfully.', data });
+});
+
+module.exports = { listCandidates, getCandidate, updateCandidate };

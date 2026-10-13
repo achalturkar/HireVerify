@@ -19,6 +19,11 @@ export default function PublicRoute({ children }: Props) {
 
     if (!user) return;
 
+    if (user.role.isClientUser) {
+      router.replace("/client-portal");
+      return;
+    }
+
     if (user.role.isSuperAdmin) {
       router.replace("/super-admin/dashboard");
       return;

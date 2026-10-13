@@ -45,7 +45,7 @@ const updateValidator = {
     clientId: Joi.string().uuid(),
     firstName: Joi.string().max(100),
     lastName: Joi.string().max(100),
-    email: Joi.string().email(),
+    email: Joi.string().email().allow(null, ''),
     phone: Joi.string().max(50).allow(null, ''),
     dateOfBirth: Joi.date().iso().allow(null),
     gender: Joi.string().max(30).allow(null, ''),

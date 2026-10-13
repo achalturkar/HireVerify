@@ -31,6 +31,8 @@ import type { LucideIcon } from 'lucide-react';
 import api from '@/services/api';
 import CandidateDocumentUpload from '@/src/components/candidate-portal/CandidateDocumentUpload';
 import { resolveLogoUrl } from '@/src/lib/logo';
+import { DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
+import type { CandidateFormConfig } from '@/src/types/client';
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -48,9 +50,10 @@ type PortalDocument = {
 type PendingItem = { key: string; label: string; type: string; documentType?: string };
 
 type PortalData = {
-  candidate: Record<string, string | null>;
+  candidate: Record<string, string | null> & { status?: string };
   company: { name: string; logoUrl?: string | null; primaryColor?: string | null };
   client?: { name: string } | null;
+  candidateFormConfig?: CandidateFormConfig;
   case: { id: string; caseNumber: string; status: string } | null;
   documents: PortalDocument[];
   invitation: { expiresAt: string };
@@ -291,6 +294,7 @@ const validateFields = (form: FormState, fields: FieldDef[]): Record<string, str
 const tabForPending = (item: PendingItem): TabKey => {
   const text = `${item.type} ${item.key}`.toLowerCase();
   if (text.includes('consent')) return 'consent';
+  if (item.key.startsWith('field-')) return 'identity';
   if (item.documentType) {
     if (IDENTITY_TYPES.includes(item.documentType)) return 'identity';
     if (EDUCATION_TYPES.includes(item.documentType)) return 'education';
@@ -327,7 +331,7 @@ function SectionCard({ icon: Icon, title, description, children }: { icon: Lucid
   );
 }
 
-function Field({ def, value, error, onChange }: { def: FieldDef; value: string; error?: string; onChange: (value: string) => void }) {
+function Field({ def, value, error, onChange, disabled = false }: { def: FieldDef; value: string; error?: string; onChange: (value: string) => void; disabled?: boolean }) {
   const id = `field-${def.key}`;
   const listId = def.suggestions ? `${id}-options` : undefined;
   const describedBy = [error ? `${id}-error` : null, def.hint ? `${id}-hint` : null].filter(Boolean).join(' ') || undefined;
@@ -339,9 +343,9 @@ function Field({ def, value, error, onChange }: { def: FieldDef; value: string; 
         {def.required && <span className="text-red-500" aria-hidden="true"> *</span>}
       </label>
       {def.multiline ? (
-        <textarea id={id} value={value} rows={3} aria-invalid={Boolean(error)} aria-describedby={describedBy} className={classes} onChange={(event) => onChange(event.target.value)} />
+        <textarea id={id} value={value} rows={3} disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={describedBy} className={classes} onChange={(event) => onChange(event.target.value)} />
       ) : def.options ? (
-        <select id={id} value={value} required={def.required} aria-invalid={Boolean(error)} aria-describedby={describedBy} className={classes} onChange={(event) => onChange(event.target.value)}>
+        <select id={id} value={value} required={def.required} disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={describedBy} className={classes} onChange={(event) => onChange(event.target.value)}>
           <option value="">Select {def.label.toLowerCase()}</option>
           {def.options.map((option) => <option key={option} value={option}>{humanize(option)}</option>)}
         </select>
@@ -352,6 +356,7 @@ function Field({ def, value, error, onChange }: { def: FieldDef; value: string; 
           value={value}
           list={listId}
           required={def.required}
+          disabled={disabled}
           placeholder={def.placeholder}
           maxLength={def.maxLength}
           inputMode={def.inputMode}
@@ -370,22 +375,26 @@ function Field({ def, value, error, onChange }: { def: FieldDef; value: string; 
   );
 }
 
-function FieldGrid({ fields, form, errors, onChange }: { fields: FieldDef[]; form: FormState; errors: Record<string, string>; onChange: (key: string, value: string) => void }) {
+function FieldGrid({ fields, form, errors, onChange, disabled = false }: { fields: FieldDef[]; form: FormState; errors: Record<string, string>; onChange: (key: string, value: string) => void; disabled?: boolean }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      {fields.map((def) => <Field key={def.key} def={def} value={form[def.key] ?? ''} error={errors[def.key]} onChange={(value) => onChange(def.key, value)} />)}
+      {fields.map((def) => <Field key={def.key} def={def} value={form[def.key] ?? ''} error={errors[def.key]} disabled={disabled} onChange={(value) => onChange(def.key, value)} />)}
     </div>
   );
 }
 
-function SaveBar({ dirty, saving, label, onSave, bare = false }: { dirty: boolean; saving: boolean; label: string; onSave: () => void; bare?: boolean }) {
+function SaveBar({ dirty, saving, label, onSave, bare = false, readOnly = false }: { dirty: boolean; saving: boolean; label: string; onSave: () => void; bare?: boolean; readOnly?: boolean }) {
   return (
     <div className={`flex flex-wrap items-center gap-3 ${bare ? '' : 'mt-6 border-t border-slate-100 pt-4'}`}>
-      <button type="button" onClick={onSave} disabled={!dirty || saving} className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50" style={{ backgroundColor: 'var(--accent)' }}>
-        {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Save size={15} aria-hidden="true" />}
-        {label}
-      </button>
-      <span className="text-xs text-slate-500">{dirty ? 'You have unsaved changes.' : 'All changes saved.'}</span>
+      {readOnly
+        ? <span className="text-xs text-slate-500">Details are locked because verification has started. Contact the company administrator if a correction is needed.</span>
+        : <>
+          <button type="button" onClick={onSave} disabled={!dirty || saving} className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50" style={{ backgroundColor: 'var(--accent)' }}>
+            {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Save size={15} aria-hidden="true" />}
+            {label}
+          </button>
+          <span className="text-xs text-slate-500">{dirty ? 'You have unsaved changes.' : 'All changes saved.'}</span>
+        </>}
     </div>
   );
 }
@@ -583,7 +592,7 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
 /* ------------------------------------------------------------------ */
 /* One card per ID: number field + upload + uploaded files             */
 /* ------------------------------------------------------------------ */
-function IdentityCard({ title, field, value, error, documents, token, onChange, onUploaded }: {
+function IdentityCard({ title, field, value, error, documents, token, onChange, onUploaded, readOnly = false }: {
   title: string;
   field: FieldDef;
   value: string;
@@ -592,6 +601,7 @@ function IdentityCard({ title, field, value, error, documents, token, onChange, 
   token: string;
   onChange: (value: string) => void;
   onUploaded: (count: number) => void | Promise<void>;
+  readOnly?: boolean;
 }) {
   const docType = IDENTITY_ITEMS.find((item) => item.fieldKey === field.key)?.docType ?? 'OTHER';
   const sorted = [...documents].sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
@@ -608,7 +618,7 @@ function IdentityCard({ title, field, value, error, documents, token, onChange, 
         {sorted[0] ? <StatusBadge status={sorted[0].verificationStatus} /> : <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">No file yet</span>}
       </div>
       <div className="grid gap-5 md:grid-cols-2">
-        <Field def={field} value={value} error={error} onChange={onChange} />
+        <Field def={field} value={value} error={error} disabled={readOnly} onChange={onChange} />
         <div>
           <p className="mb-1.5 text-sm font-medium text-slate-700">Copy of {title}</p>
           <AttachmentUploader variant="inline" token={token} types={[docType]} documentNumber={numberForFile} onUploaded={onUploaded} />
@@ -625,6 +635,7 @@ function IdentityCard({ title, field, value, error, documents, token, onChange, 
 export default function CandidatePortalPage() {
   const { token } = useParams<{ token: string }>();
   const [portal, setPortal] = useState<PortalData | null>(null);
+  const [daysLeft, setDaysLeft] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>({});
   const [baseline, setBaseline] = useState<FormState>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -649,6 +660,7 @@ export default function CandidatePortalPage() {
         throw new Error(typeof body?.message === 'string' ? body.message : 'The candidate portal response was incomplete. Ask the company to resend the link.');
       }
       setPortal(data);
+      setDaysLeft(Math.ceil((new Date(data.invitation.expiresAt).getTime() - Date.now()) / 86400000));
       if (syncForm) {
         const next = toForm(data.candidate);
         setForm(next);
@@ -688,14 +700,24 @@ export default function CandidatePortalPage() {
   }, [message]);
 
   const accent = useMemo(() => safeColor(portal?.company.primaryColor), [portal]);
+  const candidateFormConfig = portal?.candidateFormConfig ?? DEFAULT_CANDIDATE_FORM_CONFIG;
+  const effectiveSectionFields = useMemo(() => ({
+    ...SECTION_FIELDS,
+    identity: SECTION_FIELDS.identity
+      .filter((field) => candidateFormConfig[field.key as keyof CandidateFormConfig]?.enabled !== false)
+      .map((field) => ({
+        ...field,
+        required: candidateFormConfig[field.key as keyof CandidateFormConfig]?.required ?? false,
+      })),
+  }), [candidateFormConfig]);
 
   const dirtyBySection = useMemo(() => {
     const result = {} as Record<SectionKey, boolean>;
     SECTIONS.forEach((section) => {
-      result[section] = SECTION_FIELDS[section].some((field) => (form[field.key] ?? '') !== (baseline[field.key] ?? ''));
+      result[section] = effectiveSectionFields[section].some((field) => (form[field.key] ?? '') !== (baseline[field.key] ?? ''));
     });
     return result;
-  }, [form, baseline]);
+  }, [form, baseline, effectiveSectionFields]);
   const anyDirty = SECTIONS.some((section) => dirtyBySection[section]);
 
   useEffect(() => {
@@ -710,10 +732,9 @@ export default function CandidatePortalPage() {
     if (!portal) return flags;
     portal.progress.pending.forEach((item) => { flags[tabForPending(item)] = true; });
     if (!portal.progress.profileComplete) flags.details = true;
-    if (!baseline.panNumber || !baseline.aadhaarNumber) flags.identity = true;
     if (portal.case && !portal.progress.consentComplete) flags.consent = true;
     return flags;
-  }, [portal, baseline]);
+  }, [portal]);
 
   const educationDocuments = useMemo(() => (portal?.documents ?? []).filter((document) => EDUCATION_TYPES.includes(document.documentType)), [portal]);
   const employmentDocuments = useMemo(() => (portal?.documents ?? []).filter((document) => EMPLOYMENT_TYPES.includes(document.documentType)), [portal]);
@@ -749,7 +770,7 @@ export default function CandidatePortalPage() {
 
   // Each tab saves only its own fields, so one section can never block another.
   const saveSection = (section: SectionKey) => {
-    const fields = SECTION_FIELDS[section];
+    const fields = effectiveSectionFields[section];
     const found = validateFields(form, fields);
     setFieldErrors((previous) => {
       const next = { ...previous };
@@ -816,16 +837,16 @@ export default function CandidatePortalPage() {
   const { progress } = portal;
   const totalSteps = Math.max(progress.pendingCount + portal.documents.length + (progress.profileComplete ? 1 : 0) + (progress.consentComplete ? 1 : 0), 1);
   const percent = progress.pendingCount === 0 ? 100 : Math.round(((totalSteps - progress.pendingCount) / totalSteps) * 100);
-  const daysLeft = Math.ceil((new Date(portal.invitation.expiresAt).getTime() - Date.now()) / 86400000);
   const firstName = portal.candidate.firstName || 'there';
   const companyLogo = resolveLogoUrl(portal.company.logoUrl);
   const companyMonogram = portal.company.name.trim().split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase() || 'C';
 
+  const profileReadOnly = Boolean(portal.case) || ['COMPLETED', 'VERIFICATION_IN_PROGRESS'].includes(portal.candidate.status ?? '');
   const sectionPanel = (section: SectionKey, icon: LucideIcon, title: string, description: string, saveLabel: string, extra?: ReactNode) => (
     <SectionCard icon={icon} title={title} description={description}>
       {extra}
-      <FieldGrid fields={SECTION_FIELDS[section]} form={form} errors={fieldErrors} onChange={setField} />
-      <SaveBar dirty={dirtyBySection[section]} saving={saving} label={saveLabel} onSave={() => saveSection(section)} />
+      <FieldGrid fields={effectiveSectionFields[section]} form={form} errors={fieldErrors} disabled={profileReadOnly} onChange={setField} />
+      <SaveBar dirty={dirtyBySection[section]} saving={saving} label={saveLabel} onSave={() => saveSection(section)} readOnly={profileReadOnly} />
     </SectionCard>
   );
 
@@ -870,11 +891,12 @@ export default function CandidatePortalPage() {
               {error || message}
             </div>
           )}
+          {profileReadOnly && <p role="status" className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">Candidate details are locked{portal.case?.caseNumber ? ` because BGV case ${portal.case.caseNumber} has been created` : ` because the candidate is ${humanize(portal.candidate.status ?? '')}`}. Contact the company administrator for corrections. You can still submit consent and requested documents.</p>}
         </div>
 
         <nav className="sticky top-0 z-10 -mx-1 mb-5 bg-[#f5f7f6]/95 px-1 py-2 backdrop-blur" aria-label="Portal sections">
           <div role="tablist" className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-            {TABS.map(({ key, label, icon: Icon }) => {
+            {TABS.filter(({ key }) => key !== 'identity' || effectiveSectionFields.identity.length > 0).map(({ key, label, icon: Icon }) => {
               const selected = activeTab === key;
               const pending = pendingByTab[key];
               return (
@@ -960,10 +982,10 @@ export default function CandidatePortalPage() {
           <div role="tabpanel" id="panel-identity" aria-labelledby="tab-identity" className="space-y-4">
             <div className="px-1">
               <h2 className="text-lg font-semibold">ID numbers and documents</h2>
-              <p className="mt-1 text-sm text-slate-600">For each ID, enter the number exactly as printed and attach a clear copy. Skip any you do not have.</p>
+              <p className="mt-1 text-sm text-slate-600">Complete the identity fields required for this client and attach the requested document copies.</p>
               <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500"><Lock size={13} aria-hidden="true" />Sent over an encrypted connection and used only to verify you.</p>
             </div>
-            {IDENTITY_ITEMS.map((item) => (
+            {IDENTITY_ITEMS.filter((item) => candidateFormConfig[item.fieldKey as keyof CandidateFormConfig]?.enabled !== false).map((item) => (
               <IdentityCard
                 key={item.docType}
                 title={item.title}
@@ -974,10 +996,11 @@ export default function CandidatePortalPage() {
                 token={token}
                 onChange={(value) => setField(item.fieldKey, value)}
                 onUploaded={afterUpload}
+                readOnly={profileReadOnly}
               />
             ))}
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <SaveBar bare dirty={dirtyBySection.identity} saving={saving} label="Save ID numbers" onSave={() => saveSection('identity')} />
+              <SaveBar bare dirty={dirtyBySection.identity} saving={saving} label="Save ID numbers" onSave={() => saveSection('identity')} readOnly={profileReadOnly} />
             </div>
           </div>
         )}
@@ -1056,9 +1079,9 @@ export default function CandidatePortalPage() {
 
         <footer className="mt-8 space-y-1 text-center text-xs text-slate-500">
           <p>Your information is sent over an encrypted connection and used only for this verification.</p>
-          <p className={daysLeft <= 3 ? 'font-medium text-amber-700' : undefined}>
+          <p className={daysLeft !== null && daysLeft <= 3 ? 'font-medium text-amber-700' : undefined}>
             This link expires on {formatDate(portal.invitation.expiresAt)}
-            {daysLeft > 0 && daysLeft <= 3 ? ` (${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left)` : ''}.
+            {daysLeft !== null && daysLeft > 0 && daysLeft <= 3 ? ` (${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left)` : ''}.
           </p>
         </footer>
       </div>

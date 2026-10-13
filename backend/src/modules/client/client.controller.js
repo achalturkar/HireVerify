@@ -6,6 +6,7 @@ const { parsePagination, buildMeta } = require('../../utils/pagination');
 const { writeAudit } = require('../../utils/audit');
 
 const service = require('./client.service');
+const accessService = require('./client-access.service');
 
 /**
  * Create Client
@@ -172,6 +173,38 @@ const restoreClient = asyncHandler(async (req, res) => {
   return success(res, { message: 'Client restored successfully.', data });
 });
 
+const listPortalUsers = asyncHandler(async (req, res) => {
+  const data = await accessService.list({ clientId: req.params.id, companyId: req.user.companyId });
+  return success(res, { message: 'Client portal users', data });
+});
+
+const invitePortalUser = asyncHandler(async (req, res) => {
+  const data = await accessService.invite({
+    clientId: req.params.id,
+    companyId: req.user.companyId,
+    payload: req.body,
+  });
+  await writeAudit({ req, action: 'client.portal_user.invite', entity: 'Client', entityId: req.params.id, metadata: { userId: data.id } });
+  return created(res, { message: 'Client portal invitation sent.', data });
+});
+
+const updatePortalUser = asyncHandler(async (req, res) => {
+  const data = await accessService.update({
+    clientId: req.params.id,
+    companyId: req.user.companyId,
+    userId: req.params.userId,
+    payload: req.body,
+  });
+  await writeAudit({ req, action: 'client.portal_user.update', entity: 'Client', entityId: req.params.id, metadata: { userId: data.id } });
+  return success(res, { message: 'Client portal access updated.', data });
+});
+
+const removePortalUser = asyncHandler(async (req, res) => {
+  await accessService.remove({ clientId: req.params.id, companyId: req.user.companyId, userId: req.params.userId });
+  await writeAudit({ req, action: 'client.portal_user.remove', entity: 'Client', entityId: req.params.id, metadata: { userId: req.params.userId } });
+  return success(res, { message: 'Client portal access revoked.' });
+});
+
 module.exports = {
   createClient,
   getClient,
@@ -181,4 +214,8 @@ module.exports = {
   activateClient,
   inactivateClient,
   restoreClient,
+  listPortalUsers,
+  invitePortalUser,
+  updatePortalUser,
+  removePortalUser,
 };

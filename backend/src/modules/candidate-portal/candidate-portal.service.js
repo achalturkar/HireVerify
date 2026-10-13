@@ -5,7 +5,8 @@ const path = require('path');
 const { prisma } = require('../../common/prisma');
 const config = require('../../config');
 const { sendMail, buildCandidatePortalEmail } = require('../../utils/mailer');
-const { BadRequestError, NotFoundError, UnauthorizedError } = require('../../utils/errors');
+const { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } = require('../../utils/errors');
+const { IDENTITY_FIELDS, normalizeConfig, normalizeIdentityValue, validateIdentityValues } = require('../client/candidate-intake-config');
 
 const MAX_INVITATION_DAYS = 30;
 const portalTokenKey = crypto.createHash('sha256').update(`candidate-portal:${config.jwt.accessSecret}`).digest();
@@ -49,7 +50,7 @@ const invitationInclude = {
   candidate: {
     include: {
       company: { select: { name: true, primaryColor: true, logoUrl: true } },
-      client: { select: { name: true } },
+      client: { select: { name: true, candidateFormConfig: true } },
       documents: true,
       bgvCases: {
         orderBy: { createdAt: 'desc' },
@@ -71,6 +72,11 @@ const findInvitation = async (token) => {
 
 const pendingFor = (candidate) => {
   const activeCase = candidate.bgvCases[0];
+  const candidateFormConfig = normalizeConfig(candidate.client?.candidateFormConfig);
+  const existingDocuments = [
+    ...(candidate.documents || []),
+    ...(activeCase?.checks || []).flatMap((check) => check.documents || []),
+  ];
   const consentComplete = Boolean(activeCase?.consents?.some((consent) => consent.consentType === 'BGV_CONSENT' && consent.consentGiven && !consent.revokedAt));
   const pending = [];
   if (activeCase && !consentComplete) pending.push({ key: 'consent', label: 'Give background verification consent', type: 'consent' });
@@ -84,17 +90,31 @@ const pendingFor = (candidate) => {
     }
   }
 
-  const profileComplete = Boolean(candidate.firstName && candidate.lastName && candidate.email && candidate.phone && candidate.dateOfBirth && candidate.currentAddress);
+  for (const field of IDENTITY_FIELDS) {
+    const config = candidateFormConfig[field.key];
+    if (config.required && !candidate[field.key]) {
+      pending.push({ key: `field-${field.key}`, label: `Provide your ${field.label} number`, type: 'profile' });
+    }
+    if (config.documentRequired && !existingDocuments.some((document) => document.documentType === field.documentType)
+      && !pending.some((item) => item.documentType === field.documentType)) {
+      pending.push({ key: `document-${field.documentType}`, label: `Upload your ${field.label} document`, type: 'document', documentType: field.documentType });
+    }
+  }
+
+  const profileComplete = Boolean(candidate.firstName && candidate.lastName && candidate.email && candidate.phone && candidate.dateOfBirth && candidate.currentAddress)
+    && IDENTITY_FIELDS.every((field) => !candidateFormConfig[field.key].required || Boolean(candidate[field.key]));
   if (!profileComplete) pending.push({ key: 'profile', label: 'Review and complete your details', type: 'profile' });
   return { activeCase, pending, consentComplete, profileComplete };
 };
 
 const toDto = (invitation) => {
   const candidate = invitation.candidate;
+  const candidateFormConfig = normalizeConfig(candidate.client?.candidateFormConfig);
   const { activeCase, pending, consentComplete, profileComplete } = pendingFor(candidate);
   return {
     candidate: {
       id: candidate.id,
+      status: candidate.status,
       firstName: candidate.firstName,
       lastName: candidate.lastName,
       email: candidate.email,
@@ -127,6 +147,7 @@ const toDto = (invitation) => {
     },
     company: candidate.company,
     client: candidate.client,
+    candidateFormConfig,
     case: activeCase ? { id: activeCase.id, caseNumber: activeCase.caseNumber, status: activeCase.status } : null,
     documents: (candidate.documents || []).map((document) => ({ id: document.id, documentType: document.documentType, documentNumber: document.documentNumber, fileName: document.fileName, fileUrl: document.fileUrl, verificationStatus: document.verificationStatus, uploadedAt: document.uploadedAt })),
     progress: { pending, pendingCount: pending.length, consentComplete, profileComplete },
@@ -149,7 +170,7 @@ const sendInvitationEmail = async ({ candidate, token, reminder, pendingCount })
 const issue = async ({ candidateId, companyId, expiresInDays = MAX_INVITATION_DAYS }) => {
   const days = Number(expiresInDays ?? MAX_INVITATION_DAYS);
   if (!Number.isInteger(days) || days < 1 || days > MAX_INVITATION_DAYS) throw new BadRequestError(`Link expiry must be between 1 and ${MAX_INVITATION_DAYS} days.`);
-  const candidate = await prisma.candidate.findFirst({ where: { id: candidateId, ...(companyId ? { companyId } : {}), isDeleted: false }, include: { company: true, client: { select: { name: true } }, bgvCases: { orderBy: { createdAt: 'desc' }, take: 1, include: { checks: { include: { documents: true } }, consents: true } } } });
+  const candidate = await prisma.candidate.findFirst({ where: { id: candidateId, ...(companyId ? { companyId } : {}), isDeleted: false }, include: { company: true,   client: { select: { name: true, candidateFormConfig: true } }, bgvCases: { orderBy: { createdAt: 'desc' }, take: 1, include: { checks: { include: { documents: true } }, consents: true } } } });
   if (!candidate) throw new NotFoundError('Candidate not found');
   if (!candidate.email) throw new BadRequestError('Candidate email is required before sending a portal link.');
 
@@ -171,10 +192,10 @@ const issue = async ({ candidateId, companyId, expiresInDays = MAX_INVITATION_DA
   return { ...toStaffStatus({ ...invitation, lastSentAt }), emailSent, status: toDto(invitation) };
 };
 
-const remind = async ({ candidateId, companyId }) => {
+const remind = async ({ candidateId, companyId, clientId }) => {
   const candidate = await prisma.candidate.findFirst({
-    where: { id: candidateId, companyId, isDeleted: false },
-    include: { company: true, client: { select: { name: true } }, bgvCases: { orderBy: { createdAt: 'desc' }, take: 1, include: { checks: { include: { documents: true } }, consents: true } } },
+    where: { id: candidateId, companyId, ...(clientId ? { clientId } : {}), isDeleted: false },
+    include: { company: true, client: { select: { name: true, candidateFormConfig: true } }, bgvCases: { orderBy: { createdAt: 'desc' }, take: 1, include: { checks: { include: { documents: true } }, consents: true } } },
   });
   if (!candidate) throw new NotFoundError('Candidate not found');
   if (!candidate.email) throw new BadRequestError('Candidate email is required before sending a reminder.');
@@ -199,15 +220,15 @@ const remind = async ({ candidateId, companyId }) => {
   return { ...toStaffStatus(updatedInvitation), emailSent };
 };
 
-const getStaffStatus = async ({ candidateId, companyId }) => {
-  const candidate = await prisma.candidate.findFirst({ where: { id: candidateId, companyId, isDeleted: false }, select: { id: true } });
+const getStaffStatus = async ({ candidateId, companyId, clientId }) => {
+  const candidate = await prisma.candidate.findFirst({ where: { id: candidateId, companyId, ...(clientId ? { clientId } : {}), isDeleted: false }, select: { id: true } });
   if (!candidate) throw new NotFoundError('Candidate not found');
   const invitation = await prisma.candidatePortalInvitation.findUnique({ where: { candidateId }, select: { activatedAt: true, lastSentAt: true, expiresAt: true, revokedAt: true, reminderCount: true, lastRemindedAt: true, encryptedToken: true } });
   return toStaffStatus(invitation);
 };
 
-const lock = async ({ candidateId, companyId, locked }) => {
-  const candidate = await prisma.candidate.findFirst({ where: { id: candidateId, companyId, isDeleted: false }, select: { id: true } });
+const lock = async ({ candidateId, companyId, clientId, locked }) => {
+  const candidate = await prisma.candidate.findFirst({ where: { id: candidateId, companyId, ...(clientId ? { clientId } : {}), isDeleted: false }, select: { id: true } });
   if (!candidate) throw new NotFoundError('Candidate not found');
   const invitation = await prisma.candidatePortalInvitation.findUnique({ where: { candidateId } });
   if (!invitation) throw new NotFoundError('Candidate portal has not been activated.');
@@ -219,10 +240,23 @@ const getPortal = async (token) => toDto(await findInvitation(token));
 
 const updateProfile = async (token, payload) => {
   const invitation = await findInvitation(token);
+  if (invitation.candidate.bgvCases.length > 0 || ['COMPLETED', 'VERIFICATION_IN_PROGRESS'].includes(invitation.candidate.status)) {
+    throw new ConflictError('Candidate details cannot be changed after verification has started or completed.');
+  }
   const allowed = ['firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress'];
   const data = {};
   for (const field of allowed) {
     if (payload[field] !== undefined) data[field] = field === 'email' ? (payload[field]?.trim().toLowerCase() || null) : payload[field];
+  }
+  const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);
+  for (const field of IDENTITY_FIELDS) {
+    if (data[field.key] !== undefined && !candidateFormConfig[field.key].enabled && data[field.key]) {
+      throw new BadRequestError(`${field.label} is not enabled for this client’s candidate form.`);
+    }
+  }
+  validateIdentityValues(data);
+  for (const field of IDENTITY_FIELDS) {
+    if (data[field.key] !== undefined) data[field.key] = normalizeIdentityValue(field.key, data[field.key]) || null;
   }
   if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) throw new BadRequestError('Email address must be valid.');
   for (const dateField of ['dateOfBirth', 'joiningDate']) {
@@ -259,6 +293,10 @@ const addDocument = async (token, file, documentType, documentNumber) => {
   const invitation = await findInvitation(token);
   if (!file) throw new BadRequestError('Choose a document to upload.');
   if (!DOCUMENT_TYPES.has(documentType)) throw new BadRequestError('Document type is invalid.');
+  const identityField = IDENTITY_FIELDS.find((field) => field.documentType === documentType);
+  if (identityField && !normalizeConfig(invitation.candidate.client?.candidateFormConfig)[identityField.key].enabled) {
+    throw new BadRequestError(`${identityField.label} documents are not enabled for this client’s candidate form.`);
+  }
   const document = await prisma.candidateDocument.create({ data: { candidateId: invitation.candidateId, documentType, documentNumber: documentNumber?.trim() || null, fileName: file.originalname, fileUrl: `/uploads/candidate-documents/portal/${token}/${path.basename(file.filename)}`, mimeType: file.mimetype, fileSize: file.size } });
   return { document, status: await getPortal(token) };
 };

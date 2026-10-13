@@ -162,6 +162,27 @@ export interface CandidatePayload {
   phone?: string;
   dateOfBirth?: string | null;
   gender?: string | null;
+  fatherName?: string | null;
+  motherName?: string | null;
+  aadhaarNumber?: string | null;
+  panNumber?: string | null;
+  uanNumber?: string | null;
+  passportNumber?: string | null;
+  drivingLicenseNumber?: string | null;
+  voterIdNumber?: string | null;
+  highestQualification?: string | null;
+  courseName?: string | null;
+  institutionName?: string | null;
+  universityName?: string | null;
+  yearOfPassing?: string | number | null;
+  gradeOrPercentage?: string | null;
+  employeeId?: string | null;
+  employeeDesignation?: string | null;
+  employeeDepartment?: string | null;
+  employmentType?: string | null;
+  joiningDate?: string | null;
+  workLocation?: string | null;
+  currentEmployer?: string | null;
   currentAddress?: string | null;
   permanentAddress?: string | null;
 }

@@ -22,6 +22,7 @@ export interface Role {
     isSuperAdmin: boolean;
 
     isCompanyAdmin: boolean;
+    isClientUser: boolean;
 
 }
 
@@ -38,6 +39,24 @@ export interface User {
     phone: string | null;
 
     companyId: string | null;
+    clientId: string | null;
+    client: {
+        id: string;
+        name: string;
+        logoUrl: string | null;
+        clientCode?: string;
+        website?: string | null;
+        industry?: string | null;
+        contactName?: string | null;
+        contactEmail?: string | null;
+        contactPhone?: string | null;
+        addressLine1?: string | null;
+        addressLine2?: string | null;
+        city?: string | null;
+        state?: string | null;
+        country?: string | null;
+        postalCode?: string | null;
+    } | null;
 
     company: Company | null;
 

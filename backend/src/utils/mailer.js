@@ -161,6 +161,34 @@ const ctaButton = (href, label) => `
   </a>
 `;
 
+const buildPasswordResetEmail = ({ name, resetUrl, expiresIn }) => ({
+  subject: 'Set or reset your HireVerify password',
+  html: emailShell({
+    signOffName: 'The HireVerify Team',
+    footerNote: 'If you did not request this link, you can safely ignore this email.',
+    bodyHtml: `
+      <h2 style="margin:0 0 10px;font-size:20px;">Hello ${escapeHtml(name)},</h2>
+      <p style="margin:0 0 12px;font-size:14px;color:${BRAND_MUTED};">Use the secure link below to set or reset your password.</p>
+      ${ctaButton(resetUrl, 'Set your password')}
+      <p style="margin:12px 0 0;font-size:12.5px;color:${BRAND_MUTED};">This link expires in ${escapeHtml(expiresIn)} and can only be used once.</p>
+    `,
+  }),
+});
+
+const buildClientPortalInviteEmail = ({ name, clientName, resetUrl, expiresIn }) => ({
+  subject: `${clientName} invited you to the HireVerify client portal`,
+  html: emailShell({
+    signOffName: clientName,
+    footerNote: 'This secure invitation is personal to you. Please do not forward it.',
+    bodyHtml: `
+      <h2 style="margin:0 0 10px;font-size:20px;">Welcome, ${escapeHtml(name)}</h2>
+      <p style="margin:0 0 12px;font-size:14px;color:${BRAND_MUTED};">${escapeHtml(clientName)} invited you to access its HireVerify client portal. Your access is limited to this client account and the permissions selected by your background-verification provider.</p>
+      ${ctaButton(resetUrl, 'Set your password')}
+      <p style="margin:12px 0 0;font-size:12.5px;color:${BRAND_MUTED};">This secure link expires in ${escapeHtml(expiresIn)}.</p>
+    `,
+  }),
+});
+
 const escapeHtml = (value) => String(value || '')
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
@@ -245,6 +273,8 @@ const buildCandidatePortalEmail = ({ candidateName, companyName, clientName, por
 
 module.exports = {
   sendMail,
+  buildPasswordResetEmail,
+  buildClientPortalInviteEmail,
   buildCompanyAdminWelcomeEmail,
   buildBgvReportsEmail,
   buildCandidatePortalEmail,

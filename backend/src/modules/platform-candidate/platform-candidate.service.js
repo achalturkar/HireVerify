@@ -1,6 +1,8 @@
 'use strict';
 
 const { prisma } = require('../../common/prisma');
+const candidateService = require('../candidate/candidate.services');
+const { NotFoundError } = require('../../utils/errors');
 
 const list = async ({ page, limit, search, companyId, status }) => {
   const candidateWhere = {
@@ -59,4 +61,25 @@ const list = async ({ page, limit, search, companyId, status }) => {
   };
 };
 
-module.exports = { list };
+const findCandidateCompany = async (id) => {
+  const candidate = await prisma.candidate.findFirst({
+    where: { id, isDeleted: false },
+    select: { companyId: true, company: { select: { id: true, name: true, shortCode: true } } },
+  });
+  if (!candidate) throw new NotFoundError('Candidate not found.');
+  return candidate;
+};
+
+const getById = async (id) => {
+  const candidate = await findCandidateCompany(id);
+  const data = await candidateService.getById({ id, companyId: candidate.companyId });
+  return { ...data, company: candidate.company };
+};
+
+const update = async ({ id, payload, currentUser }) => {
+  const candidate = await findCandidateCompany(id);
+  const data = await candidateService.update({ id, companyId: candidate.companyId, payload, currentUser });
+  return { ...data, company: candidate.company };
+};
+
+module.exports = { list, getById, update };

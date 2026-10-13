@@ -4,6 +4,7 @@ const { prisma } = require('../../common/prisma');
 const repo = require('./candidate.repository');
 
 const { NotFoundError, ConflictError, BadRequestError } = require('../../utils/errors');
+const { IDENTITY_FIELDS, normalizeConfig, normalizeIdentityValue, validateIdentityValues } = require('../client/candidate-intake-config');
 
 const toDto = (candidate) => ({
   id: candidate.id,
@@ -79,10 +80,10 @@ const normalizeDateOfBirth = (value) => {
 const assertClientBelongsToCompany = async (clientId, companyId) => {
   const client = await prisma.client.findFirst({
     where: { id: clientId, companyId, isDeleted: false },
-    select: { id: true },
+    select: { id: true, candidateFormConfig: true },
   });
 
-  if (!client) throw new NotFoundError('Client not found');
+  return client;
 };
 
 const create = async ({ payload, companyId, currentUser }) => {
@@ -92,7 +93,15 @@ const create = async ({ payload, companyId, currentUser }) => {
   if (!firstName || !lastName) throw new BadRequestError('First name and last name are required');
   const normalizedEmail = email?.trim().toLowerCase() || null;
 
-  await assertClientBelongsToCompany(clientId, companyId);
+  const client = await assertClientBelongsToCompany(clientId, companyId);
+  validateIdentityValues(payload);
+  const intakeConfig = normalizeConfig(client.candidateFormConfig);
+  for (const { key, label } of IDENTITY_FIELDS) {
+    const value = payload[key];
+    if (value && !intakeConfig[key].enabled) {
+      throw new BadRequestError(`${label} is not enabled for this client’s candidate form.`);
+    }
+  }
 
   if (normalizedEmail) {
     const existing = await repo.findByEmail(companyId, clientId, normalizedEmail);
@@ -111,12 +120,12 @@ const create = async ({ payload, companyId, currentUser }) => {
     gender: payload.gender || null,
     fatherName: payload.fatherName || null,
     motherName: payload.motherName || null,
-    aadhaarNumber: payload.aadhaarNumber || null,
-    panNumber: payload.panNumber || null,
-    uanNumber: payload.uanNumber || null,
-    passportNumber: payload.passportNumber || null,
-    drivingLicenseNumber: payload.drivingLicenseNumber || null,
-    voterIdNumber: payload.voterIdNumber || null,
+    aadhaarNumber: normalizeIdentityValue('aadhaarNumber', payload.aadhaarNumber) || null,
+    panNumber: normalizeIdentityValue('panNumber', payload.panNumber) || null,
+    uanNumber: normalizeIdentityValue('uanNumber', payload.uanNumber) || null,
+    passportNumber: normalizeIdentityValue('passportNumber', payload.passportNumber) || null,
+    drivingLicenseNumber: normalizeIdentityValue('drivingLicenseNumber', payload.drivingLicenseNumber) || null,
+    voterIdNumber: normalizeIdentityValue('voterIdNumber', payload.voterIdNumber) || null,
     highestQualification: payload.highestQualification || null,
     courseName: payload.courseName || null,
     institutionName: payload.institutionName || null,
@@ -170,6 +179,7 @@ const update = async ({ id, companyId, payload, currentUser }) => {
   if (payload.clientId && payload.clientId !== existing.clientId) {
     await assertClientBelongsToCompany(payload.clientId, companyId);
   }
+  validateIdentityValues(payload);
 
   const normalizedEmail = payload.email?.trim().toLowerCase() || null;
   if (normalizedEmail && normalizedEmail !== existing.email?.toLowerCase()) {
@@ -183,7 +193,9 @@ const update = async ({ id, companyId, payload, currentUser }) => {
   ['clientId', 'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress', 'status']
     .forEach((field) => {
       if (payload[field] !== undefined) {
-        data[field] = field === 'email'
+        data[field] = IDENTITY_FIELDS.some((identityField) => identityField.key === field)
+          ? normalizeIdentityValue(field, payload[field]) || null
+          : field === 'email'
           ? (payload[field]?.trim().toLowerCase() || null)
           : ['dateOfBirth', 'joiningDate'].includes(field)
             ? normalizeDateOfBirth(payload[field])

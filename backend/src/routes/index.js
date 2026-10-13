@@ -25,6 +25,7 @@ const candidatePortalRoutes = require('../modules/candidate-portal/candidate-por
 const verifierRoutes = require('../modules/verifier/verifier.routes');
 const verificationModeRoutes = require('../modules/verification-mode/verification-mode.routes');
 const marketingRoutes = require('../modules/marketing/marketing.routes');
+const clientPortalRoutes = require('../modules/client-portal/client-portal.routes');
 
 const router = express.Router();
 
@@ -42,6 +43,7 @@ router.use('/platform/dashboard', platformDashboardRoutes);
 router.use('/platform/branding', platformBrandingRoutes);
 router.use('/platform/locations', platformLocationsRoutes);
 router.use('/clients', clientRoutes);
+router.use('/client-portal', clientPortalRoutes);
 
 
 // NEW

@@ -2,7 +2,14 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+Copy `.env.example` to `.env.local`. The same-origin `/api/v1` route is proxied
+to the backend at `http://localhost:5000` by default. Set
+`NEXT_PUBLIC_API_PROXY_TARGET` in `.env.local` if the backend uses a different
+host or port.
+Start the backend before starting the frontend so API calls and uploaded assets
+can be served through the proxy.
+
+Then run the development server:
 
 ```bash
 npm run dev

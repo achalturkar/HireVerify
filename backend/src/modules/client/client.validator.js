@@ -2,6 +2,7 @@
 
 const { body, param, query } = require('express-validator');
 const validatorLib = require('validator');
+const { CLIENT_PERMISSIONS } = require('./client-access.service');
 
 // logoUrl comes back from two different places: a user manually pasting an
 // external image URL, OR our own service round-tripping the path it just
@@ -37,6 +38,9 @@ const createValidator = [
     .optional({ checkFalsy: true })
     .custom(isLogoUrlValid)
     .withMessage('logoUrl must be a valid URL'),
+  body('reportShowCompanyBranding').optional().isBoolean(),
+  body('reportShowClientBranding').optional().isBoolean(),
+  body('candidateFormConfig').optional().isObject(),
 
   body('website')
     .optional()
@@ -110,6 +114,9 @@ const updateValidator = [
     .optional({ checkFalsy: true })
     .custom(isLogoUrlValid)
     .withMessage('logoUrl must be a valid URL'),
+  body('reportShowCompanyBranding').optional().isBoolean(),
+  body('reportShowClientBranding').optional().isBoolean(),
+  body('candidateFormConfig').optional().isObject(),
 
   body('website')
     .optional({ values: 'falsy' })
@@ -176,6 +183,21 @@ const idParamValidator = [
   param('id').isUUID(),
 ];
 
+const portalUsersValidator = [param('id').isUUID()];
+const portalUserIdValidator = [param('id').isUUID(), param('userId').isUUID()];
+const invitePortalUserValidator = [
+  ...portalUsersValidator,
+  body('firstName').isString().trim().isLength({ min: 1, max: 100 }),
+  body('lastName').isString().trim().isLength({ min: 1, max: 100 }),
+  body('email').isEmail().normalizeEmail(),
+  body('permissions').isArray({ min: 1 }).custom((values) => values.every((value) => CLIENT_PERMISSIONS.includes(value))),
+];
+const updatePortalUserValidator = [
+  ...portalUserIdValidator,
+  body('permissions').optional().isArray().custom((values) => values.every((value) => CLIENT_PERMISSIONS.includes(value))),
+  body('status').optional().isIn(['ACTIVE', 'INACTIVE']),
+];
+
 /**
  * List Validation
  */
@@ -223,5 +245,9 @@ module.exports = {
   createValidator,
   updateValidator,
   idParamValidator,
+  portalUsersValidator,
+  portalUserIdValidator,
+  invitePortalUserValidator,
+  updatePortalUserValidator,
   listValidator,
 };

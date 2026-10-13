@@ -20,7 +20,12 @@ const documentUpload = multer({
     filename: (_req, file, cb) => cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`),
   }),
   limits: { fileSize: 15 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => cb(null, ['application/pdf', 'image/jpeg', 'image/png'].includes(file.mimetype)),
+  fileFilter: (_req, file, cb) => {
+    if (!['application/pdf', 'image/jpeg', 'image/png'].includes(file.mimetype)) {
+      return cb(new BadRequestError('Only PDF, JPG, or PNG files are allowed.'));
+    }
+    return cb(null, true);
+  },
 });
 
 const router = express.Router();

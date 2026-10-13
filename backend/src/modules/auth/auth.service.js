@@ -40,13 +40,34 @@ const toUserDto = (user) => ({
   company: user.company
     ? { id: user.company.id, name: user.company.name, slug: user.company.slug, status: user.company.status, primaryColor: user.company.primaryColor, logoUrl: user.company.logoUrl }
     : null,
+  clientId: user.clientId || null,
+  client: user.client ? {
+    id: user.client.id,
+    name: user.client.name,
+    logoUrl: user.client.logoUrl,
+    clientCode: user.client.clientCode,
+    website: user.client.website,
+    industry: user.client.industry,
+    contactName: user.client.contactName,
+    contactEmail: user.client.contactEmail,
+    contactPhone: user.client.contactPhone,
+    addressLine1: user.client.addressLine1,
+    addressLine2: user.client.addressLine2,
+    city: user.client.city,
+    state: user.client.state,
+    country: user.client.country,
+    postalCode: user.client.postalCode,
+  } : null,
   role: {
     id: user.role.id,
     name: user.role.name,
     isSuperAdmin: user.role.isSuperAdmin,
     isCompanyAdmin: user.role.isCompanyAdmin,
+    isClientUser: user.role.isClientUser,
   },
-  permissions: user.role.rolePermissions.map((rp) => rp.permission.key),
+  permissions: user.role.isClientUser
+    ? (user.clientPermissions || [])
+    : user.role.rolePermissions.map((rp) => rp.permission.key),
   status: user.status,
   mustChangePassword: user.mustChangePassword,
   lastLoginAt: user.lastLoginAt,
@@ -86,6 +107,9 @@ const login = async ({ email, password, req }) => {
   if (user.company && !user.role.isSuperAdmin) {
     if (user.company.isDeleted || user.company.status !== 'ACTIVE') {
       throw new ForbiddenError('Company is not active');
+    }
+    if (user.role.isClientUser && (!user.client || user.client.isDeleted || user.client.status !== 'ACTIVE' || user.client.companyId !== user.companyId)) {
+      throw new ForbiddenError('Client account is not active');
     }
   }
 

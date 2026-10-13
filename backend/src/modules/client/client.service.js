@@ -2,6 +2,7 @@
 
 const { prisma } = require('../../common/prisma');
 const repo = require('./client.repository');
+const { normalizeConfig, validateConfig } = require('./candidate-intake-config');
 
 const {
   NotFoundError,
@@ -18,6 +19,9 @@ const toDto = (client) => ({
   clientCode: client.clientCode,
   name: client.name,
   logoUrl: client.logoUrl,
+  reportShowCompanyBranding: client.reportShowCompanyBranding,
+  reportShowClientBranding: client.reportShowClientBranding,
+  candidateFormConfig: normalizeConfig(client.candidateFormConfig),
   website: client.website,
   industry: client.industry,
   contactName: client.contactName,
@@ -204,6 +208,11 @@ const update = async ({
   if (!existing) {
     throw new NotFoundError('Client not found');
   }
+  const showCompanyBranding = payload.reportShowCompanyBranding ?? existing.reportShowCompanyBranding;
+  const showClientBranding = payload.reportShowClientBranding ?? existing.reportShowClientBranding;
+  if (!showCompanyBranding && !showClientBranding) {
+    throw new BadRequestError('Keep company branding or client branding enabled for reports.');
+  }
 
   // Duplicate Client Name
   if (
@@ -275,6 +284,8 @@ const update = async ({
     'clientCode',
     'name',
     'logoUrl',
+    'reportShowCompanyBranding',
+    'reportShowClientBranding',
     'website',
     'industry',
     'contactName',
@@ -294,6 +305,9 @@ const update = async ({
       data[field] = payload[field];
     }
   });
+  if (payload.candidateFormConfig !== undefined) {
+    data.candidateFormConfig = validateConfig(payload.candidateFormConfig);
+  }
 
   data.updatedById = currentUser?.id || null;
 

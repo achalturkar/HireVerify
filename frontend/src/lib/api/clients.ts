@@ -4,6 +4,8 @@ import type {
   UpdateClientPayload,
   ListClientsParams,
   PaginationMeta,
+  ClientPortalPermission,
+  ClientPortalUser,
 } from "@/src/types/client";
 
 const API_BASE =
@@ -238,6 +240,49 @@ export async function inactivateClient(
   });
 
   return res.data.data;
+}
+
+export async function listClientPortalUsers(
+  id: string,
+  accessToken: string | null
+): Promise<ClientPortalUser[]> {
+  const res = await request<Envelope<ClientPortalUser[]>>(`/clients/${id}/portal-users`, accessToken);
+  return res.data.data;
+}
+
+export async function inviteClientPortalUser(
+  id: string,
+  payload: { firstName: string; lastName: string; email: string; permissions: ClientPortalPermission[] },
+  accessToken: string | null
+): Promise<ClientPortalUser> {
+  const res = await request<Envelope<ClientPortalUser>>(`/clients/${id}/portal-users`, accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return res.data.data;
+}
+
+export async function updateClientPortalUser(
+  clientId: string,
+  userId: string,
+  payload: { permissions?: ClientPortalPermission[]; status?: 'ACTIVE' | 'INACTIVE' },
+  accessToken: string | null
+): Promise<ClientPortalUser> {
+  const res = await request<Envelope<ClientPortalUser>>(`/clients/${clientId}/portal-users/${userId}`, accessToken, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  return res.data.data;
+}
+
+export async function revokeClientPortalUser(
+  clientId: string,
+  userId: string,
+  accessToken: string | null
+): Promise<void> {
+  await request<ApiResponse<{ message: string }>>(`/clients/${clientId}/portal-users/${userId}`, accessToken, {
+    method: 'DELETE',
+  });
 }
 
 export { ApiError };

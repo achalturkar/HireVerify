@@ -8,7 +8,7 @@ const { buildReport } = require('./bgv-report.generator');
 const CASE_STATUSES = ['DRAFT', 'INITIATED', 'CONSENT_PENDING', 'IN_PROGRESS', 'UNDER_REVIEW', 'COMPLETED', 'ON_HOLD', 'CANCELLED'];
 const TRANSITIONS = Object.fromEntries(CASE_STATUSES.map((status) => [
   status,
-  CASE_STATUSES.filter((targetStatus) => targetStatus !== status),
+  ['COMPLETED', 'CANCELLED'].includes(status) ? [] : CASE_STATUSES.filter((targetStatus) => targetStatus !== status),
 ]));
 
 const toDto = (item) => item;
@@ -51,6 +51,7 @@ const create = async ({ payload, companyId, currentUser }) => {
       const item = await tx.bGVCase.create({ data: { companyId, clientId: payload.clientId, candidateId: payload.candidateId, caseNumber, status: payload.status || 'DRAFT', initiatedAt: payload.status === 'INITIATED' ? new Date() : null, clientReference: payload.clientReference || null, packageName: payload.packageName || null, remarks: payload.remarks || null, createdById: currentUser?.id || null } });
       const checks = payload.checks || [];
       if (checks.length) await tx.verificationCheck.createMany({ data: checks.map((check) => ({ caseId: item.id, type: check.type, provider: check.provider || 'SUREPASS', priority: check.priority || 0 })) });
+      await tx.candidate.update({ where: { id: payload.candidateId }, data: { status: 'VERIFICATION_IN_PROGRESS', updatedById: currentUser?.id || null } });
       await tx.verificationEvent.create({ data: { caseId: item.id, eventType: 'CREATED', message: 'BGV case created' } });
       return item;
     }, { isolationLevel: 'Serializable' });
@@ -79,8 +80,19 @@ const transition = async ({ id, companyId, status, remarks, currentUser }) => {
   const data = { status, updatedById: currentUser?.id || null, ...(remarks !== undefined ? { remarks } : {}) };
   if (status === 'INITIATED' && !current.initiatedAt) data.initiatedAt = new Date();
   if (status === 'COMPLETED') data.completedAt = new Date();
-  await repo.update(id, data);
-  await repo.createEvent({ caseId: id, eventType: 'STATUS_CHANGED', status: null, message: `${current.status} -> ${status}`, metadata: { from: current.status, to: status, userId: currentUser?.id || null } });
+  const candidateStatus = status === 'COMPLETED'
+    ? 'COMPLETED'
+    : status === 'ON_HOLD'
+      ? 'ON_HOLD'
+      : status === 'CANCELLED'
+        ? 'WITHDRAWN'
+        : 'VERIFICATION_IN_PROGRESS';
+  await prisma.$transaction(async (tx) => {
+    await tx.bGVCase.update({ where: { id }, data });
+    await tx.candidate.update({ where: { id: current.candidateId }, data: { status: candidateStatus, updatedById: currentUser?.id || null } });
+    await tx.verificationEvent.create({ data: { caseId: id, eventType: 'STATUS_CHANGED', status: null, message: `${current.status} -> ${status}`, metadata: { from: current.status, to: status, userId: currentUser?.id || null } } });
+    if (status === 'COMPLETED') await recordReportGenerated({ ...current, ...data }, tx);
+  });
   return getById({ id, companyId });
 };
 
@@ -137,9 +149,9 @@ const generateReport = async ({ id, companyId }) => {
   return buildReport(item);
 };
 
-const recordReportGenerated = async (item) => {
+const recordReportGenerated = async (item, database = prisma) => {
   const generatedAt = new Date();
-  return prisma.bGVReport.upsert({
+  return database.bGVReport.upsert({
     where: { caseId: item.id },
     create: {
       companyId: item.companyId,

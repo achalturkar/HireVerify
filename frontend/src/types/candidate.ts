@@ -84,6 +84,12 @@ export interface CandidateFormValues {
   phone: string;
   dateOfBirth: string;
   gender: string;
+  aadhaarNumber?: string;
+  panNumber?: string;
+  uanNumber?: string;
+  passportNumber?: string;
+  drivingLicenseNumber?: string;
+  voterIdNumber?: string;
   employeeId: string;
   employeeDesignation: string;
   employeeDepartment: string;
