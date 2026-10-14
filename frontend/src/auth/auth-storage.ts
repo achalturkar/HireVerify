@@ -3,20 +3,30 @@
 import { LoginSession, User } from "./types";
 
 export const SESSION_KEY = "hireassess_session";
+const IMPERSONATION_SESSION_KEY = "hireassess_impersonation_session";
 
 class AuthStorage {
 
   save(session: LoginSession): void {
     if (typeof window === "undefined") return;
 
+    this.clearImpersonation();
     localStorage.setItem(
       SESSION_KEY,
       JSON.stringify(session)
     );
   }
 
-  get(): LoginSession | null {
+  saveImpersonation(session: LoginSession): void {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem(IMPERSONATION_SESSION_KEY, JSON.stringify(session));
+  }
 
+  get(): LoginSession | null {
+    return this.getImpersonation() || this.getPrimarySession();
+  }
+
+  getPrimarySession(): LoginSession | null {
     if (typeof window === "undefined") {
       return null;
     }
@@ -35,11 +45,30 @@ class AuthStorage {
     }
   }
 
+  getImpersonation(): LoginSession | null {
+    if (typeof window === "undefined") return null;
+    const raw = sessionStorage.getItem(IMPERSONATION_SESSION_KEY);
+    if (!raw) return null;
+
+    try {
+      return JSON.parse(raw) as LoginSession;
+    } catch {
+      this.clearImpersonation();
+      return null;
+    }
+  }
+
+  clearImpersonation(): void {
+    if (typeof window === "undefined") return;
+    sessionStorage.removeItem(IMPERSONATION_SESSION_KEY);
+  }
+
   clear(): void {
 
     if (typeof window === "undefined") return;
 
     localStorage.removeItem(SESSION_KEY);
+    this.clearImpersonation();
   }
 
   updateUser(user: User): void {
@@ -50,7 +79,8 @@ class AuthStorage {
 
     session.user = user;
 
-    this.save(session);
+    if (this.getImpersonation()) this.saveImpersonation(session);
+    else localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   }
 
   updateAccessToken(accessToken: string): void {
@@ -61,7 +91,8 @@ class AuthStorage {
 
     session.accessToken = accessToken;
 
-    this.save(session);
+    if (this.getImpersonation()) this.saveImpersonation(session);
+    else localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   }
 
   updateRefreshToken(refreshToken: string): void {
@@ -72,7 +103,8 @@ class AuthStorage {
 
     session.refreshToken = refreshToken;
 
-    this.save(session);
+    if (this.getImpersonation()) this.saveImpersonation(session);
+    else localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   }
 
   isLoggedIn(): boolean {
@@ -83,4 +115,5 @@ class AuthStorage {
 
 }
 
-export default new AuthStorage();
+const authStorage = new AuthStorage();
+export default authStorage;

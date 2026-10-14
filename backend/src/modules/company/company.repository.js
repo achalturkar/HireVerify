@@ -20,8 +20,9 @@ const softDelete = (id) =>
     data: { isDeleted: true, deletedAt: new Date(), status: 'INACTIVE' },
   });
 
-const list = async ({ skip, limit, search, status, sortBy, sortOrder, includeDeleted }) => {
+const list = async ({ skip, limit, search, status, sortBy, sortOrder, includeDeleted, companyId }) => {
   const where = {
+    ...(companyId ? { id: companyId } : {}),
     ...(includeDeleted ? {} : { isDeleted: false }),
     ...(status ? { status } : {}),
     ...(search

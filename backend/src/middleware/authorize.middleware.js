@@ -37,7 +37,7 @@ const requireRole = ({ superAdmin = false, companyAdmin = false } = {}) => (req,
     if (!req.user) throw new UnauthorizedError('Not authenticated');
     const r = req.user.role || {};
     if (superAdmin && r.isSuperAdmin) return next();
-    if (companyAdmin && (r.isCompanyAdmin || r.isSuperAdmin)) return next();
+    if (companyAdmin && r.isCompanyAdmin) return next();
     if (!superAdmin && !companyAdmin) return next();
     throw new ForbiddenError('Insufficient role');
   } catch (err) {

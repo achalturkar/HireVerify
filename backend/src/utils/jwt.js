@@ -4,8 +4,8 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const config = require('../config');
 
-const signAccessToken = (payload) =>
-  jwt.sign(payload, config.jwt.accessSecret, { expiresIn: config.jwt.accessExpiresIn });
+const signAccessToken = (payload, expiresIn = config.jwt.accessExpiresIn) =>
+  jwt.sign(payload, config.jwt.accessSecret, { expiresIn });
 
 const signRefreshToken = (payload, jti) =>
   jwt.sign({ ...payload, jti }, config.jwt.refreshSecret, { expiresIn: config.jwt.refreshExpiresIn });

@@ -19,9 +19,14 @@ import {
   Calendar,
   AlertCircle,
   Receipt,
+  LogIn,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
+import AuthStorage from '@/src/auth/auth-storage';
 import { getCompanyDetails } from '@/src/lib/api/companies';
+import { startCompanyImpersonation, toImpersonationSession } from '@/src/lib/api/impersonation';
 import { ApiError } from '@/src/lib/api';
 import { resolveLogoUrl } from '@/src/lib/logo';
 import CompanyWorkspaceTabs from '@/src/components/superadmin/CompanyWorkspaceTabs';
@@ -149,7 +154,7 @@ function DetailSkeleton() {
 }
 
 export default function CompanyDetailPage() {
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const params = useParams();
   const companyId = params?.id as string;
 
@@ -157,6 +162,10 @@ export default function CompanyDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [logoBroken, setLogoBroken] = useState(false);
+  const [accessDialogOpen, setAccessDialogOpen] = useState(false);
+  const [accessReason, setAccessReason] = useState('');
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [startingAccess, setStartingAccess] = useState(false);
 
   useEffect(() => {
     if (!companyId || !accessToken) return;
@@ -210,6 +219,31 @@ export default function CompanyDetailPage() {
   const completionRate = stats.bgvCases > 0 ? Math.round((stats.completedCases / stats.bgvCases) * 100) : 0;
   const resolvedLogo = resolveLogoUrl(company.logoUrl);
 
+  const handleStartCompanyAccess = async () => {
+    const reason = accessReason.trim();
+    if (reason.length < 10 || reason.length > 500) {
+      setAccessError('Enter a reason between 10 and 500 characters.');
+      return;
+    }
+    if (!accessToken || !admin || !user?.role.isSuperAdmin) {
+      setAccessError('Only a superadmin can access a company portal.');
+      return;
+    }
+
+    setStartingAccess(true);
+    setAccessError(null);
+    try {
+      const result = await startCompanyImpersonation(company.id, admin.id, reason, accessToken);
+      AuthStorage.saveImpersonation(
+        toImpersonationSession(result, company.id, `${user.firstName} ${user.lastName}`.trim())
+      );
+      window.location.assign('/company/dashboard');
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : 'Could not start company access.');
+      setStartingAccess(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[var(--background)]">
       <div className="border-b border-[var(--border)] bg-[var(--surface)]/50 backdrop-blur-sm sticky top-0 z-10">
@@ -221,9 +255,25 @@ export default function CompanyDetailPage() {
             <ArrowLeft size={14} />
             Back to companies
           </Link>
-          <Link href={`/super-admin/invoices?companyId=${encodeURIComponent(company.id)}`} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3.5 py-2 text-[12px] font-semibold text-[var(--primary-foreground)] hover:opacity-90">
-            <Receipt size={14} />View invoices
-          </Link>
+          <div className="flex items-center gap-2">
+            {user?.role.isSuperAdmin && admin?.status === 'ACTIVE' && company.status === 'ACTIVE' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAccessReason('');
+                  setAccessError(null);
+                  setAccessDialogOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-[var(--primary)]/40 px-3.5 py-2 text-[12px] font-semibold text-[var(--primary)] hover:bg-[var(--primary)]/10"
+              >
+                <LogIn size={14} />
+                Access company portal
+              </button>
+            )}
+            <Link href={`/super-admin/invoices?companyId=${encodeURIComponent(company.id)}`} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3.5 py-2 text-[12px] font-semibold text-[var(--primary-foreground)] hover:opacity-90">
+              <Receipt size={14} />View invoices
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -473,6 +523,75 @@ export default function CompanyDetailPage() {
         )}
         </CompanyWorkspaceTabs>
       </div>
+
+      {accessDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="company-access-title"
+            className="w-full max-w-lg rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-2xl"
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 id="company-access-title" className="text-lg font-semibold text-[var(--foreground)]">
+                  Access {company.name} portal
+                </h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  You will temporarily act as {admin?.firstName} {admin?.lastName}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAccessDialogOpen(false)}
+                disabled={startingAccess}
+                aria-label="Close"
+                className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--surface-muted)]"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mb-4 rounded-lg border border-[var(--accent)]/30 bg-[var(--accent)]/10 p-3 text-sm text-[var(--foreground)]">
+              Access lasts up to 15 minutes, is recorded in the audit log, and can be stopped at any time.
+            </div>
+            <label htmlFor="company-access-reason" className="mb-2 block text-sm font-medium text-[var(--foreground)]">
+              Reason for access
+            </label>
+            <textarea
+              id="company-access-reason"
+              value={accessReason}
+              onChange={(event) => setAccessReason(event.target.value)}
+              maxLength={500}
+              rows={4}
+              placeholder="Describe the support or investigation purpose (10–500 characters)."
+              className="w-full resize-y rounded-lg border border-[var(--border)] bg-[var(--background)] p-3 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
+            />
+            {accessError && (
+              <p role="alert" className="mt-2 text-sm text-[var(--danger)]">{accessError}</p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAccessDialogOpen(false)}
+                disabled={startingAccess}
+                className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--foreground)] hover:bg-[var(--surface-muted)] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleStartCompanyAccess}
+                disabled={startingAccess || accessReason.trim().length < 10}
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-[var(--primary-foreground)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {startingAccess && <Loader2 size={15} className="animate-spin" />}
+                Confirm and continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

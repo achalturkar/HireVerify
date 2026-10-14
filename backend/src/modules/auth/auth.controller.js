@@ -62,4 +62,31 @@ const changePassword = asyncHandler(async (req, res) => {
   return created(res, { message: 'Password changed successfully. Please log in again.' });
 });
 
-module.exports = { login, forgotPassword, resetPassword, refresh, logout, me, changePassword };
+const startImpersonation = asyncHandler(async (req, res) => {
+  const { companyId, targetUserId, reason } = req.body;
+  const data = await authService.startImpersonation({
+    actorId: req.user.id,
+    companyId,
+    targetUserId,
+    reason,
+    req,
+  });
+  return success(res, { message: 'Company access started', data });
+});
+
+const stopImpersonation = asyncHandler(async (req, res) => {
+  await authService.stopImpersonation({ impersonation: req.impersonation, req });
+  return success(res, { message: 'Company access ended' });
+});
+
+module.exports = {
+  login,
+  forgotPassword,
+  resetPassword,
+  refresh,
+  logout,
+  me,
+  changePassword,
+  startImpersonation,
+  stopImpersonation,
+};

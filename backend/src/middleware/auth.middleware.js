@@ -89,6 +89,61 @@ console.log(userAuth.permissions);
 console.log("=================================");
     req.user = userAuth;
     req.permissions = new Set(userAuth.permissions);
+    req.authTokenJti = decoded.jti || null;
+
+    if (decoded.impersonation) {
+      const claim = decoded.impersonation;
+      const session = await prisma.impersonationSession.findUnique({
+        where: { id: claim.sessionId },
+        include: {
+          actor: { include: { role: true } },
+          target: { include: { role: true, company: true } },
+        },
+      });
+      const now = new Date();
+      if (
+        !session ||
+        session.endedAt ||
+        session.expiresAt <= now ||
+        session.actorUserId !== claim.actorUserId ||
+        session.companyId !== claim.companyId ||
+        session.targetUserId !== decoded.sub
+      ) {
+        throw new UnauthorizedError('Impersonation session has expired or been revoked');
+      }
+
+      const actor = session.actor;
+      const target = session.target;
+      if (
+        !actor ||
+        actor.isDeleted ||
+        actor.status !== 'ACTIVE' ||
+        !actor.role.isSuperAdmin ||
+        !target ||
+        target.isDeleted ||
+        target.status !== 'ACTIVE' ||
+        !target.role.isCompanyAdmin ||
+        target.role.isSuperAdmin ||
+        target.role.isClientUser ||
+        target.companyId !== session.companyId ||
+        !target.company ||
+        target.company.isDeleted ||
+        target.company.status !== 'ACTIVE' ||
+        userAuth.companyId !== session.companyId
+      ) {
+        throw new UnauthorizedError('Impersonation access is no longer authorized');
+      }
+
+      req.impersonation = {
+        sessionId: session.id,
+        actorUserId: session.actorUserId,
+        targetUserId: session.targetUserId,
+        companyId: session.companyId,
+        reason: session.reason,
+        startedAt: session.startedAt.toISOString(),
+        expiresAt: session.expiresAt.toISOString(),
+      };
+    }
     return next();
   } catch (err) {
     return next(err);

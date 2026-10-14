@@ -73,6 +73,7 @@ model Company {
   verifiers           Verifier[]
   verificationModes   VerificationMode[]
   marketingSmtpConfig MarketingSmtpConfig?
+  impersonationSessions ImpersonationSession[]
   marketingLeads      MarketingLead[]
   marketingCampaigns  MarketingCampaign[]
 
@@ -193,6 +194,8 @@ model User {
   refreshTokens RefreshToken[]
 
   auditLogs AuditLog[]
+  startedImpersonationSessions ImpersonationSession[] @relation("ImpersonationActor")
+  targetedImpersonationSessions ImpersonationSession[] @relation("ImpersonationTarget")
 
   @@index([companyId])
   @@index([clientId])
@@ -264,6 +267,27 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model ImpersonationSession {
+  id           String    @id @default(uuid()) @db.Uuid
+  actorUserId  String    @map("actor_user_id") @db.Uuid
+  targetUserId String    @map("target_user_id") @db.Uuid
+  companyId    String    @map("company_id") @db.Uuid
+  reason       String    @db.VarChar(500)
+  startedAt    DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(6)
+  endedAt      DateTime? @map("ended_at") @db.Timestamptz(6)
+
+  actor  User    @relation("ImpersonationActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+  target User    @relation("ImpersonationTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([actorUserId, startedAt])
+  @@index([targetUserId, startedAt])
+  @@index([companyId, startedAt])
+  @@index([expiresAt])
+  @@map("impersonation_sessions")
 }
 
 // ============================================================

@@ -5,6 +5,7 @@ const controller = require('./auth.controller');
 const { validate } = require('../../middleware/validate.middleware');
 const { authenticate } = require('../../middleware/auth.middleware');
 const { authLimiter } = require('../../middleware/rateLimit.middleware');
+const { requireRole } = require('../../middleware/authorize.middleware');
 const v = require('./auth.validator');
 
 const router = express.Router();
@@ -38,6 +39,49 @@ const router = express.Router();
  *       401: { description: Invalid credentials }
  */
 router.post('/login', authLimiter, validate(v.loginValidator), controller.login);
+
+/**
+ * @openapi
+ * /auth/impersonation/start:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Start a short-lived, audited company-admin access session
+ *     description: Superadmin only. Requires a reason and an active company-admin target. The returned access token expires after 15 minutes and has no refresh token.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [companyId, targetUserId, reason]
+ *             properties:
+ *               companyId: { type: string, format: uuid }
+ *               targetUserId: { type: string, format: uuid }
+ *               reason: { type: string, minLength: 10, maxLength: 500 }
+ *     responses:
+ *       200: { description: Temporary company-admin session created }
+ *       403: { description: Superadmin access required }
+ *       409: { description: An impersonation session is already active }
+ */
+router.post(
+  '/impersonation/start',
+  authenticate,
+  requireRole({ superAdmin: true }),
+  validate(v.impersonationStartValidator),
+  controller.startImpersonation
+);
+
+/**
+ * @openapi
+ * /auth/impersonation/stop:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Revoke the current temporary company-admin session
+ *     responses:
+ *       200: { description: Temporary company-admin session ended }
+ *       401: { description: Session expired or revoked }
+ */
+router.post('/impersonation/stop', authenticate, controller.stopImpersonation);
 
 /**
  * @openapi

@@ -28,6 +28,7 @@ const listCompanies = asyncHandler(async (req, res) => {
   const { items, total } = await service.list({
     query: {
       ...pagination,
+      companyId: req.user.role?.isSuperAdmin ? undefined : req.user.companyId,
       status: req.query.status,
       includeDeleted: req.query.includeDeleted,
     },

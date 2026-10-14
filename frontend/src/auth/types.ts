@@ -79,6 +79,12 @@ export interface LoginSession {
     accessToken: string;
 
     refreshToken: string;
+    impersonation?: {
+        sessionId: string;
+        companyId: string;
+        expiresAt: string;
+        actorName: string;
+    };
 
 }
 

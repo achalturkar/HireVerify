@@ -37,6 +37,16 @@ const logoutValidator = [
   body('refreshToken').optional().isString(),
 ];
 
+const impersonationStartValidator = [
+  body('companyId').isUUID().withMessage('Valid company ID required'),
+  body('targetUserId').isUUID().withMessage('Valid company admin ID required'),
+  body('reason')
+    .isString()
+    .trim()
+    .isLength({ min: 10, max: 500 })
+    .withMessage('Reason must be between 10 and 500 characters'),
+];
+
 const changePasswordValidator = [
   body('currentPassword').isString().isLength({ min: 1 }).withMessage('Current password is required'),
   strongPassword('newPassword'),
@@ -48,6 +58,7 @@ module.exports = {
   forgotPasswordValidator,
   resetPasswordValidator,
   logoutValidator,
+  impersonationStartValidator,
   changePasswordValidator,
   strongPassword,
 };

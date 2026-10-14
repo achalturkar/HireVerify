@@ -91,6 +91,9 @@ export async function refreshAccessToken(): Promise<string> {
   if (!session) {
     throw new Error("No Session");
   }
+  if (AuthStorage.getImpersonation()) {
+    throw new Error("Impersonation sessions cannot be refreshed");
+  }
 
   const response = await api<{ data: { data: { accessToken: string } } }>("/auth/refresh-token", {
     method: "POST",
@@ -111,9 +114,24 @@ export async function refreshAccessToken(): Promise<string> {
  */
 export async function logout(): Promise<void> {
 
-  const session = AuthStorage.get();
+  const impersonationSession = AuthStorage.getImpersonation();
+  if (impersonationSession) {
+    try {
+      await api("/auth/impersonation/stop", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${impersonationSession.accessToken}`,
+        },
+      });
+    } catch (error) {
+      console.error("Could not revoke impersonation session during logout", error);
+    }
+  }
+
+  const session = AuthStorage.getPrimarySession() || AuthStorage.get();
 
   if (!session) {
+    AuthStorage.clear();
     return;
   }
 

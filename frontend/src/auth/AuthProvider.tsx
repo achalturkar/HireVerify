@@ -16,6 +16,8 @@ import {
   getSession,
   logout as logoutService,
 } from "./auth-service";
+import AuthStorage from "./auth-storage";
+import { stopCompanyImpersonation } from "@/src/lib/api/impersonation";
 
 import { User } from "./types";
 
@@ -23,8 +25,10 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   accessToken: string | null;
+  isImpersonating: boolean;
   permissions: string[];
   refreshUser: () => Promise<void>;
+  stopImpersonation: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -41,6 +45,7 @@ export function AuthProvider({
   const [loading, setLoading] = useState(true);
 
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isImpersonating, setIsImpersonating] = useState(false);
 
   const router = useRouter();
 
@@ -49,8 +54,6 @@ export function AuthProvider({
     try {
 
       const session = getSession();
-
-      console.log("SESSION =>", session);
 
       if (!session) {
 
@@ -61,12 +64,9 @@ export function AuthProvider({
       }
 
       setAccessToken(session.accessToken);
-
-      console.log("Calling /auth/me");
+      setIsImpersonating(Boolean(session.impersonation));
 
       const me = await getCurrentUser();
-
-      console.log("ME =>", me);
 
       setUser(me);
 
@@ -74,11 +74,28 @@ export function AuthProvider({
 
       console.error("AUTH ERROR", e);
 
+      if (AuthStorage.getImpersonation()) {
+        AuthStorage.clearImpersonation();
+        const baseSession = getSession();
+        if (baseSession) {
+          try {
+            const baseUser = await getCurrentUser();
+            setAccessToken(baseSession.accessToken);
+            setIsImpersonating(false);
+            setUser(baseUser);
+            return;
+          } catch (restoreError) {
+            console.error("Could not restore superadmin session after impersonation", restoreError);
+          }
+        }
+      }
+
       await logoutService();
 
       setUser(null);
 
       setAccessToken(null);
+      setIsImpersonating(false);
 
     } finally {
 
@@ -89,9 +106,11 @@ export function AuthProvider({
   }, []);
 
   useEffect(() => {
+    const loadTimer = window.setTimeout(() => {
+      void loadUser();
+    }, 0);
 
-    loadUser();
-
+    return () => window.clearTimeout(loadTimer);
   }, [loadUser]);
 
   const refreshUser = async () => {
@@ -100,6 +119,39 @@ export function AuthProvider({
 
   };
 
+  const stopImpersonation = useCallback(async () => {
+    const impersonation = AuthStorage.getImpersonation();
+    if (!impersonation) return;
+
+    await stopCompanyImpersonation(impersonation.accessToken);
+    AuthStorage.clearImpersonation();
+
+    const baseSession = getSession();
+    if (!baseSession) {
+      await logoutService();
+      setUser(null);
+      setAccessToken(null);
+      setIsImpersonating(false);
+      router.replace("/login");
+      return;
+    }
+
+    try {
+      const baseUser = await getCurrentUser();
+      setUser(baseUser);
+      setAccessToken(baseSession.accessToken);
+      setIsImpersonating(false);
+      router.replace(`/super-admin/companies/${impersonation.impersonation?.companyId}`);
+    } catch (error) {
+      console.error("Could not restore superadmin session after stopping impersonation", error);
+      await logoutService();
+      setUser(null);
+      setAccessToken(null);
+      setIsImpersonating(false);
+      router.replace("/login");
+    }
+  }, [router]);
+
   const logout = useCallback(async () => {
 
     await logoutService();
@@ -107,6 +159,7 @@ export function AuthProvider({
     setUser(null);
 
     setAccessToken(null);
+    setIsImpersonating(false);
 
     router.replace("/login");
 
@@ -119,8 +172,10 @@ export function AuthProvider({
         user,
         loading,
         accessToken,
+        isImpersonating,
         permissions: user?.permissions ?? [],
         refreshUser,
+        stopImpersonation,
         logout,
       }}
     >

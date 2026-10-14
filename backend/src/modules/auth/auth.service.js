@@ -1,6 +1,7 @@
 'use strict';
 
 const config = require('../../config');
+const { prisma } = require('../../common/prisma');
 const { redis } = require('../../common/redis');
 const {
   signAccessToken,
@@ -18,6 +19,7 @@ const {
   BadRequestError,
   ForbiddenError,
   NotFoundError,
+  ConflictError,
 } = require('../../utils/errors');
 const authRepo = require('./auth.repository');
 const { invalidateUserAuthCache } = require('../../middleware/auth.middleware');
@@ -252,4 +254,151 @@ const changePassword = async ({ userId, currentPassword, newPassword }) => {
   await invalidateUserAuthCache(userId);
 };
 
-module.exports = { login, forgotPassword, resetPassword, refresh, logout, me, changePassword };
+const IMPERSONATION_TTL_SECONDS = 15 * 60;
+
+const auditRequestData = (req) => ({
+  ipAddress: (req?.headers?.['x-forwarded-for'] || req?.socket?.remoteAddress || '').toString().slice(0, 50),
+  userAgent: (req?.headers?.['user-agent'] || '').toString().slice(0, 500),
+});
+
+const startImpersonation = async ({ actorId, companyId, targetUserId, reason, req }) => {
+  const actor = await prisma.user.findUnique({
+    where: { id: actorId },
+    include: { role: true },
+  });
+  if (!actor || actor.isDeleted || actor.status !== 'ACTIVE' || !actor.role.isSuperAdmin) {
+    throw new ForbiddenError('An active superadmin account is required');
+  }
+
+  const target = await prisma.user.findFirst({
+    where: {
+      id: targetUserId,
+      companyId,
+      clientId: null,
+      isDeleted: false,
+      status: 'ACTIVE',
+      role: { isCompanyAdmin: true, isSuperAdmin: false, isClientUser: false },
+      company: { isDeleted: false, status: 'ACTIVE' },
+    },
+    include: {
+      role: { include: { rolePermissions: { include: { permission: true } } } },
+      company: true,
+      client: true,
+    },
+  });
+  if (!target) {
+    throw new NotFoundError('Active company admin or company not found');
+  }
+
+  const now = new Date();
+  const activeSession = await prisma.impersonationSession.findFirst({
+    where: { actorUserId: actorId, endedAt: null, expiresAt: { gt: now } },
+    select: { id: true },
+  });
+  if (activeSession) {
+    throw new ConflictError('End your current company access session before starting another');
+  }
+
+  const expiresAt = new Date(now.getTime() + IMPERSONATION_TTL_SECONDS * 1000);
+  const session = await prisma.$transaction(async (tx) => {
+    const createdSession = await tx.impersonationSession.create({
+      data: {
+        actorUserId: actor.id,
+        targetUserId: target.id,
+        companyId: target.companyId,
+        reason: reason.trim(),
+        expiresAt,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        companyId: target.companyId,
+        userId: actor.id,
+        action: 'auth.impersonation.start',
+        entity: 'Company',
+        entityId: target.companyId,
+        metadata: {
+          sessionId: createdSession.id,
+          actor: { id: actor.id, email: actor.email },
+          target: { id: target.id, email: target.email },
+          reason: reason.trim(),
+          expiresAt: expiresAt.toISOString(),
+        },
+        ...auditRequestData(req),
+      },
+    });
+    return createdSession;
+  });
+
+  const accessToken = signAccessToken({
+    ...buildUserPayload(target),
+    jti: generateJti(),
+    impersonation: {
+      sessionId: session.id,
+      actorUserId: actor.id,
+      companyId: target.companyId,
+    },
+  }, '15m');
+
+  return {
+    accessToken,
+    expiresAt: session.expiresAt,
+    sessionId: session.id,
+    user: toUserDto(target),
+  };
+};
+
+const stopImpersonation = async ({ impersonation, req }) => {
+  if (!impersonation?.sessionId || !impersonation.actorUserId) {
+    throw new ForbiddenError('This request is not an impersonation session');
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const ended = await tx.impersonationSession.updateMany({
+      where: {
+        id: impersonation.sessionId,
+        actorUserId: impersonation.actorUserId,
+        targetUserId: impersonation.targetUserId,
+        companyId: impersonation.companyId,
+        endedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: { endedAt: new Date() },
+    });
+    if (ended.count !== 1) {
+      throw new ForbiddenError('This impersonation session is no longer active');
+    }
+
+    await tx.auditLog.create({
+      data: {
+        companyId: impersonation.companyId,
+        userId: impersonation.actorUserId,
+        action: 'auth.impersonation.stop',
+        entity: 'Company',
+        entityId: impersonation.companyId,
+        metadata: {
+          sessionId: impersonation.sessionId,
+          actorUserId: impersonation.actorUserId,
+          targetUserId: impersonation.targetUserId,
+          reason: impersonation.reason,
+          startedAt: impersonation.startedAt,
+          expiresAt: impersonation.expiresAt,
+        },
+        ...auditRequestData(req),
+      },
+    });
+  });
+};
+
+module.exports = {
+  login,
+  forgotPassword,
+  resetPassword,
+  refresh,
+  logout,
+  me,
+  changePassword,
+  startImpersonation,
+  stopImpersonation,
+};

@@ -233,6 +233,7 @@ const list = async ({ query }) => {
   const result = await repo.list({
     skip: query.skip,
     limit: query.limit,
+    companyId: query.companyId,
     search: query.search,
     status: query.status,
     sortBy: ['name', 'createdAt', 'status'].includes(query.sortBy) ? query.sortBy : 'createdAt',

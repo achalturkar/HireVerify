@@ -7,14 +7,33 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const controller = require('./company.controller');
 const { authenticate } = require('../../middleware/auth.middleware');
-const { authorize } = require('../../middleware/authorize.middleware');
+const { authorize, requireRole } = require('../../middleware/authorize.middleware');
 const { validate } = require('../../middleware/validate.middleware');
-const { BadRequestError } = require('../../utils/errors');
+const { BadRequestError, ForbiddenError } = require('../../utils/errors');
 const config = require('../../config');
 const v = require('./company.validator');
 
 const router = express.Router();
 router.use(authenticate);
+
+const requireCompanyScope = (req, _res, next) => {
+  const role = req.user?.role || {};
+  if (
+    role.isSuperAdmin ||
+    (role.isCompanyAdmin && req.user.companyId && req.user.companyId === req.params.id)
+  ) {
+    return next();
+  }
+  return next(new ForbiddenError('You can only access your own company'));
+};
+
+const requireCompanyListScope = (req, _res, next) => {
+  const role = req.user?.role || {};
+  if (role.isSuperAdmin || (role.isCompanyAdmin && req.user.companyId)) {
+    return next();
+  }
+  return next(new ForbiddenError('Company access is not allowed'));
+};
 
 const ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.svg'];
 const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
@@ -74,7 +93,7 @@ const uploadCompanyFiles = (req, res, next) => {
  * @openapi
  * tags:
  *   - name: Companies
- *     description: Company (tenant) management — Super Admin only
+ *     description: Superadmin company management and company-admin access limited to its own tenant
  */
 
 /**
@@ -133,8 +152,14 @@ router.get('/analytics', authorize('company.view'), controller.getCompanyAnalyti
 
 router
   .route('/')
-  .get(authorize('company.view'), validate(v.listValidator), controller.listCompanies)
-  .post(uploadCompanyFiles, authorize('company.create'), validate(v.createValidator), controller.createCompany);
+  .get(requireCompanyListScope, authorize('company.view'), validate(v.listValidator), controller.listCompanies)
+  .post(
+    requireRole({ superAdmin: true }),
+    uploadCompanyFiles,
+    authorize('company.create'),
+    validate(v.createValidator),
+    controller.createCompany
+  );
 
 /**
  * @openapi
@@ -166,9 +191,20 @@ router
  */
 router
   .route('/:id')
-  .get(authorize('company.view'), validate(v.idParamValidator), controller.getCompany)
-  .put(uploadCompanyFiles, authorize('company.update'), validate(v.updateValidator), controller.updateCompany)
-  .delete(authorize('company.delete'), validate(v.idParamValidator), controller.deleteCompany);
+  .get(requireCompanyScope, authorize('company.view'), validate(v.idParamValidator), controller.getCompany)
+  .put(
+    requireCompanyScope,
+    authorize('company.update'),
+    uploadCompanyFiles,
+    validate(v.updateValidator),
+    controller.updateCompany
+  )
+  .delete(
+    requireRole({ superAdmin: true }),
+    authorize('company.delete'),
+    validate(v.idParamValidator),
+    controller.deleteCompany
+  );
 
 /**
  * @openapi
@@ -184,7 +220,7 @@ router
  *     responses:
  *       200: { description: Company stats }
  */
-router.get('/:id/stats', authorize('company.view'), validate(v.idParamValidator), controller.getCompanyStats);
+router.get('/:id/stats', requireCompanyScope, authorize('company.view'), validate(v.idParamValidator), controller.getCompanyStats);
 
 /**
  * @openapi
@@ -200,7 +236,13 @@ router.get('/:id/stats', authorize('company.view'), validate(v.idParamValidator)
  *     responses:
  *       200: { description: Company details }
  */
-router.get('/:id/details', authorize('company.view'), validate(v.idParamValidator), controller.getCompanyDetails);
+router.get(
+  '/:id/details',
+  requireRole({ superAdmin: true }),
+  authorize('company.view'),
+  validate(v.idParamValidator),
+  controller.getCompanyDetails
+);
 
 /**
  * @openapi
@@ -216,6 +258,7 @@ router.get('/:id/details', authorize('company.view'), validate(v.idParamValidato
  */
 router.post(
   '/:id/suspend',
+  requireRole({ superAdmin: true }),
   authorize('company.suspend'),
   validate(v.idParamValidator),
   controller.suspendCompany
@@ -235,6 +278,7 @@ router.post(
  */
 router.post(
   '/:id/activate',
+  requireRole({ superAdmin: true }),
   authorize('company.suspend'),
   validate(v.idParamValidator),
   controller.activateCompany
