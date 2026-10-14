@@ -2,8 +2,8 @@
 
 const { prisma } = require('../../common/prisma');
 
-const findCase = (caseId, companyId) => prisma.bGVCase.findFirst({ where: { id: caseId, companyId }, select: { id: true } });
-const findById = (id, companyId) => prisma.verificationCheck.findFirst({ where: { id, case: { companyId } }, include: { case: { select: { id: true, caseNumber: true, companyId: true, candidateId: true } }, documents: true } });
+const findCase = (caseId, companyId) => prisma.bGVCase.findFirst({ where: { id: caseId, companyId }, select: { id: true, status: true } });
+const findById = (id, companyId) => prisma.verificationCheck.findFirst({ where: { id, case: { companyId } }, include: { case: { select: { id: true, caseNumber: true, companyId: true, candidateId: true, status: true } }, documents: true } });
 const create = (data) => prisma.verificationCheck.create({ data });
 const update = (id, data) => prisma.verificationCheck.update({ where: { id }, data });
 const list = (companyId, { caseId, type, status } = {}) => prisma.verificationCheck.findMany({

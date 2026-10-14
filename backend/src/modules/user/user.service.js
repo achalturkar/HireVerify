@@ -136,6 +136,32 @@ const update = async ({ currentUser, id, payload }) => {
   return toDto(updated);
 };
 
+const updateCompanyAdminEmail = async ({ currentUser, id, email }) => {
+  if (!currentUser.role?.isSuperAdmin) {
+    throw new ForbiddenError('Only a Super Admin can change a Company Admin login email');
+  }
+
+  const user = await repo.findById(id);
+  if (!user) throw new NotFoundError('User not found');
+  if (!user.role?.isCompanyAdmin || user.role?.isSuperAdmin || !user.companyId) {
+    throw new BadRequestError('Email can only be changed for a Company Admin account');
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (normalizedEmail === user.email.toLowerCase()) {
+    throw new BadRequestError('The new email is the same as the current email');
+  }
+
+  const existing = await repo.findByEmail(normalizedEmail);
+  if (existing && existing.id !== user.id) {
+    throw new ConflictError('A user with this email already exists');
+  }
+
+  const updated = await repo.update(id, { email: normalizedEmail });
+  await invalidateUserAuthCache(id);
+  return toDto(updated);
+};
+
 const remove = async ({ currentUser, id }) => {
   const user = await repo.findById(id);
   if (!user) throw new NotFoundError('User not found');
@@ -208,6 +234,7 @@ module.exports = {
   getById,
   list,
   update,
+  updateCompanyAdminEmail,
   remove,
   getMyProfile,
   updateProfile,

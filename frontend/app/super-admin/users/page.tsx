@@ -8,6 +8,7 @@ import {
   listUsers,
   createUser,
   updateUser,
+  updateCompanyAdminEmail,
   deleteUser,
   listRolesForCompany,
   listCompanyOptions,
@@ -117,6 +118,11 @@ export default function UsersPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [emailTarget, setEmailTarget] = useState<User | null>(null);
+  const [emailDraft, setEmailDraft] = useState('');
+  const [emailSubmitting, setEmailSubmitting] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const [banner, setBanner] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
 
@@ -259,6 +265,38 @@ export default function UsersPage() {
       setDeleteTarget(null);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const openEmailChange = (user: User) => {
+    setEmailTarget(user);
+    setEmailDraft(user.email);
+    setEmailError(null);
+  };
+
+  const closeEmailChange = () => {
+    if (emailSubmitting) return;
+    setEmailTarget(null);
+    setEmailDraft('');
+    setEmailError(null);
+  };
+
+  const handleEmailChange = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!emailTarget) return;
+
+    setEmailSubmitting(true);
+    setEmailError(null);
+    try {
+      const updated = await updateCompanyAdminEmail(accessToken, emailTarget.id, emailDraft.trim());
+      setBanner({ text: `Login email changed to ${updated.email}.`, tone: 'success' });
+      setEmailTarget(null);
+      setEmailDraft('');
+      await fetchUsers();
+    } catch (err) {
+      setEmailError(err instanceof ApiError ? err.message : 'Could not change the login email.');
+    } finally {
+      setEmailSubmitting(false);
     }
   };
 
@@ -436,6 +474,16 @@ export default function UsersPage() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1.5">
+                      {isSuperAdmin && u.role?.isCompanyAdmin && (
+                        <button
+                          onClick={() => openEmailChange(u)}
+                          className="rounded-md px-2 py-1 text-[11px] text-[#8891B8] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
+                          aria-label={`Change login email for ${u.firstName} ${u.lastName}`}
+                          title="Change login email"
+                        >
+                          Email
+                        </button>
+                      )}
                       <button
                         onClick={() => openEdit(u)}
                         className="w-7 h-7 rounded-md flex items-center justify-center text-[#8891B8] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
@@ -499,6 +547,74 @@ export default function UsersPage() {
           onClose={closeModal}
           onSubmit={handleSubmit}
         />
+      )}
+
+      {emailTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default bg-[#060819]/70 backdrop-blur-sm"
+            aria-label="Close email change dialog"
+            onClick={closeEmailChange}
+            disabled={emailSubmitting}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#161C3A] shadow-2xl shadow-black/40">
+            <div className="border-b border-white/[0.08] px-5 py-4">
+              <p className="mb-0.5 text-[11px] uppercase tracking-[0.14em] text-[var(--primary)]" style={{ fontFamily: 'var(--font-mono)' }}>
+                Super Admin action
+              </p>
+              <h2 className="text-[15px] font-semibold" style={{ fontFamily: 'var(--font-display)' }}>
+                Change Company Admin login email
+              </h2>
+              <p className="mt-1 text-[12px] text-[#8891B8]">
+                {emailTarget.firstName} {emailTarget.lastName} · {emailTarget.company?.name ?? 'Company'}
+              </p>
+            </div>
+            <form onSubmit={handleEmailChange} className="space-y-4 px-5 py-5">
+              {emailError && (
+                <div className="rounded-lg border border-[#FF6B6B]/25 bg-[#FF6B6B]/10 px-3 py-2.5 text-[12.5px] text-[#FF6B6B]">
+                  {emailError}
+                </div>
+              )}
+              <div>
+                <label htmlFor="company-admin-login-email" className="mb-1.5 block text-[11.5px] font-medium text-[#AAB2D4]">
+                  New login email
+                </label>
+                <input
+                  id="company-admin-login-email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  maxLength={254}
+                  value={emailDraft}
+                  onChange={(event) => setEmailDraft(event.target.value)}
+                  disabled={emailSubmitting}
+                  className="w-full rounded-lg border border-white/[0.08] bg-[#0F1330] px-3 py-2.5 text-[13.5px] text-[#F2F4FA] outline-none transition-colors focus:border-[var(--primary)]/50 focus:ring-1 focus:ring-[var(--primary)]/30 disabled:opacity-50"
+                />
+                <p className="mt-1 text-[11px] text-[#565F8C]">
+                  Only the login email will change. The password and other account details stay the same.
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5 pt-1">
+                <button
+                  type="submit"
+                  disabled={emailSubmitting || emailDraft.trim().toLowerCase() === emailTarget.email.toLowerCase()}
+                  className="flex-1 rounded-lg bg-[var(--primary)] py-2.5 text-[13.5px] font-semibold text-[var(--primary-foreground)] transition-colors hover:bg-[var(--primary)]/90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {emailSubmitting ? 'Saving…' : 'Change email'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeEmailChange}
+                  disabled={emailSubmitting}
+                  className="rounded-lg border border-white/[0.1] px-4 py-2.5 text-[13.5px] font-medium text-[#AAB2D4] transition-colors hover:bg-white/[0.05] disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {deleteTarget && (

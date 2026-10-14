@@ -138,6 +138,8 @@ export type ClientPortalPermission =
   | 'clientportal.candidates.invite'
   | 'clientportal.candidates.portal.manage';
 
+export type ClientPortalAccountMethod = 'INVITATION' | 'PASSWORD';
+
 export interface ClientPortalUser {
   id: string;
   firstName: string;

@@ -281,6 +281,7 @@ const recordConsent = async (token, payload, request) => {
   const invitation = await findInvitation(token);
   const activeCase = invitation.candidate.bgvCases[0];
   if (!activeCase) throw new BadRequestError('There is no active verification case for this candidate.');
+  if (activeCase.status === 'COMPLETED') throw new ConflictError('This candidate form is locked because the BGV case is completed.');
   if (payload.consentGiven !== true) throw new BadRequestError('Consent must be explicitly accepted.');
   const existing = activeCase.consents.find((consent) => consent.consentType === 'BGV_CONSENT');
   const data = { consentGiven: true, consentVersion: payload.consentVersion || '1.0', consentText: payload.consentText || 'I consent to the background verification checks requested for my application.', ipAddress: request.ip, userAgent: request.get('user-agent'), consentedAt: new Date(), revokedAt: null };
@@ -291,6 +292,9 @@ const recordConsent = async (token, payload, request) => {
 
 const addDocument = async (token, file, documentType, documentNumber) => {
   const invitation = await findInvitation(token);
+  if (invitation.candidate.bgvCases[0]?.status === 'COMPLETED') {
+    throw new ConflictError('This candidate form is locked because the BGV case is completed.');
+  }
   if (!file) throw new BadRequestError('Choose a document to upload.');
   if (!DOCUMENT_TYPES.has(documentType)) throw new BadRequestError('Document type is invalid.');
   const identityField = IDENTITY_FIELDS.find((field) => field.documentType === documentType);

@@ -175,6 +175,11 @@ const list = async ({ companyId, query }) => {
 const update = async ({ id, companyId, payload, currentUser }) => {
   const existing = await repo.findById(id, companyId);
   if (!existing) throw new NotFoundError('Candidate not found');
+  const completedCase = await prisma.bGVCase.findFirst({
+    where: { candidateId: id, companyId, status: 'COMPLETED' },
+    select: { id: true },
+  });
+  if (completedCase) throw new ConflictError('Candidate details cannot be changed after the BGV case is completed.');
 
   if (payload.clientId && payload.clientId !== existing.clientId) {
     await assertClientBelongsToCompany(payload.clientId, companyId);

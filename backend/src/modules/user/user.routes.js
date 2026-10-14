@@ -3,7 +3,7 @@
 const express = require('express');
 const controller = require('./user.controller');
 const { authenticate } = require('../../middleware/auth.middleware');
-const { authorize } = require('../../middleware/authorize.middleware');
+const { authorize, requireRole } = require('../../middleware/authorize.middleware');
 const { validate } = require('../../middleware/validate.middleware');
 const v = require('./user.validator');
 
@@ -109,5 +109,12 @@ router
   .get(authorize('users.view'), validate(v.idParamValidator), controller.getUser)
   .put(authorize('users.update'), validate(v.updateValidator), controller.updateUser)
   .delete(authorize('users.delete'), validate(v.idParamValidator), controller.deleteUser);
+
+router.put(
+  '/:id/email',
+  requireRole({ superAdmin: true }),
+  validate(v.updateEmailValidator),
+  controller.updateCompanyAdminEmail
+);
 
 module.exports = router;

@@ -704,7 +704,7 @@ async function buildReport(item) {
       drawFooter(doc, reportBrandName);
       doc.addPage();
       drawPageChrome(doc, logo);
-      drawBand(doc, 'EXECUTIVE SUMMARY (CONTINUED)');
+      drawBand(doc, 'EXECUTIVE SUMMARY');
       drawHeaderRow(doc, ['TYPE OF CHECK', 'BRIEF DETAILS', 'STATUS'], summaryWidths);
       summaryPages += 1;
     }
@@ -807,5 +807,5 @@ async function buildReport(item) {
   return doc;
 }
  
-module.exports = { buildReport };
+module.exports = { buildReport, getOverallVerificationStatus: (checks, fallback) => overallVerificationStatus(orderedChecks(checks || []), fallback) };
  

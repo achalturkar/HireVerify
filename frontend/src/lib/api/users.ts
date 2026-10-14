@@ -64,6 +64,18 @@ export async function updateUser(
   return json.data as User;
 }
 
+export async function updateCompanyAdminEmail(
+  token: string | null,
+  id: string,
+  email: string
+): Promise<User> {
+  const json = await authFetch(`/users/${id}/email`, token, {
+    method: 'PUT',
+    body: JSON.stringify({ email }),
+  });
+  return json.data as User;
+}
+
 export async function deleteUser(token: string | null, id: string): Promise<void> {
   await authFetch(`/users/${id}`, token, { method: 'DELETE' });
 }

@@ -36,6 +36,16 @@ const updateUser = asyncHandler(async (req, res) => {
   return success(res, { message: 'User updated', data });
 });
 
+const updateCompanyAdminEmail = asyncHandler(async (req, res) => {
+  const data = await service.updateCompanyAdminEmail({
+    currentUser: req.user,
+    id: req.params.id,
+    email: req.body.email,
+  });
+  await writeAudit({ req, action: 'users.updateCompanyAdminEmail', entity: 'User', entityId: req.params.id });
+  return success(res, { message: 'Company Admin login email updated', data });
+});
+
 const deleteUser = asyncHandler(async (req, res) => {
   await service.remove({ currentUser: req.user, id: req.params.id });
   await writeAudit({ req, action: 'users.delete', entity: 'User', entityId: req.params.id });
@@ -68,6 +78,7 @@ module.exports = {
   getUser,
   listUsers,
   updateUser,
+  updateCompanyAdminEmail,
   deleteUser,
   getMyProfile,
   updateMyProfile,

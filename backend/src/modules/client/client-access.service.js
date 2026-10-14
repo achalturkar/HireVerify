@@ -78,6 +78,7 @@ const list = async ({ clientId, companyId }) => {
 const invite = async ({ clientId, companyId, payload }) => {
   const client = await assertClient(clientId, companyId, true);
   const email = payload.email.trim().toLowerCase();
+  const accountMethod = payload.accountMethod || 'INVITATION';
   const permissions = validatePermissions(payload.permissions);
   if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) {
     throw new ConflictError('An account with this email already exists.');
@@ -86,7 +87,9 @@ const invite = async ({ clientId, companyId, payload }) => {
   const role = await prisma.role.findFirst({ where: { companyId: null, isClientUser: true } });
   if (!role) throw new BadRequestError('Client portal access is not configured yet. Restart the backend after applying migrations.');
 
-  const initialPassword = crypto.randomBytes(48).toString('base64url');
+  const initialPassword = accountMethod === 'PASSWORD'
+    ? payload.password
+    : crypto.randomBytes(48).toString('base64url');
   const passwordHash = await hashPassword(initialPassword);
   const user = await prisma.user.create({
     data: {
@@ -98,10 +101,12 @@ const invite = async ({ clientId, companyId, payload }) => {
       lastName: payload.lastName.trim(),
       email,
       passwordHash,
-      mustChangePassword: true,
+      mustChangePassword: accountMethod === 'INVITATION',
       status: 'ACTIVE',
     },
   });
+
+  if (accountMethod === 'PASSWORD') return userDto(user);
 
   const token = signResetToken({ sub: user.id, email: user.email });
   const resetUrl = `${config.frontendUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;

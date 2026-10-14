@@ -7,6 +7,7 @@ import {
   ArrowLeft, ChevronLeft, ChevronRight, Download, FileCheck2, FileText, Globe, Mail, Pencil, Phone, Receipt, Users, MapPin, Power, PowerOff, ShieldCheck, UserPlus, Trash2, Building2, SlidersHorizontal,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
+import { getReportVerificationStatus, getVerificationStatus } from '@/src/lib/verification-status';
 import { getClient, updateClient, activateClient, inactivateClient, listClientPortalUsers, inviteClientPortalUser, updateClientPortalUser, revokeClientPortalUser, ApiError as ClientApiError } from '@/src/lib/api/clients';
 import { listCandidates, createCandidate, ApiError as CandidateApiError } from '@/src/lib/api/candidates';
 import { ApiError as BGVApiError, downloadBGVReport, listBGVCases } from '@/src/lib/api/bgv';
@@ -17,7 +18,7 @@ import ClientFormModal from '@/src/components/layout/company/client/ClientFormMo
 import ClientConfirmDialog from '@/src/components/layout/company/client/ClientConfirmDialog';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
 import { CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
-import type { CandidateFormConfig, Client, ClientFormValues, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
+import type { CandidateFormConfig, Client, ClientFormValues, ClientPortalAccountMethod, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
 import type { Candidate, CandidateFormValues, PaginationMeta } from '@/src/types/candidate';
 
 const PAGE_SIZE = 10;
@@ -118,7 +119,11 @@ export default function ClientDetailPage() {
   const [portalUserPermissionDrafts, setPortalUserPermissionDrafts] = useState<Record<string, ClientPortalPermission[]>>({});
   const [portalInviteSubmitting, setPortalInviteSubmitting] = useState(false);
   const [portalInviteError, setPortalInviteError] = useState<string | null>(null);
+  const [portalInviteSuccess, setPortalInviteSuccess] = useState<string | null>(null);
   const [portalInvite, setPortalInvite] = useState({ firstName: '', lastName: '', email: '' });
+  const [portalAccountMethod, setPortalAccountMethod] = useState<ClientPortalAccountMethod>('INVITATION');
+  const [portalPassword, setPortalPassword] = useState('');
+  const [portalPasswordConfirm, setPortalPasswordConfirm] = useState('');
   const [portalInvitePermissions, setPortalInvitePermissions] = useState<ClientPortalPermission[]>([
     'clientportal.reports.view',
     'clientportal.reports.download',
@@ -225,14 +230,31 @@ export default function ClientDetailPage() {
     event.preventDefault();
     if (!client) return;
     setPortalInviteError(null);
+    setPortalInviteSuccess(null);
+    if (portalAccountMethod === 'PASSWORD' && portalPassword !== portalPasswordConfirm) {
+      setPortalInviteError('Passwords do not match.');
+      return;
+    }
     setPortalInviteSubmitting(true);
     try {
-      await inviteClientPortalUser(client.id, { ...portalInvite, permissions: portalInvitePermissions }, accessToken);
+      await inviteClientPortalUser(client.id, {
+        ...portalInvite,
+        permissions: portalInvitePermissions,
+        accountMethod: portalAccountMethod,
+        ...(portalAccountMethod === 'PASSWORD' ? { password: portalPassword } : {}),
+      }, accessToken);
       setPortalInvite({ firstName: '', lastName: '', email: '' });
       setPortalInvitePermissions(['clientportal.reports.view', 'clientportal.reports.download']);
+      setPortalPassword('');
+      setPortalPasswordConfirm('');
+      setPortalInviteSuccess(
+        portalAccountMethod === 'PASSWORD'
+          ? 'Portal account created. The user can now sign in with the password you set.'
+          : 'Invitation email sent. The user can set a password using the secure link.'
+      );
       await loadPortalUsers();
     } catch (err) {
-      setPortalInviteError(err instanceof ClientApiError ? err.message : 'Could not send the invitation email.');
+      setPortalInviteError(err instanceof ClientApiError ? err.message : 'Could not create the portal account.');
     } finally {
       setPortalInviteSubmitting(false);
     }
@@ -691,14 +713,84 @@ export default function ClientDetailPage() {
           <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
             <div className="flex items-start gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]"><UserPlus size={18} /></span>
-              <div><h2 className="text-[15px] font-semibold">Invite a client portal user</h2><p className="mt-1 text-[12px] leading-5 text-[var(--muted)]">We’ll email a secure password-setup link. Access is limited to this client and the permissions you select.</p></div>
+              <div><h2 className="text-[15px] font-semibold">Create client portal access</h2><p className="mt-1 text-[12px] leading-5 text-[var(--muted)]">Choose how the user will receive login access. Access is limited to this client and the permissions you select.</p></div>
             </div>
             <form onSubmit={submitPortalInvite} className="mt-5 space-y-4">
+              <fieldset>
+                <legend className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Account setup</legend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 ${portalAccountMethod === 'INVITATION' ? 'border-[var(--primary)] bg-[var(--primary)]/5' : 'border-[var(--border)]'}`}>
+                    <input
+                      type="radio"
+                      name="portal-account-method"
+                      value="INVITATION"
+                      checked={portalAccountMethod === 'INVITATION'}
+                      onChange={() => {
+                        setPortalAccountMethod('INVITATION');
+                        setPortalPassword('');
+                        setPortalPasswordConfirm('');
+                        setPortalInviteError(null);
+                        setPortalInviteSuccess(null);
+                      }}
+                      className="mt-0.5 accent-[var(--primary)]"
+                    />
+                    <span><span className="block text-[12px] font-semibold">Send invitation link</span><span className="mt-0.5 block text-[10px] leading-4 text-[var(--muted)]">Email a secure link so the user can set their own password.</span></span>
+                  </label>
+                  <label className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 ${portalAccountMethod === 'PASSWORD' ? 'border-[var(--primary)] bg-[var(--primary)]/5' : 'border-[var(--border)]'}`}>
+                    <input
+                      type="radio"
+                      name="portal-account-method"
+                      value="PASSWORD"
+                      checked={portalAccountMethod === 'PASSWORD'}
+                      onChange={() => {
+                        setPortalAccountMethod('PASSWORD');
+                        setPortalInviteError(null);
+                        setPortalInviteSuccess(null);
+                      }}
+                      className="mt-0.5 accent-[var(--primary)]"
+                    />
+                    <span><span className="block text-[12px] font-semibold">Set a temporary password</span><span className="mt-0.5 block text-[10px] leading-4 text-[var(--muted)]">Create the account now and securely share the password with the user.</span></span>
+                  </label>
+                </div>
+              </fieldset>
               <div className="grid gap-3 sm:grid-cols-3">
                 <label className="text-[11px] font-medium text-[var(--muted)]">First name<input required value={portalInvite.firstName} onChange={(event) => setPortalInvite((current) => ({ ...current, firstName: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
                 <label className="text-[11px] font-medium text-[var(--muted)]">Last name<input required value={portalInvite.lastName} onChange={(event) => setPortalInvite((current) => ({ ...current, lastName: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
                 <label className="text-[11px] font-medium text-[var(--muted)]">Email address<input required type="email" value={portalInvite.email} onChange={(event) => setPortalInvite((current) => ({ ...current, email: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
               </div>
+              {portalAccountMethod === 'PASSWORD' && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-[11px] font-medium text-[var(--muted)]">
+                    Temporary password
+                    <input
+                      required
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={8}
+                      maxLength={128}
+                      value={portalPassword}
+                      onChange={(event) => setPortalPassword(event.target.value)}
+                      disabled={portalInviteSubmitting}
+                      className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
+                    />
+                  </label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">
+                    Confirm password
+                    <input
+                      required
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={8}
+                      maxLength={128}
+                      value={portalPasswordConfirm}
+                      onChange={(event) => setPortalPasswordConfirm(event.target.value)}
+                      disabled={portalInviteSubmitting}
+                      className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
+                    />
+                  </label>
+                  <p className="text-[11px] leading-4 text-[var(--muted)] sm:col-span-2">The password is stored securely and can be used to sign in immediately. Share it with the user through a secure channel, not email.</p>
+                </div>
+              )}
               <fieldset>
                 <legend className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Portal permissions</legend>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -711,7 +803,13 @@ export default function ClientDetailPage() {
                 </div>
               </fieldset>
               {portalInviteError && <p role="alert" className="text-[12px] text-[#FF6B6B]">{portalInviteError}</p>}
-              <button type="submit" disabled={portalInviteSubmitting || portalInvitePermissions.length === 0} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary-foreground)] disabled:cursor-not-allowed disabled:opacity-50"><Mail size={14} />{portalInviteSubmitting ? 'Sending invitation…' : 'Send invitation'}</button>
+              {portalInviteSuccess && <p role="status" className="text-[12px] text-emerald-700">{portalInviteSuccess}</p>}
+              <button type="submit" disabled={portalInviteSubmitting || portalInvitePermissions.length === 0 || (portalAccountMethod === 'PASSWORD' && portalPassword !== portalPasswordConfirm)} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary-foreground)] disabled:cursor-not-allowed disabled:opacity-50">
+                {portalAccountMethod === 'INVITATION' ? <Mail size={14} /> : <ShieldCheck size={14} />}
+                {portalInviteSubmitting
+                  ? portalAccountMethod === 'INVITATION' ? 'Sending invitation…' : 'Creating account…'
+                  : portalAccountMethod === 'INVITATION' ? 'Send invitation link' : 'Create login account'}
+              </button>
             </form>
           </section>
 
@@ -825,7 +923,7 @@ export default function ClientDetailPage() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[680px] text-left text-[13px]">
                 <thead className="border-b border-[var(--border)] bg-[var(--surface-muted)]/60 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                  <tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">{isReports ? 'Completed' : 'Created'}</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Result</th><th className="px-5 py-3 text-right">Action</th></tr>
+                  <tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">{isReports ? 'Completed' : 'Created'}</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Verification status</th><th className="px-5 py-3 text-right">Action</th></tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
                   {loadingRows ? <tr><td colSpan={6} className="px-5 py-14 text-center text-[var(--muted)]">Loading {isReports ? 'reports' : 'cases'}…</td></tr>
@@ -836,7 +934,7 @@ export default function ClientDetailPage() {
                           <td className="px-5 py-3.5"><p className="font-medium">{item.candidate ? `${item.candidate.firstName} ${item.candidate.lastName}` : 'Candidate'}</p><p className="text-[11px] text-[var(--muted)]">{item.candidate?.candidateCode || '—'}</p></td>
                           <td className="px-5 py-3.5 text-[12px] text-[var(--muted)]">{dateLabel(isReports ? item.completedAt : item.createdAt)}</td>
                           <td className="px-5 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${item.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-700' : item.status === 'CANCELLED' || item.status === 'ON_HOLD' ? 'bg-amber-500/10 text-amber-700' : 'bg-sky-500/10 text-sky-700'}`}>{item.status.replaceAll('_', ' ')}</span></td>
-                          <td className="px-5 py-3.5 text-[12px] text-[var(--muted)]">{item.overallResult.replaceAll('_', ' ')}</td>
+                          <td className="px-5 py-3.5">{(() => { const verification = isReports ? getReportVerificationStatus(item.reportVerificationStatus) : getVerificationStatus(item.verificationStatuses); return <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${verification.className}`}>{verification.label}</span>; })()}</td>
                           <td className="px-5 py-3.5 text-right">{isReports && <button type="button" onClick={() => void downloadReport(item)} disabled={recordAction === `report-${item.id}`} title="Download report" aria-label={`Download report for ${item.caseNumber}`} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-semibold hover:bg-[var(--surface-muted)] disabled:opacity-50"><Download size={13} />{recordAction === `report-${item.id}` ? 'Preparing…' : 'PDF'}</button>}</td>
                         </tr>
                       ))}

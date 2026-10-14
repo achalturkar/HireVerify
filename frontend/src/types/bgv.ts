@@ -45,6 +45,8 @@ export interface BGVCase {
   candidate?: { id: string; candidateCode: string; firstName: string; lastName: string; email: string; phone?: string | null; gender?: string | null; dateOfBirth?: string | null; currentAddress?: string | null; permanentAddress?: string | null };
   client?: { id: string; name: string; clientCode: string };
   checks?: VerificationCheck[];
+  verificationStatuses?: VerificationStatus[];
+  reportVerificationStatus?: string;
   consents?: { consentType: string; consentGiven: boolean; revokedAt: string | null; consentedAt?: string | null; createdAt?: string }[];
   events?: { id: string; eventType: string; status?: string | null; message?: string | null; createdAt: string }[];
   _count?: { checks: number };

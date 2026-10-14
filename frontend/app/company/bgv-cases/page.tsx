@@ -6,15 +6,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Activity, CheckCircle2, ChevronRight, Download, FileCheck2, FileSpreadsheet, Layers3, Loader2, Pencil, Plus, Search, Send } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { listClients } from '@/src/lib/api/clients';
+import { getVerificationStatus } from '@/src/lib/verification-status';
 import { createBGVCase, downloadBGVReport, exportBGVCases, getBGVCase, listBGVCases, transitionBGVCase, updateBGVCaseChecks, updateBGVCaseMeta, ApiError } from '@/src/lib/api/bgv';
 import BGVCaseWizardModal from '@/src/components/layout/company/bgv/BGVCaseWizardModal';
-import type { BGVCase, BGVCaseStatus, BGVOverallResult } from '@/src/types/bgv';
+import type { BGVCase, BGVCaseStatus } from '@/src/types/bgv';
 import type { CreateBGVCasePayload } from '@/src/types/bgv';
 import type { Client } from '@/src/types/client';
 import type { PaginationMeta } from '@/src/types/user';
 
 const statuses: BGVCaseStatus[] = ['DRAFT', 'INITIATED', 'CONSENT_PENDING', 'IN_PROGRESS', 'UNDER_REVIEW', 'COMPLETED', 'ON_HOLD', 'CANCELLED'];
-const resultStyle: Record<BGVOverallResult, string> = { PENDING: 'text-[var(--muted)]', CLEAR: 'text-[var(--primary)]', MINOR_DISCREPANCY: 'text-[#F2AE55]', MAJOR_DISCREPANCY: 'text-[#FF6B6B]', UNABLE_TO_VERIFY: 'text-[#FF6B6B]', REQUIRES_REVIEW: 'text-[#F2AE55]' };
 const caseSummaryCards = [
   { label: 'All cases', status: '' as const, accent: 'var(--primary)', icon: Layers3, hint: 'Every verification case' },
   { label: 'Initiated', status: 'INITIATED' as const, accent: '#5EA8D9', icon: Send, hint: 'Recently started' },
@@ -325,7 +325,7 @@ export default function BGVCaseListPage() {
                 <th className="px-5 py-3">Candidate</th>
                 <th className="px-5 py-3">Client</th>
                 <th className="px-5 py-3">Checks</th>
-                <th className="px-5 py-3">Result</th>
+                <th className="px-5 py-3">Verification status</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Next step</th>
                 <th className="px-5 py-3 text-right">Actions</th>
@@ -352,8 +352,11 @@ export default function BGVCaseListPage() {
                     </td>
                     <td className="px-5 py-4 text-[var(--muted)]">{item.client?.name ?? item.clientId}</td>
                     <td className="px-5 py-4">{item._count?.checks ?? item.checks?.length ?? 0}</td>
-                    <td className={`px-5 py-4 font-medium ${resultStyle[item.overallResult]}`}>
-                      {item.overallResult.replaceAll('_', ' ')}
+                    <td className="px-5 py-4">
+                      {(() => {
+                        const verification = getVerificationStatus(item.verificationStatuses);
+                        return <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${verification.className}`}>{verification.label}</span>;
+                      })()}
                     </td>
                     <td className="px-5 py-4">
                       <span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[11px]">

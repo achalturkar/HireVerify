@@ -38,6 +38,11 @@ const updateValidator = [
 
 const idParamValidator = [param('id').isUUID()];
 
+const updateEmailValidator = [
+  param('id').isUUID(),
+  body('email').isEmail().normalizeEmail(),
+];
+
 const listValidator = [
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
@@ -48,4 +53,12 @@ const listValidator = [
   query('sortOrder').optional().isIn(['asc', 'desc']),
 ];
 
-module.exports = { createValidator, updateValidator, idParamValidator, listValidator, updateProfileValidator, changePasswordValidator };
+module.exports = {
+  createValidator,
+  updateValidator,
+  idParamValidator,
+  updateEmailValidator,
+  listValidator,
+  updateProfileValidator,
+  changePasswordValidator,
+};

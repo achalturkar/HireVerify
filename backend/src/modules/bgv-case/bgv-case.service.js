@@ -8,7 +8,7 @@ const { buildReport } = require('./bgv-report.generator');
 const CASE_STATUSES = ['DRAFT', 'INITIATED', 'CONSENT_PENDING', 'IN_PROGRESS', 'UNDER_REVIEW', 'COMPLETED', 'ON_HOLD', 'CANCELLED'];
 const TRANSITIONS = Object.fromEntries(CASE_STATUSES.map((status) => [
   status,
-  ['COMPLETED', 'CANCELLED'].includes(status) ? [] : CASE_STATUSES.filter((targetStatus) => targetStatus !== status),
+  status === 'CANCELLED' ? [] : CASE_STATUSES.filter((targetStatus) => targetStatus !== status),
 ]));
 
 const toDto = (item) => item;
@@ -80,6 +80,7 @@ const transition = async ({ id, companyId, status, remarks, currentUser }) => {
   const data = { status, updatedById: currentUser?.id || null, ...(remarks !== undefined ? { remarks } : {}) };
   if (status === 'INITIATED' && !current.initiatedAt) data.initiatedAt = new Date();
   if (status === 'COMPLETED') data.completedAt = new Date();
+  else if (current.status === 'COMPLETED') data.completedAt = null;
   const candidateStatus = status === 'COMPLETED'
     ? 'COMPLETED'
     : status === 'ON_HOLD'
@@ -118,10 +119,6 @@ const updateChecks = async ({ id, companyId, checks, currentUser }) => {
 
   const requested = new Map(checks.map((check) => [check.type, check]));
   const existing = new Map((current.checks || []).map((check) => [check.type, check]));
-  const protectedChecks = (current.checks || []).filter((check) => !requested.has(check.type) && (
-    check.status !== 'PENDING' || check.resultData || check.remarks || check.documents?.length
-  ));
-  if (protectedChecks.length) throw new ConflictError(`Completed or edited checks cannot be removed: ${protectedChecks.map((check) => check.type).join(', ')}`);
 
   await prisma.$transaction(async (tx) => {
     const removeIds = (current.checks || []).filter((check) => !requested.has(check.type)).map((check) => check.id);

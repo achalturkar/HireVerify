@@ -1,7 +1,7 @@
 'use strict';
 
 const repo = require('./verification.repository');
-const { NotFoundError, BadRequestError } = require('../../utils/errors');
+const { NotFoundError, BadRequestError, ConflictError } = require('../../utils/errors');
 const PDFDocument = require('pdfkit');
 const surepass = require('./providers/surepass.provider');
 
@@ -34,6 +34,12 @@ const toDto = (check) => ({
   case: check.case,
 });
 
+const assertCaseEditable = (check) => {
+  if (['COMPLETED', 'CANCELLED'].includes(check.case.status)) {
+    throw new ConflictError('This case is finalized and its verification details cannot be changed.');
+  }
+};
+
 const get = async ({ id, companyId }) => {
   const check = await repo.findById(id, companyId);
   if (!check) throw new NotFoundError('Verification check not found');
@@ -43,7 +49,9 @@ const get = async ({ id, companyId }) => {
 const list = async ({ companyId, caseId, type, status }) => ({ items: (await repo.list(companyId, { caseId, type, status })).map(toDto) });
 
 const create = async ({ payload, companyId }) => {
-  if (!(await repo.findCase(payload.caseId, companyId))) throw new NotFoundError('BGV case not found');
+  const caseItem = await repo.findCase(payload.caseId, companyId);
+  if (!caseItem) throw new NotFoundError('BGV case not found');
+  if (['COMPLETED', 'CANCELLED'].includes(caseItem.status)) throw new ConflictError('This case is finalized and cannot be changed.');
   const check = await repo.create({ caseId: payload.caseId, type: payload.type, provider: payload.provider || 'SUREPASS', priority: payload.priority || 0, inputData: payload.inputData || null });
   await repo.event({ caseId: check.caseId, verificationId: check.id, eventType: 'CREATED', message: 'Verification check created' });
   return toDto(check);
@@ -52,11 +60,12 @@ const create = async ({ payload, companyId }) => {
 const update = async ({ id, companyId, payload }) => {
   const current = await repo.findById(id, companyId);
   if (!current) throw new NotFoundError('Verification check not found');
+  assertCaseEditable(current);
   if (current.isLocked) throw new BadRequestError('This verification is locked');
-  if (current.status === 'CANCELLED' && payload.status !== 'CANCELLED') throw new BadRequestError('Cancelled checks cannot be reopened');
   const data = { status: payload.status || current.status, ...(payload.result !== undefined ? { result: payload.result } : {}), ...(payload.resultData !== undefined ? { resultData: payload.resultData } : {}), ...(payload.failureReason !== undefined ? { failureReason: payload.failureReason } : {}), ...(payload.remarks !== undefined ? { remarks: payload.remarks } : {}) };
   if (data.status === 'IN_PROGRESS' && !current.startedAt) data.startedAt = new Date();
   if (data.status === 'COMPLETED' || data.status === 'FAILED') data.completedAt = new Date();
+  else if (current.status === 'COMPLETED' || current.status === 'FAILED' || current.status === 'CANCELLED') data.completedAt = null;
   const updated = await repo.update(id, data);
   await repo.event({ caseId: updated.caseId, verificationId: id, eventType: data.status === 'COMPLETED' ? 'COMPLETED' : data.status === 'FAILED' ? 'FAILED' : 'STATUS_CHANGED', status: updated.status, message: `Verification status changed to ${updated.status}` });
   return toDto(await repo.findById(id, companyId));
@@ -65,6 +74,7 @@ const update = async ({ id, companyId, payload }) => {
 const lock = async ({ id, companyId, locked, userId }) => {
   const current = await repo.findById(id, companyId);
   if (!current) throw new NotFoundError('Verification check not found');
+  assertCaseEditable(current);
   await repo.update(id, { isLocked: locked, lockedAt: locked ? new Date() : null, lockedById: locked ? userId : null });
   return toDto(await repo.findById(id, companyId));
 };
@@ -72,6 +82,7 @@ const lock = async ({ id, companyId, locked, userId }) => {
 const addDocument = async ({ id, companyId, documentType, fileName, fileUrl, mimeType, fileSize }) => {
   const current = await repo.findById(id, companyId);
   if (!current) throw new NotFoundError('Verification check not found');
+  assertCaseEditable(current);
   if (current.isLocked) throw new BadRequestError('This verification is locked');
   await repo.addDocument({ candidateId: current.case.candidateId, verificationId: id, documentType, fileName, fileUrl, mimeType, fileSize });
   return toDto(await repo.findById(id, companyId));
@@ -80,6 +91,7 @@ const addDocument = async ({ id, companyId, documentType, fileName, fileUrl, mim
 const removeDocument = async ({ id, companyId, documentId }) => {
   const current = await repo.findById(id, companyId);
   if (!current) throw new NotFoundError('Verification check not found');
+  assertCaseEditable(current);
   if (current.isLocked) throw new BadRequestError('This verification is locked');
   await repo.deleteDocument(documentId, id);
   return toDto(await repo.findById(id, companyId));
@@ -90,6 +102,7 @@ const retry = async ({ id, companyId }) => update({ id, companyId, payload: { st
 const executePan = async ({ id, companyId, pan: submittedPan }) => {
   const current = await repo.findById(id, companyId);
   if (!current) throw new NotFoundError('Verification check not found');
+  assertCaseEditable(current);
   if (current.type !== 'PAN') throw new BadRequestError('This verification check is not a PAN check');
 
   const pan = String(submittedPan || '').trim().toUpperCase();
@@ -112,6 +125,7 @@ const executePan = async ({ id, companyId, pan: submittedPan }) => {
 const executeCheck = async ({ id, companyId, inputData, apiVersion }) => {
   const current = await repo.findById(id, companyId);
   if (!current) throw new NotFoundError('Verification check not found');
+  assertCaseEditable(current);
   if (!['UAN', 'ADDRESS', 'ADDRESS_PHYSICAL', 'COURT', 'POLICE_RECORD'].includes(current.type)) throw new BadRequestError('This check is not configured for Surepass execution');
   await repo.update(id, { status: 'IN_PROGRESS', startedAt: new Date(), inputData });
   await repo.event({ caseId: current.caseId, verificationId: id, eventType: 'API_REQUEST', message: `${current.type} verification request sent` });

@@ -1,6 +1,7 @@
 'use strict';
 
 const { prisma } = require('../../common/prisma');
+const { getOverallVerificationStatus } = require('./bgv-report.generator');
 
 const create = (data) => prisma.bGVCase.create({ data });
 
@@ -41,11 +42,23 @@ const list = async ({ companyId, clientId, candidateId, status, overallResult, s
   const [items, total] = await Promise.all([
     prisma.bGVCase.findMany({
       where, skip, take: limit, orderBy: { [sortBy]: sortOrder },
-      include: { candidate: { select: { id: true, candidateCode: true, firstName: true, lastName: true, email: true } }, client: { select: { id: true, name: true, clientCode: true, contactEmail: true } }, _count: { select: { checks: true } } },
+      include: {
+        candidate: { select: { id: true, candidateCode: true, firstName: true, lastName: true, email: true } },
+        client: { select: { id: true, name: true, clientCode: true, contactEmail: true } },
+        checks: { select: { type: true, status: true, result: true, resultData: true, remarks: true, documents: { select: { id: true } } } },
+        _count: { select: { checks: true } },
+      },
     }),
     prisma.bGVCase.count({ where }),
   ]);
-  return { items, total };
+  return {
+    items: items.map(({ checks, ...item }) => ({
+      ...item,
+      verificationStatuses: checks.map((check) => check.status),
+      reportVerificationStatus: getOverallVerificationStatus(checks, item.overallResult),
+    })),
+    total,
+  };
 };
 
 const update = (id, data) => prisma.bGVCase.update({ where: { id }, data });

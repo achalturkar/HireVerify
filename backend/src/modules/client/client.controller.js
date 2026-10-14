@@ -184,8 +184,18 @@ const invitePortalUser = asyncHandler(async (req, res) => {
     companyId: req.user.companyId,
     payload: req.body,
   });
-  await writeAudit({ req, action: 'client.portal_user.invite', entity: 'Client', entityId: req.params.id, metadata: { userId: data.id } });
-  return created(res, { message: 'Client portal invitation sent.', data });
+  const isPasswordAccount = req.body.accountMethod === 'PASSWORD';
+  await writeAudit({
+    req,
+    action: isPasswordAccount ? 'client.portal_user.create' : 'client.portal_user.invite',
+    entity: 'Client',
+    entityId: req.params.id,
+    metadata: { userId: data.id, accountMethod: isPasswordAccount ? 'PASSWORD' : 'INVITATION' },
+  });
+  return created(res, {
+    message: isPasswordAccount ? 'Client portal account created.' : 'Client portal invitation sent.',
+    data,
+  });
 });
 
 const updatePortalUser = asyncHandler(async (req, res) => {

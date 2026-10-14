@@ -190,6 +190,11 @@ const invitePortalUserValidator = [
   body('firstName').isString().trim().isLength({ min: 1, max: 100 }),
   body('lastName').isString().trim().isLength({ min: 1, max: 100 }),
   body('email').isEmail().normalizeEmail(),
+  body('accountMethod').optional().isIn(['INVITATION', 'PASSWORD']),
+  body('password')
+    .if(body('accountMethod').equals('PASSWORD'))
+    .isString()
+    .isLength({ min: 8, max: 128 }),
   body('permissions').isArray({ min: 1 }).custom((values) => values.every((value) => CLIENT_PERMISSIONS.includes(value))),
 ];
 const updatePortalUserValidator = [

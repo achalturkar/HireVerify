@@ -61,6 +61,7 @@ export interface PortalCase {
   caseNumber: string;
   status: string;
   overallResult: string | null;
+  verificationStatuses: string[];
   initiatedAt: string | null;
   completedAt: string | null;
   createdAt: string;
@@ -76,6 +77,8 @@ export interface PortalReport {
   id: string;
   caseNumber: string;
   completedAt: string | null;
+  verificationStatuses: string[];
+  reportVerificationStatus: string;
   candidate: { firstName: string; lastName: string; candidateCode: string };
 }
 

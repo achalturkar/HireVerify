@@ -5,6 +5,7 @@ import type {
   ListClientsParams,
   PaginationMeta,
   ClientPortalPermission,
+  ClientPortalAccountMethod,
   ClientPortalUser,
 } from "@/src/types/client";
 
@@ -252,7 +253,14 @@ export async function listClientPortalUsers(
 
 export async function inviteClientPortalUser(
   id: string,
-  payload: { firstName: string; lastName: string; email: string; permissions: ClientPortalPermission[] },
+  payload: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    permissions: ClientPortalPermission[];
+    accountMethod?: ClientPortalAccountMethod;
+    password?: string;
+  },
   accessToken: string | null
 ): Promise<ClientPortalUser> {
   const res = await request<Envelope<ClientPortalUser>>(`/clients/${id}/portal-users`, accessToken, {

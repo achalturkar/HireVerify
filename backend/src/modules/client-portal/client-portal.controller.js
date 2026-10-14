@@ -7,7 +7,7 @@ const { parsePagination, buildMeta } = require('../../utils/pagination');
 const { NotFoundError, BadRequestError, ConflictError } = require('../../utils/errors');
 const candidateService = require('../candidate/candidate.services');
 const caseService = require('../bgv-case/bgv-case.service');
-const { buildReport } = require('../bgv-case/bgv-report.generator');
+const { buildReport, getOverallVerificationStatus } = require('../bgv-case/bgv-report.generator');
 const candidatePortalService = require('../candidate-portal/candidate-portal.service');
 const { IDENTITY_FIELDS, normalizeConfig } = require('../client/candidate-intake-config');
 
@@ -173,6 +173,7 @@ const listCases = asyncHandler(async (req, res) => {
         initiatedAt: true,
         completedAt: true,
         createdAt: true,
+        checks: { select: { status: true } },
         candidate: { select: { firstName: true, lastName: true, candidateCode: true } },
       },
     }),
@@ -180,7 +181,10 @@ const listCases = asyncHandler(async (req, res) => {
   ]);
   return success(res, {
     message: 'Client cases',
-    data: items,
+    data: items.map(({ checks, ...item }) => ({
+      ...item,
+      verificationStatuses: checks.map((check) => check.status),
+    })),
     meta: buildMeta({ page: pagination.page, limit: pagination.limit, total }),
   });
 });
@@ -198,6 +202,8 @@ const listReports = asyncHandler(async (req, res) => {
         id: true,
         caseNumber: true,
         completedAt: true,
+        overallResult: true,
+        checks: { select: { type: true, status: true, result: true, resultData: true, remarks: true, documents: { select: { id: true } } } },
         candidate: { select: { firstName: true, lastName: true, candidateCode: true } },
       },
     }),
@@ -205,7 +211,11 @@ const listReports = asyncHandler(async (req, res) => {
   ]);
   return success(res, {
     message: 'Completed client reports',
-    data: items,
+    data: items.map(({ checks, ...item }) => ({
+      ...item,
+      verificationStatuses: checks.map((check) => check.status),
+      reportVerificationStatus: getOverallVerificationStatus(checks, item.overallResult),
+    })),
     meta: buildMeta({ page: pagination.page, limit: pagination.limit, total }),
   });
 });
