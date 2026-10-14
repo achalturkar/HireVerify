@@ -418,7 +418,7 @@ const summaryCheckLabel = (type) => ({
   REFERENCE: 'Reference Verification',
   CV: 'CV Validation',
   SOCIAL_MEDIA: 'Social Media Verification',
-  COURT: 'Criminal Record Verification (Court Check - PAN Address)',
+  COURT: 'Court Record Verification',
   CIBIL: 'CIBIL Verification',
   TWENTY_SIX_AS: '26AS Verification',
   POLICE: 'Police Verification',
