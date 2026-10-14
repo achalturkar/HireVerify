@@ -68,6 +68,7 @@ export interface InvoiceInput {
 
 export interface InvoiceItem extends InvoiceItemInput {
   id: string;
+  case?: { caseNumber: string } | null;
   subtotal: InvoiceAmount;
   discountAmount: InvoiceAmount;
   taxableAmount: InvoiceAmount;

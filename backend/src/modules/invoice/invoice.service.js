@@ -19,7 +19,10 @@ const dateRange = (from, to) => ({
 const composeAddress = (...parts) => parts.flat().map((part) => String(part || '').trim()).filter(Boolean).join(', ');
 
 const includeInvoice = {
-  items: { orderBy: { id: 'asc' } },
+  items: {
+    orderBy: [{ position: 'asc' }, { id: 'asc' }],
+    include: { case: { select: { caseNumber: true } } },
+  },
   payments: { orderBy: { paymentDate: 'desc' } },
   activity: { orderBy: { createdAt: 'desc' } },
 };
@@ -92,7 +95,7 @@ const listCases = async ({ companyId, clientId }) => {
 
 const calculateItems = (items) => {
   const totals = { subtotal: 0, discountTotal: 0, taxTotal: 0, total: 0 };
-  const calculated = items.map((item) => {
+  const calculated = items.map((item, position) => {
     const quantity = Number(item.quantity);
     const unitPrice = Number(item.unitPrice);
     const discountPercent = Number(item.discountPercent || 0);
@@ -108,6 +111,7 @@ const calculateItems = (items) => {
     totals.total = roundMoney(totals.total + total);
     return {
       caseId: item.caseId || null,
+      position,
       description: item.description.trim(),
       candidateName: item.candidateName?.trim() || null,
       serviceCode: item.serviceCode?.trim() || null,

@@ -235,7 +235,7 @@ const drawContinuationHeader = (doc, invoice, theme) => {
 };
 
 const itemDescription = (item) => {
-  const title = item.description || item.title || '-';
+  const title = item.case?.caseNumber || item.description || item.title || '-';
   const subs = [];
   if (item.candidateName) subs.push(`Candidate: ${item.candidateName}`);
   if (item.serviceCode) subs.push(`Service code: ${item.serviceCode}`);
