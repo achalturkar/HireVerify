@@ -1,14 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Copy, Download, FileCheck2, FileText, KeyRound, Plus, RefreshCw, Users, X, Eye } from 'lucide-react';
+import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, Clock3, Copy, Download, FileCheck2, FileText, KeyRound, MessageSquareText, Plus, RefreshCw, Receipt, Sparkles, Users, X, Eye, Search } from 'lucide-react';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { changePassword } from '@/src/lib/api/users';
 import { getReportVerificationStatus, getVerificationStatus } from '@/src/lib/verification-status';
 import {
   ClientPortalApiError,
   downloadPortalReport,
+  getPortalDashboard,
   hasPortalPermission,
   listPortalCandidates,
   listPortalCases,
@@ -17,6 +20,8 @@ import {
   savePortalCandidate,
   type PortalCandidate,
   type PortalCase,
+  type PortalDashboardSummary,
+  type PortalListFilters,
   type PortalReport,
 } from '@/src/lib/api/client-portal';
 import type { ClientPortalPermission } from '@/src/types/client';
@@ -41,6 +46,13 @@ function dateText(value: string | null | undefined) {
   return value ? new Date(value).toLocaleDateString() : '—';
 }
 
+function dateTimeText(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? 'Date unavailable'
+    : new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+}
+
 function statusClass(status: string) {
   if (status === 'COMPLETED' || status === 'CLEAR') return 'bg-emerald-500/10 text-emerald-700';
   if (status.includes('PENDING') || status.includes('PROGRESS') || status === 'ON_HOLD') return 'bg-amber-500/10 text-amber-700';
@@ -56,7 +68,7 @@ export default function ClientPortalPage() {
     () => (['candidates', 'cases', 'reports'] as const).filter((key) => hasPortalPermission(permissions, PERMISSION_TAB[key])),
     [permissions],
   );
-  const section = pathname.split('/')[2] || 'candidates';
+  const section = pathname.split('/')[2] || 'dashboard';
   const tab = (['candidates', 'cases', 'reports'].includes(section) ? section : 'candidates') as PortalTab;
   const activeTab = availableTabs.includes(tab) ? tab : availableTabs[0] ?? 'candidates';
   const [page, setPage] = useState(1);
@@ -65,6 +77,7 @@ export default function ClientPortalPage() {
   const [reports, setReports] = useState<PortalReport[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [filters, setFilters] = useState<PortalListFilters>({ search: '', status: '', dateFrom: '', dateTo: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [candidateModal, setCandidateModal] = useState(false);
@@ -79,6 +92,13 @@ export default function ClientPortalPage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [dashboard, setDashboard] = useState<PortalDashboardSummary | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const updateFilter = (key: keyof PortalListFilters, value: string) => {
+    setPage(1);
+    setFilters((current) => ({ ...current, [key]: value }));
+  };
 
   useEffect(() => {
     if (authLoading) return;
@@ -94,17 +114,17 @@ export default function ClientPortalPage() {
     setError(null);
     try {
       if (activeTab === 'candidates' && hasPortalPermission(permissions, 'clientportal.candidates.view')) {
-        const result = await listPortalCandidates(page, accessToken);
+        const result = await listPortalCandidates(page, accessToken, filters);
         setCandidates(result.items);
         setTotal(result.total);
         setTotalPages(result.totalPages);
       } else if (activeTab === 'cases' && hasPortalPermission(permissions, 'clientportal.cases.view')) {
-        const result = await listPortalCases(page, accessToken);
+        const result = await listPortalCases(page, accessToken, filters);
         setCases(result.items);
         setTotal(result.total);
         setTotalPages(result.totalPages);
       } else if (activeTab === 'reports' && hasPortalPermission(permissions, 'clientportal.reports.view')) {
-        const result = await listPortalReports(page, accessToken);
+        const result = await listPortalReports(page, accessToken, filters);
         setReports(result.items);
         setTotal(result.total);
         setTotalPages(result.totalPages);
@@ -117,13 +137,31 @@ export default function ClientPortalPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, activeTab, page, permissions]);
+  }, [accessToken, activeTab, filters, page, permissions]);
 
   useEffect(() => {
-    if (authLoading || !user?.role.isClientUser || !availableTabs.includes(activeTab)) return;
-    const timer = window.setTimeout(() => { void loadTab(); }, 0);
+    if (authLoading || !user?.role.isClientUser || !['candidates', 'cases', 'reports'].includes(section) || !availableTabs.includes(activeTab)) return;
+    const timer = window.setTimeout(() => { void loadTab(); }, 250);
     return () => window.clearTimeout(timer);
-  }, [activeTab, authLoading, availableTabs, loadTab, user]);
+  }, [activeTab, authLoading, availableTabs, loadTab, section, user]);
+
+  const loadDashboard = useCallback(async () => {
+    setDashboardLoading(true);
+    setDashboardError(null);
+    try {
+      setDashboard(await getPortalDashboard(accessToken));
+    } catch (loadError) {
+      setDashboardError(errorMessage(loadError, 'Could not load dashboard data.'));
+    } finally {
+      setDashboardLoading(false);
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (authLoading || !user?.role.isClientUser || section !== 'dashboard') return;
+    const timer = window.setTimeout(() => { void loadDashboard(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [authLoading, loadDashboard, section, user]);
 
   const openCreateCandidate = () => {
     setCandidateValues(EMPTY_CANDIDATE);
@@ -239,6 +277,340 @@ export default function ClientPortalPage() {
     );
   }
 
+  if (section === 'dashboard') {
+    const metrics = [
+      ...(dashboard?.permissions.candidates ? [{
+        label: 'Candidates',
+        value: dashboard.counts.candidates,
+        icon: Users,
+        href: '/client-portal/candidates',
+        detail: 'Candidate records in your workspace',
+        accent: 'text-sky-600 bg-sky-500/10',
+        iconBg: 'bg-sky-500/10 text-sky-700',
+      }] : []),
+      ...(dashboard?.permissions.cases ? [{
+        label: 'BGV cases',
+        value: dashboard.counts.cases,
+        icon: FileCheck2,
+        href: '/client-portal/cases',
+        detail: `${(dashboard.counts.openCases ?? 0).toLocaleString()} currently in progress`,
+        accent: 'text-amber-600 bg-amber-500/10',
+        iconBg: 'bg-amber-500/10 text-amber-700',
+      }] : []),
+      ...(dashboard?.permissions.cases ? [{
+        label: 'Completed cases',
+        value: dashboard.counts.completedCases,
+        icon: Activity,
+        href: '/client-portal/cases',
+        detail: 'Verification checks completed',
+        accent: 'text-emerald-600 bg-emerald-500/10',
+        iconBg: 'bg-emerald-500/10 text-emerald-700',
+      }] : []),
+      ...(dashboard?.permissions.reports ? [{
+        label: 'Available reports',
+        value: dashboard.counts.reports,
+        icon: FileText,
+        href: '/client-portal/reports',
+        detail: 'Completed reports ready to view',
+        accent: 'text-violet-600 bg-violet-500/10',
+        iconBg: 'bg-violet-500/10 text-violet-700',
+      }] : []),
+      ...(dashboard?.permissions.invoices ? [{
+        label: 'Invoices',
+        value: dashboard.counts.invoices,
+        icon: Receipt,
+        detail: 'Issued invoices to review',
+        accent: 'text-violet-600 bg-violet-500/10',
+        iconBg: 'bg-violet-500/10 text-violet-700',
+        href: '/client-portal/invoices',
+      }] : []),
+    ];
+    const chartHasData = dashboard?.monthlyActivity.some((month) => (month.candidates ?? 0) > 0 || (month.cases ?? 0) > 0 || (month.invoices ?? 0) > 0) ?? false;
+    const quickLinks = [
+      ...(dashboard?.permissions.cases ? [{
+        label: 'Track case progress',
+        description: 'See what is in progress',
+        href: '/client-portal/cases',
+        icon: FileCheck2,
+        accent: 'bg-emerald-500/10 text-emerald-700',
+      }] : []),
+      ...(hasPortalPermission(permissions, 'clientportal.reports.view') ? [{
+        label: 'View reports',
+        description: 'Open completed verifications',
+        href: '/client-portal/reports',
+        icon: FileText,
+        accent: 'bg-violet-500/10 text-violet-700',
+      }] : []),
+      ...(dashboard?.permissions.invoices ? [{
+        label: 'Review invoices',
+        description: 'Check billing and payment status',
+        href: '/client-portal/invoices',
+        icon: Receipt,
+        accent: 'bg-amber-500/10 text-amber-700',
+      }] : []),
+      {
+        label: 'Request support',
+        description: 'Ask your account team for help',
+        href: '/client-portal/requests',
+        icon: MessageSquareText,
+        accent: 'bg-sky-500/10 text-sky-700',
+      },
+    ];
+    const recentUpdateGroups = [
+      ...(dashboard?.permissions.cases ? [{
+        id: 'cases',
+        title: 'BGV cases',
+        count: dashboard.counts.cases ?? 0,
+        countLabel: 'total cases',
+        href: '/client-portal/cases',
+        icon: FileCheck2,
+        accent: 'bg-amber-500/10 text-amber-700',
+        latest: dashboard.recentCases[0] ? {
+          title: `Case ${dashboard.recentCases[0].caseNumber}`,
+          detail: `${dashboard.recentCases[0].candidate.firstName} ${dashboard.recentCases[0].candidate.lastName} · ${dashboard.recentCases[0].status.replaceAll('_', ' ')}`,
+          date: dateTimeText(dashboard.recentCases[0].createdAt),
+          href: `/client-portal/cases/${dashboard.recentCases[0].id}`,
+          action: 'View case',
+        } : null,
+      }] : []),
+      ...(dashboard?.permissions.reports ? [{
+        id: 'reports',
+        title: 'Completed reports',
+        count: dashboard.counts.reports ?? 0,
+        countLabel: 'reports completed',
+        href: '/client-portal/reports',
+        icon: FileText,
+        accent: 'bg-emerald-500/10 text-emerald-700',
+        latest: dashboard.recentReports[0] ? {
+          title: `Report for ${dashboard.recentReports[0].candidate.firstName} ${dashboard.recentReports[0].candidate.lastName}`,
+          detail: `${dashboard.recentReports[0].caseNumber} · Completed`,
+          date: dateTimeText(dashboard.recentReports[0].completedAt),
+          href: '/client-portal/reports',
+          action: 'View reports',
+        } : null,
+      }] : []),
+      ...(dashboard?.permissions.invoices ? [{
+        id: 'invoices',
+        title: 'Invoices',
+        count: dashboard.counts.invoices ?? 0,
+        countLabel: 'issued invoices',
+        href: '/client-portal/invoices',
+        icon: Receipt,
+        accent: 'bg-violet-500/10 text-violet-700',
+        latest: dashboard.recentInvoices[0] ? {
+          title: dashboard.recentInvoices[0].invoiceNumber,
+          detail: `${dashboard.recentInvoices[0].status.replaceAll('_', ' ')} · ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: dashboard.recentInvoices[0].currency, maximumFractionDigits: 2 }).format(dashboard.recentInvoices[0].total)}`,
+          date: dateTimeText(dashboard.recentInvoices[0].invoiceDate),
+          href: '/client-portal/invoices',
+          action: 'View invoices',
+        } : null,
+      }] : []),
+    ];
+
+    return (
+      <div className="space-y-6">
+        <section className="relative isolate overflow-hidden rounded-3xl bg-[var(--primary)] px-5 py-6 text-[var(--primary-foreground)] shadow-lg shadow-[var(--primary)]/10 sm:px-8 sm:py-8">
+          <div aria-hidden="true" className="absolute -right-10 -top-28 -z-10 h-72 w-72 rounded-full border-[36px] border-current opacity-[0.07]" />
+          <div aria-hidden="true" className="absolute -bottom-28 right-36 -z-10 h-56 w-56 rounded-full border-[28px] border-current opacity-[0.06]" />
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-current/20 bg-black/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]">
+                <Sparkles size={12} /> Client workspace
+              </div>
+              <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome back, {user.firstName}</h2>
+              <p className="mt-2 max-w-xl text-[13px] leading-6 opacity-80">
+                Here&apos;s your organization&apos;s background verification overview. Follow candidate and case activity, find reports, and keep billing on track.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] font-medium opacity-80">
+                <span className="inline-flex items-center gap-1.5"><Users size={13} />{client?.name ?? 'Your organization'}</span>
+                {client?.clientCode && <span className="inline-flex items-center gap-1.5"><span className="opacity-60">Client ID</span>{client.clientCode}</span>}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {hasPortalPermission(permissions, 'clientportal.candidates.create') && (
+                <Link href="/client-portal/candidates" className="inline-flex w-fit shrink-0 items-center justify-center gap-2 rounded-xl bg-[var(--primary-foreground)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary)] shadow-sm transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current">
+                  <Plus size={15} />Add candidate
+                </Link>
+              )}
+              <button type="button" onClick={() => void loadDashboard()} disabled={dashboardLoading} className="inline-flex w-fit shrink-0 items-center justify-center gap-2 rounded-xl border border-current/25 bg-black/5 px-4 py-2.5 text-[12px] font-semibold transition hover:bg-black/10 disabled:opacity-50">
+                <RefreshCw size={14} className={dashboardLoading ? 'animate-spin' : ''} />{dashboardLoading ? 'Refreshing…' : 'Refresh overview'}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section aria-label="Recent portal updates" className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4 sm:px-6">
+            <div>
+              <h3 className="text-[14px] font-semibold">Recent updates</h3>
+              <p className="mt-1 text-[11px] text-[var(--muted)]">A quick count and the latest update for each area.</p>
+            </div>
+            <span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-medium text-[var(--muted)]">By category</span>
+          </div>
+          {dashboardLoading && !dashboard
+            ? <div className="grid gap-3 p-5 sm:grid-cols-2 sm:px-6 xl:grid-cols-3" aria-label="Loading recent updates">
+              {[1, 2, 3].map((item) => <div key={item} className="h-36 animate-pulse rounded-xl border border-[var(--border)] p-4"><div className="h-3 w-24 rounded bg-[var(--surface-muted)]" /><div className="mt-4 h-8 w-16 rounded bg-[var(--surface-muted)]" /><div className="mt-4 h-3 w-40 rounded bg-[var(--surface-muted)]" /></div>)}
+            </div>
+            : recentUpdateGroups.length === 0
+              ? <div className="px-5 py-8 text-center sm:px-6">
+                <Activity size={21} className="mx-auto text-[var(--muted)]" />
+                <p className="mt-2 text-[12px] font-medium">No update categories available</p>
+                <p className="mt-1 text-[11px] text-[var(--muted)]">Ask your administrator for access to cases, reports, or invoices.</p>
+              </div>
+              : <div className="grid gap-3 p-5 sm:grid-cols-2 sm:px-6 xl:grid-cols-3">
+                {recentUpdateGroups.map(({ id, title, count, countLabel, href, icon: Icon, accent, latest }) => <article key={id} className="flex min-h-[174px] flex-col rounded-xl border border-[var(--border)] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold text-[var(--muted)]">{title}</p>
+                      <p className="mt-1 text-2xl font-semibold tabular-nums">{count.toLocaleString()}</p>
+                      <p className="text-[10px] text-[var(--muted)]">{countLabel}</p>
+                    </div>
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${accent}`}><Icon size={16} /></span>
+                  </div>
+                  <div className="mt-4 border-t border-[var(--border)] pt-3">
+                    {latest ? (
+                      <>
+                        <p className="truncate text-[11px] font-semibold" title={latest.title}>{latest.title}</p>
+                        <p className="mt-1 truncate text-[10px] text-[var(--muted)]" title={latest.detail}>{latest.detail}</p>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <span className="truncate text-[9px] text-[var(--muted)]">{latest.date}</span>
+                          <Link href={latest.href} className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-[var(--primary)] hover:underline">
+                            {latest.action}<ArrowUpRight size={12} />
+                          </Link>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] text-[var(--muted)]">No recent updates in this area.</p>
+                        <Link href={href} className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-[var(--primary)] hover:underline">
+                          View all<ArrowUpRight size={12} />
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </article>)}
+              </div>}
+        </section>
+
+        {dashboardError && <p role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-[12px] text-rose-700"><span>{dashboardError}</span><button type="button" onClick={() => void loadDashboard()} className="font-semibold underline underline-offset-2">Try again</button></p>}
+        {dashboardLoading && !dashboard
+          ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Loading dashboard">
+            {[1, 2, 3, 4].map((item) => <div key={item} className="h-36 animate-pulse rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><div className="h-3 w-24 rounded bg-[var(--surface-muted)]" /><div className="mt-5 h-8 w-16 rounded bg-[var(--surface-muted)]" /><div className="mt-3 h-3 w-40 rounded bg-[var(--surface-muted)]" /></div>)}
+          </div>
+          : dashboard && metrics.length === 0
+            ? <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-5 py-12 text-center"><ShieldCheckIcon /><h2 className="mt-3 text-[15px] font-semibold">Dashboard access is not set up yet</h2><p className="mx-auto mt-1 max-w-md text-[12px] leading-5 text-[var(--muted)]">Ask your client administrator to enable access to candidate records, case progress, reports, or invoices.</p></section>
+            : dashboard && (
+              <>
+                <section aria-label="Client activity summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {metrics.map(({ label, value, icon: Icon, href, detail, iconBg }) => {
+                    const content = <div className="group flex min-h-[150px] items-start justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[var(--primary)]/40 hover:shadow-md">
+                      <div className="min-w-0"><p className="text-[12px] font-semibold text-[var(--muted)]">{label}</p><p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">{(value ?? 0).toLocaleString()}</p><p className="mt-1.5 max-w-[210px] text-[11px] leading-4 text-[var(--muted)]">{detail}</p></div>
+                      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconBg}`}><Icon size={19} /></span>
+                      {href && <span className="mt-auto self-end text-[var(--muted)] transition group-hover:text-[var(--primary)]"><ArrowUpRight size={15} /></span>}
+                    </div>;
+                    return href ? <Link key={label} href={href} className="block rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]">{content}</Link> : <div key={label}>{content}</div>;
+                  })}
+                </section>
+
+                {quickLinks.length > 0 && <section aria-label="Quick actions" className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]"><Sparkles size={16} /></span>
+                    <div><h3 className="text-[14px] font-semibold">Quick actions</h3><p className="mt-0.5 text-[11px] text-[var(--muted)]">Jump straight to the work you need to do.</p></div>
+                  </div>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    {quickLinks.map(({ label, description, href, icon: Icon, accent }) => <Link key={label} href={href} className="group flex items-center gap-3 rounded-xl border border-[var(--border)] p-3 transition hover:border-[var(--primary)]/40 hover:bg-[var(--surface-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]">
+                      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent}`}><Icon size={17} /></span>
+                      <span className="min-w-0 flex-1"><span className="block text-[12px] font-semibold">{label}</span><span className="mt-0.5 block text-[10px] leading-4 text-[var(--muted)]">{description}</span></span>
+                      <ArrowRight size={14} className="shrink-0 text-[var(--muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--primary)]" />
+                    </Link>)}
+                  </div>
+                </section>}
+
+                <div className="grid gap-4 xl:grid-cols-[1.4fr_0.6fr]">
+                  {dashboard.monthlyActivity.length > 0 && <section className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-6">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div><h3 className="text-[14px] font-semibold">Activity over time</h3><p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">A monthly view of new candidates, BGV cases, and invoices for your organization.</p></div>
+                      <span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-medium text-[var(--muted)]">Last 12 months</span>
+                    </div>
+                    {chartHasData
+                      ? <div className="mt-5 h-[280px] w-full" role="img" aria-label="Line chart showing monthly candidate, BGV case, and invoice activity">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={dashboard.monthlyActivity} margin={{ top: 10, right: 18, left: -18, bottom: 0 }}>
+                            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
+                            <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
+                            <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--foreground)', fontSize: 12 }} />
+                            {dashboard.permissions.candidates && <Line type="monotone" dataKey="candidates" name="New candidates" stroke="#4D8FE8" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />}
+                            {dashboard.permissions.cases && <Line type="monotone" dataKey="cases" name="BGV cases" stroke="#14A38B" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />}
+                            {dashboard.permissions.invoices && <Line type="monotone" dataKey="invoices" name="Invoices" stroke="#8B6BE8" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                      : <div className="mt-5 flex h-[220px] flex-col items-center justify-center rounded-xl bg-[var(--surface-muted)] px-4 text-center">
+                        <Activity size={22} className="text-[var(--muted)]" />
+                        <p className="mt-3 text-[12px] font-medium">No activity to chart yet</p>
+                        <p className="mt-1 max-w-sm text-[11px] leading-5 text-[var(--muted)]">When candidates, cases, or invoices are added, their month-by-month activity will appear here.</p>
+                      </div>}
+                  </section>}
+
+                  {dashboard.permissions.cases && <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+                    <div className="border-b border-[var(--border)] px-5 py-4">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-700"><Clock3 size={15} /></span>
+                        <div><h3 className="text-[13px] font-semibold">Cases in progress</h3><p className="mt-0.5 text-[10px] text-[var(--muted)]">Cases that may need follow-up</p></div>
+                      </div>
+                    </div>
+                    <div className="px-5 py-5">
+                      <p className="text-3xl font-semibold tabular-nums">{(dashboard.counts.openCases ?? 0).toLocaleString()}</p>
+                      <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">{(dashboard.counts.openCases ?? 0) === 0 ? 'You’re all caught up. There are no open cases right now.' : 'These checks are not yet marked complete. Open case progress to see the latest updates.'}</p>
+                      <Link href="/client-portal/cases" className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)] hover:opacity-90">
+                        View case progress <ArrowRight size={13} />
+                      </Link>
+                    </div>
+                  </section>}
+                </div>
+
+                {dashboard.permissions.cases && <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+                  <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
+                    <div><h3 className="text-[14px] font-semibold">Recent BGV cases</h3><p className="mt-0.5 text-[11px] text-[var(--muted)]">The latest verification activity for your organization.</p></div>
+                    <Link href="/client-portal/cases" className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--primary)] hover:underline">View all cases <ArrowRight size={13} /></Link>
+                  </div>
+                  {dashboard.recentCases.length === 0
+                    ? <div className="px-5 py-10 text-center"><CheckCircle2 size={22} className="mx-auto text-emerald-600" /><p className="mt-3 text-[12px] font-medium">No BGV cases yet</p><p className="mt-1 text-[11px] text-[var(--muted)]">When a verification case is created, its latest progress will show here.</p></div>
+                    : <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-[12px]">
+                      <thead className="bg-[var(--surface-muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted)]"><tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Created</th></tr></thead>
+                      <tbody className="divide-y divide-[var(--border)]">{dashboard.recentCases.map((item) => <tr key={item.id}>
+                        <td className="px-5 py-3.5"><Link href={`/client-portal/cases/${item.id}`} className="font-mono font-medium text-[var(--primary)] hover:underline">{item.caseNumber}</Link></td>
+                        <td className="px-5 py-3.5">{item.candidate.firstName} {item.candidate.lastName}<span className="block text-[10px] text-[var(--muted)]">{item.candidate.candidateCode}</span></td>
+                        <td className="px-5 py-3.5"><Status value={item.status} /></td>
+                        <td className="px-5 py-3.5 text-right text-[var(--muted)]">{dateText(item.createdAt)}</td>
+                      </tr>)}</tbody>
+                    </table></div>}
+                </section>}
+
+                {dashboard.permissions.invoices && <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+                  <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
+                    <div><h3 className="text-[14px] font-semibold">Recent invoices</h3><p className="mt-0.5 text-[11px] text-[var(--muted)]">The latest billing documents issued to your organization.</p></div>
+                    <Link href="/client-portal/invoices" className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--primary)] hover:underline">View all invoices <ArrowRight size={13} /></Link>
+                  </div>
+                  {dashboard.recentInvoices.length === 0
+                    ? <div className="px-5 py-10 text-center"><Receipt size={21} className="mx-auto text-[var(--muted)]" /><p className="mt-3 text-[12px] font-medium">No invoices have been issued</p><p className="mt-1 text-[11px] text-[var(--muted)]">New billing documents will be available here when issued.</p></div>
+                    : <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-[12px]">
+                      <thead className="bg-[var(--surface-muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted)]"><tr><th className="px-5 py-3">Invoice</th><th className="px-5 py-3">Date</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Total</th></tr></thead>
+                      <tbody className="divide-y divide-[var(--border)]">{dashboard.recentInvoices.map((invoice) => <tr key={invoice.id}>
+                        <td className="px-5 py-3.5"><Link href="/client-portal/invoices" className="font-semibold text-[var(--primary)] hover:underline">{invoice.invoiceNumber}</Link></td>
+                        <td className="px-5 py-3.5">{dateText(invoice.invoiceDate)}</td>
+                        <td className="px-5 py-3.5"><Status value={invoice.status} /></td>
+                        <td className="px-5 py-3.5 text-right tabular-nums">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: invoice.currency, maximumFractionDigits: 2 }).format(invoice.total)}</td>
+                      </tr>)}</tbody>
+                    </table></div>}
+                </section>}
+              </>
+            )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
         <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -253,6 +625,30 @@ export default function ClientPortalPage() {
             <div className="flex items-center justify-between gap-3">{portalNotice && <div role="status" className="flex flex-wrap items-center gap-3 text-[12px] text-emerald-700"><span>{portalNotice}</span>{candidateInviteUrl && <button type="button" onClick={copyCandidateInvite} className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 px-2.5 py-1.5 font-semibold"><Copy size={13} />Copy invitation link</button>}</div>}{activeTab === 'candidates' && canCreateCandidates && <button type="button" onClick={openCreateCandidate} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)]"><Plus size={14} />Add candidate</button>}</div>
 
             {error && <p role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-[12px] text-rose-700">{error}</p>}
+            <section aria-label={`${activeTab} filters`} className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="relative block text-[10px] font-medium text-[var(--muted)]">Search
+                <Search size={14} className="absolute left-3 top-[31px] text-[var(--muted)]" />
+                <input value={filters.search || ''} onChange={(event) => updateFilter('search', event.target.value)} placeholder={activeTab === 'candidates' ? 'Name, email, or reference' : 'Case or candidate'} className={`${inputClass} pl-9`} />
+              </label>
+              <label className="block text-[10px] font-medium text-[var(--muted)]">Status
+                <select value={filters.status || ''} onChange={(event) => updateFilter('status', event.target.value)} className={inputClass}>
+                  <option value="">All statuses</option>
+                  {(activeTab === 'candidates'
+                    ? ['PENDING', 'INVITED', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'ON_HOLD']
+                    : activeTab === 'cases'
+                      ? ['DRAFT', 'INITIATED', 'CONSENT_PENDING', 'IN_PROGRESS', 'UNDER_REVIEW', 'COMPLETED', 'ON_HOLD', 'CANCELLED']
+                      : ['CLEAR', 'MINOR_DISCREPANCY', 'MAJOR_DISCREPANCY', 'UNABLE_TO_VERIFY', 'REQUIRES_REVIEW']
+                  ).map((status) => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
+                </select>
+              </label>
+              <label className="block text-[10px] font-medium text-[var(--muted)]">{activeTab === 'reports' ? 'Completed from' : 'Created from'}
+                <input type="date" value={filters.dateFrom || ''} max={filters.dateTo || undefined} onChange={(event) => updateFilter('dateFrom', event.target.value)} className={inputClass} />
+              </label>
+              <label className="block text-[10px] font-medium text-[var(--muted)]">{activeTab === 'reports' ? 'Completed to' : 'Created to'}
+                <input type="date" value={filters.dateTo || ''} min={filters.dateFrom || undefined} onChange={(event) => updateFilter('dateTo', event.target.value)} className={inputClass} />
+              </label>
+            </section>
+
             <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
               <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4"><div><h2 className="text-[14px] font-semibold">{activeTab === 'candidates' ? 'Candidates' : activeTab === 'cases' ? 'BGV case progress' : 'Completed reports'}</h2><p className="mt-0.5 text-[11px] text-[var(--muted)]">{total} record{total === 1 ? '' : 's'}</p></div></div>
               {loading ? <p className="px-5 py-12 text-center text-[12px] text-[var(--muted)]">Loading…</p>
@@ -264,7 +660,10 @@ export default function ClientPortalPage() {
                     : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-[12px]"><thead className="bg-[var(--surface-muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted)]"><tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Verification status</th><th className="px-5 py-3">Initiated</th><th className="px-5 py-3">Completed</th><th className="px-5 py-3 text-right">Progress</th></tr></thead><tbody className="divide-y divide-[var(--border)]">{cases.map((item) => { const verification = getVerificationStatus(item.verificationStatuses); return <tr key={item.id}><td className="px-5 py-3.5 font-mono">{item.caseNumber}</td><td className="px-5 py-3.5">{item.candidate.firstName} {item.candidate.lastName}<span className="block text-[10px] text-[var(--muted)]">{item.candidate.candidateCode}</span></td><td className="px-5 py-3.5"><Status value={item.status} /></td><td className="px-5 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${verification.className}`}>{verification.label}</span></td><td className="px-5 py-3.5">{dateText(item.initiatedAt)}</td><td className="px-5 py-3.5">{dateText(item.completedAt)}</td><td className="px-5 py-3.5 text-right"><button type="button" onClick={() => router.push(`/client-portal/cases/${item.id}`)} className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[11px] hover:bg-[var(--surface-muted)]"><Eye size={13} />View</button></td></tr>; })}</tbody></table></div>
                 ) : reports.length === 0 ? <EmptyState icon={<FileText size={19} />} message="No completed reports are available." />
                   : <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-[12px]"><thead className="bg-[var(--surface-muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted)]"><tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Completed</th><th className="px-5 py-3">Verification status</th><th className="px-5 py-3 text-right">Report</th></tr></thead><tbody className="divide-y divide-[var(--border)]">{reports.map((report) => { const verification = getReportVerificationStatus(report.reportVerificationStatus); return <tr key={report.id}><td className="px-5 py-3.5 font-mono">{report.caseNumber}</td><td className="px-5 py-3.5">{report.candidate.firstName} {report.candidate.lastName}<span className="block text-[10px] text-[var(--muted)]">{report.candidate.candidateCode}</span></td><td className="px-5 py-3.5">{dateText(report.completedAt)}</td><td className="px-5 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${verification.className}`}>{verification.label}</span></td><td className="px-5 py-3.5 text-right">{canDownloadReports && <button type="button" disabled={downloadingReport === report.id} onClick={() => void downloadReport(report)} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-medium hover:bg-[var(--surface-muted)] disabled:opacity-50"><Download size={13} />{downloadingReport === report.id ? 'Downloading…' : 'PDF'}</button>}</td></tr>; })}</tbody></table></div>}
-              <div className="flex items-center justify-between border-t border-[var(--border)] px-5 py-3 text-[11px] text-[var(--muted)]"><span>Page {page} of {Math.max(1, totalPages)}</span><div className="flex gap-2"><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Previous</button><button type="button" disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Next</button></div></div>
+              <div className="flex flex-col items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3 text-[11px] text-[var(--muted)] sm:flex-row">
+                <span>{total === 0 ? '0 records' : `${(page - 1) * 20 + 1}–${Math.min(page * 20, total)} of ${total} records`} · 20 per page</span>
+                <div className="flex items-center gap-2"><span>Page {page} of {Math.max(1, totalPages)}</span><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Previous</button><button type="button" disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Next</button></div>
+              </div>
             </section>
           </>
         )}

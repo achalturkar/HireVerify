@@ -103,11 +103,6 @@ const create = async ({ payload, companyId, currentUser }) => {
     }
   }
 
-  if (normalizedEmail) {
-    const existing = await repo.findByEmail(companyId, clientId, normalizedEmail);
-    if (existing) throw new ConflictError('A candidate with this email already exists for this client.');
-  }
-
   const candidate = await repo.create({
     companyId,
     clientId,
@@ -162,6 +157,8 @@ const list = async ({ companyId, query }) => {
     search: query.search,
     clientId: query.clientId,
     status: query.status,
+    dateFrom: query.dateFrom,
+    dateTo: query.dateTo,
     sortBy: ['candidateCode', 'firstName', 'lastName', 'email', 'status', 'createdAt', 'updatedAt'].includes(query.sortBy)
       ? query.sortBy
       : 'createdAt',
@@ -187,12 +184,6 @@ const update = async ({ id, companyId, payload, currentUser }) => {
   validateIdentityValues(payload);
 
   const normalizedEmail = payload.email?.trim().toLowerCase() || null;
-  if (normalizedEmail && normalizedEmail !== existing.email?.toLowerCase()) {
-    const duplicate = await repo.findByEmail(companyId, payload.clientId || existing.clientId, normalizedEmail);
-    if (duplicate && duplicate.id !== id) {
-      throw new ConflictError('A candidate with this email already exists for this client.');
-    }
-  }
 
   const data = {};
   ['clientId', 'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress', 'status']

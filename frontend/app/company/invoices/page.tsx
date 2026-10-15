@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Check,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
@@ -35,6 +36,7 @@ import {
   getInvoiceProfile,
   InvoiceApiError,
   listInvoiceCases,
+  listCompletedInvoiceCases,
   listInvoices,
   previewInvoicePdf,
   recordInvoicePayment,
@@ -94,6 +96,7 @@ const clientBillingFrom = (client?: Client, invoice?: Invoice): ClientBillingDra
 });
 
 const today = () => new Date().toISOString().slice(0, 10);
+const monthStart = () => `${today().slice(0, 7)}-01`;
 const datePlusDays = (dayCount: number) => {
   const value = new Date();
   value.setDate(value.getDate() + dayCount);
@@ -232,14 +235,25 @@ export default function InvoicesPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [cases, setCases] = useState<InvoiceCase[]>([]);
   const [casesLoading, setCasesLoading] = useState(false);
+  const [completedCases, setCompletedCases] = useState<InvoiceCase[]>([]);
+  const [completedSearchDone, setCompletedSearchDone] = useState(false);
+  const [completedCaseSearch, setCompletedCaseSearch] = useState('');
+  const [selectedCompletedCaseIds, setSelectedCompletedCaseIds] = useState<string[]>([]);
+  const [completedFrom, setCompletedFrom] = useState(monthStart());
+  const [completedTo, setCompletedTo] = useState(today());
+  const [completedLoading, setCompletedLoading] = useState(false);
+  const [bulkRate, setBulkRate] = useState('');
+  const [bulkDiscountPercent, setBulkDiscountPercent] = useState('0');
+  const [bulkTaxPercent, setBulkTaxPercent] = useState('0');
   const [formError, setFormError] = useState('');
   const [form, setForm] = useState({ clientId: '', invoiceDate: today(), dueDate: datePlusDays(30), currency: 'INR', placeOfSupply: '', purchaseOrderNumber: '', notes: '', terms: 'Payment due within 30 days.' });
-  const [lines, setLines] = useState<DraftLine[]>([newLine()]);
+  const [lines, setLines] = useState<DraftLine[]>([]);
   const [recipient, setRecipient] = useState('');
   const [statusChoice, setStatusChoice] = useState<'SENT' | 'VOID'>('SENT');
   const [payment, setPayment] = useState({ amount: '', paymentDate: today(), method: 'BANK_TRANSFER', reference: '' });
   const [clientBilling, setClientBilling] = useState<ClientBillingDraft>(emptyClientBilling);
   const selectedClientIdRef = useRef('');
+  const completedSearchRef = useRef(0);
 
   const loadInvoices = useCallback(async () => {
     setLoading(true);
@@ -291,23 +305,47 @@ export default function InvoicesPage() {
   const monthlyCollected = selectedBilling?.monthly.reduce((sum, month) => sum + amount(month.collected), 0) || 0;
   const rankedClients = analytics.topClients.filter((client) => client.currency === selectedCurrency).slice(0, 6);
   const compactMoney = (value: number) => new Intl.NumberFormat('en-IN', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+  const unbilledCompletedCases = completedCases.filter((item) => !item.isBilled);
+  const billedCompletedCases = completedCases.filter((item) => item.isBilled);
+  const normalizedCaseSearch = completedCaseSearch.trim().toLocaleLowerCase();
+  const matchesCaseSearch = (item: InvoiceCase) => !normalizedCaseSearch
+    || [item.candidateName, item.caseNumber, item.candidate.candidateCode, item.packageName || '']
+      .some((value) => value.toLocaleLowerCase().includes(normalizedCaseSearch));
+  const visibleUnbilledCases = unbilledCompletedCases.filter(matchesCaseSearch);
+  const visibleBilledCases = billedCompletedCases.filter(matchesCaseSearch);
 
   const setFormValue = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const setLineValue = (index: number, key: keyof DraftLine, value: string) => setLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, [key]: value } : line));
+  const setCandidateName = (index: number, value: string) => {
+    const normalizedName = value.trim().toLocaleLowerCase();
+    if (normalizedName && lines.some((line, lineIndex) => lineIndex !== index
+      && line.candidateName.trim().toLocaleLowerCase() === normalizedName)) {
+      setFormError('A candidate can only be included once on an invoice.');
+      return;
+    }
+    setLineValue(index, 'candidateName', value);
+    setFormError('');
+  };
 
   const chooseClient = async (clientId: string) => {
     selectedClientIdRef.current = clientId;
+    completedSearchRef.current += 1;
     const cachedClient = clients.find((item) => item.id === clientId);
     setClientBilling(clientBillingFrom(cachedClient));
     setForm((current) => ({ ...current, clientId, placeOfSupply: cachedClient?.state || '' }));
     setLines((current) => current.map((line) => ({ ...line, caseId: '' })));
     setCases([]);
+    setCompletedCases([]);
+    setCompletedSearchDone(false);
+    setCompletedCaseSearch('');
+    setSelectedCompletedCaseIds([]);
+    setCompletedLoading(false);
     if (!clientId) return;
-    setCasesLoading(true);
+    if (editingId) setCasesLoading(true);
     try {
       const [latestClient, clientCases] = await Promise.all([
         getClient(clientId, accessToken).catch(() => cachedClient),
-        listInvoiceCases(clientId, accessToken),
+        editingId ? listInvoiceCases(clientId, accessToken) : Promise.resolve(null),
       ]);
       if (selectedClientIdRef.current !== clientId) return;
       if (latestClient) {
@@ -315,7 +353,7 @@ export default function InvoicesPage() {
         setClients((current) => current.map((item) => item.id === latestClient.id ? latestClient : item));
         setForm((current) => ({ ...current, placeOfSupply: current.placeOfSupply === (cachedClient?.state || '') ? latestClient.state || '' : current.placeOfSupply }));
       }
-      setCases(clientCases);
+      if (clientCases) setCases(clientCases);
     } catch (cause) {
       if (selectedClientIdRef.current === clientId) setFormError(cause instanceof Error ? cause.message : 'Could not load client cases.');
     } finally {
@@ -323,13 +361,168 @@ export default function InvoicesPage() {
     }
   };
 
+  const clearCompletedSearch = () => {
+    completedSearchRef.current += 1;
+    setCompletedCases([]);
+    setCompletedCaseSearch('');
+    setSelectedCompletedCaseIds([]);
+    setCompletedSearchDone(false);
+    setCompletedLoading(false);
+  };
+
+  const findCompletedCases = async () => {
+    if (!form.clientId) {
+      setFormError('Choose a client before searching completed cases.');
+      return;
+    }
+    if (!completedFrom || !completedTo || completedFrom > completedTo) {
+      setFormError('Enter a valid completion date range.');
+      return;
+    }
+    const searchId = ++completedSearchRef.current;
+    const clientId = form.clientId;
+    setCompletedLoading(true);
+    setFormError('');
+    setCompletedSearchDone(false);
+    setCompletedCases([]);
+    setCompletedCaseSearch('');
+    setSelectedCompletedCaseIds([]);
+    try {
+      const result = await listCompletedInvoiceCases(clientId, completedFrom, completedTo, accessToken);
+      if (completedSearchRef.current !== searchId || selectedClientIdRef.current !== clientId) return;
+      setCompletedCases(result);
+      setCompletedSearchDone(true);
+      setSelectedCompletedCaseIds(result.filter((item) => lines.some((line) => line.caseId === item.id)).map((item) => item.id));
+      if (!result.length) setNotice('No completed cases were found for this client and date range.');
+    } catch (cause) {
+      if (completedSearchRef.current === searchId && selectedClientIdRef.current === clientId) {
+        setFormError(cause instanceof Error ? cause.message : 'Could not find completed cases.');
+      }
+    } finally {
+      if (completedSearchRef.current === searchId) setCompletedLoading(false);
+    }
+  };
+
+  const updateCompletedCaseSelection = (caseIds: string[]) => {
+    const selectedIds = new Set(caseIds);
+    const candidateIds = new Set<string>();
+    for (const item of completedCases.filter((candidateCase) => selectedIds.has(candidateCase.id))) {
+      if (candidateIds.has(item.candidateId)) {
+        setFormError('A candidate can only be added once to an invoice.');
+        return;
+      }
+      candidateIds.add(item.candidateId);
+      const alreadyLinkedCase = lines.find((line) => line.caseId && line.caseId !== item.id
+        && [...completedCases, ...cases].some((candidate) => candidate.id === line.caseId && candidate.candidateId === item.candidateId));
+      if (alreadyLinkedCase) {
+        setFormError('This candidate is already included on another invoice line.');
+        return;
+      }
+    }
+    const existingCaseIds = new Set(lines.map((line) => line.caseId).filter(Boolean));
+    const additions = completedCases.filter((item) => selectedIds.has(item.id) && !existingCaseIds.has(item.id));
+    const removals = new Set(completedCases.filter((item) => !selectedIds.has(item.id)).map((item) => item.id));
+
+    const retainedLines = lines.filter((line) => !removals.has(line.caseId));
+    if (retainedLines.length + additions.length > 500) {
+      setFormError('An invoice can include up to 500 line items. Select fewer cases or create multiple invoices.');
+      return;
+    }
+
+    const addedLines = additions.map((item): DraftLine => ({
+      caseId: item.id,
+      description: item.packageName || `Background verification - ${item.caseNumber}`,
+      candidateName: item.candidateName,
+      serviceCode: '',
+      quantity: '1',
+      unitPrice: bulkRate || '0',
+      discountPercent: bulkDiscountPercent,
+      taxPercent: bulkTaxPercent,
+    }));
+    setLines([...retainedLines, ...addedLines]);
+    setSelectedCompletedCaseIds(caseIds);
+    setFormError('');
+  };
+
+  const isCandidateLinkedOnAnotherLine = (item: InvoiceCase, exceptIndex = -1) => lines.some((line, index) => {
+    if (index === exceptIndex) return false;
+    if (line.caseId) {
+      return line.caseId === item.id
+        || [...completedCases, ...cases].some((candidate) => candidate.id === line.caseId && candidate.candidateId === item.candidateId);
+    }
+    return Boolean(line.candidateName.trim())
+      && line.candidateName.trim().toLocaleLowerCase() === item.candidateName.trim().toLocaleLowerCase();
+  });
+  const isCandidateAlreadyLinked = (item: InvoiceCase) => isCandidateLinkedOnAnotherLine(item);
+
+  const isCandidateAlreadySelected = (item: InvoiceCase) => selectedCompletedCaseIds.some((id) => id !== item.id
+    && completedCases.some((candidate) => candidate.id === id && candidate.candidateId === item.candidateId));
+
+  const selectAllUniqueCandidates = () => {
+    const seen = new Set<string>();
+    const visibleUnbilledIds = new Set(visibleUnbilledCases.map((item) => item.id));
+    const ids = selectedCompletedCaseIds.filter((id) => !visibleUnbilledIds.has(id));
+    for (const item of visibleUnbilledCases) {
+      if (seen.has(item.candidateId)) continue;
+      const selectedCase = visibleUnbilledCases.find((candidate) => candidate.candidateId === item.candidateId
+        && selectedCompletedCaseIds.includes(candidate.id));
+      if (selectedCase) {
+        if (!ids.includes(selectedCase.id)) ids.push(selectedCase.id);
+        seen.add(item.candidateId);
+        continue;
+      }
+      if (selectedCompletedCaseIds.some((id) => completedCases.some((candidate) => candidate.id === id && candidate.candidateId === item.candidateId))) {
+        seen.add(item.candidateId);
+        continue;
+      }
+      if (isCandidateAlreadyLinked(item)) {
+        seen.add(item.candidateId);
+        continue;
+      }
+      ids.push(item.id);
+      seen.add(item.candidateId);
+    }
+    updateCompletedCaseSelection(ids);
+  };
+
+  const clearVisibleUnbilledSelection = () => {
+    const visibleIds = new Set(visibleUnbilledCases.map((item) => item.id));
+    updateCompletedCaseSelection(selectedCompletedCaseIds.filter((id) => !visibleIds.has(id)));
+  };
+
+  const applyBulkPricing = () => {
+    if ((bulkRate !== '' && (!Number.isFinite(Number(bulkRate)) || Number(bulkRate) < 0 || Number(bulkRate) > 100000000))
+      || ![bulkDiscountPercent, bulkTaxPercent].every((value) => Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100)) {
+      setFormError('Enter a valid rate and percentages between 0 and 100.');
+      return;
+    }
+    setLines((current) => current.map((line) => ({
+      ...line,
+      ...(bulkRate !== '' ? { unitPrice: bulkRate } : {}),
+      discountPercent: bulkDiscountPercent,
+      taxPercent: bulkTaxPercent,
+    })));
+    setFormError('');
+    setNotice('Rate, discount, and tax have been applied to all line items.');
+  };
+
   const resetComposer = () => {
     selectedClientIdRef.current = '';
+    completedSearchRef.current += 1;
     setEditingId(null);
     setForm({ clientId: '', invoiceDate: today(), dueDate: datePlusDays(30), currency: 'INR', placeOfSupply: '', purchaseOrderNumber: '', notes: '', terms: 'Payment due within 30 days.' });
     setClientBilling(emptyClientBilling);
-    setLines([newLine()]);
+    setLines([]);
     setCases([]);
+    setCompletedCases([]);
+    setCompletedSearchDone(false);
+    setCompletedCaseSearch('');
+    setSelectedCompletedCaseIds([]);
+    setCompletedFrom(monthStart());
+    setCompletedTo(today());
+    setBulkRate('');
+    setBulkDiscountPercent('0');
+    setBulkTaxPercent('0');
     setFormError('');
   };
 
@@ -350,7 +543,7 @@ export default function InvoicesPage() {
       terms: invoice.terms || '',
     });
     setClientBilling(clientBillingFrom(clients.find((client) => client.id === invoice.clientId), invoice));
-    setLines(invoice.items.map((item) => ({
+    const invoiceLines = invoice.items.map((item) => ({
       caseId: item.caseId || '',
       description: item.case?.caseNumber || item.description,
       candidateName: item.candidateName || '',
@@ -359,7 +552,11 @@ export default function InvoicesPage() {
       unitPrice: Number(item.unitPrice),
       discountPercent: Number(item.discountPercent),
       taxPercent: Number(item.taxPercent),
-    })));
+    }));
+    setLines(invoiceLines);
+    setBulkRate(String(invoiceLines[0]?.unitPrice ?? ''));
+    setBulkDiscountPercent(String(invoiceLines[0]?.discountPercent ?? 0));
+    setBulkTaxPercent(String(invoiceLines[0]?.taxPercent ?? 0));
     setCasesLoading(true);
     try { setCases(await listInvoiceCases(invoice.clientId, accessToken)); }
     catch { setCases([]); }
@@ -369,6 +566,7 @@ export default function InvoicesPage() {
   const submitInvoice = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.clientId) { setFormError('Choose a client before saving.'); return; }
+    if (!lines.length) { setFormError('Add at least one line item before saving.'); return; }
     if (lines.some((line) => !line.description.trim() || amount(line.quantity) <= 0 || amount(line.unitPrice) < 0)) { setFormError('Each line needs a description, positive quantity, and valid rate.'); return; }
     const payload: InvoiceInput = {
       ...form,
@@ -616,32 +814,116 @@ export default function InvoicesPage() {
 
             {form.clientId && <section aria-label="Client billing details" className="border-l-2 border-[var(--primary)] py-2 pl-4"><div className="mb-3 flex flex-wrap items-baseline justify-between gap-2"><div><h3 className="text-sm font-semibold">Client billing details</h3><p className="mt-0.5 text-[11px] text-[var(--muted)]">Saved on this invoice; the client profile will not be changed.</p></div>{missingClientBillingFields.length > 0 && <p className="text-[11px] text-amber-700 dark:text-amber-300">Complete {missingClientBillingFields.join(', ')} for a more complete invoice</p>}</div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><FormField label="Billing address" className="sm:col-span-2"><textarea value={clientBilling.address} onChange={(event) => setClientBilling((current) => ({ ...current, address: event.target.value }))} maxLength={1000} placeholder="Street, city, postal code, country" className={`${fieldClass} min-h-16 resize-y`} /></FormField><FormField label="Contact person"><input value={clientBilling.contactName} onChange={(event) => setClientBilling((current) => ({ ...current, contactName: event.target.value }))} maxLength={150} className={fieldClass} /></FormField><FormField label="Contact phone"><input value={clientBilling.phone} onChange={(event) => setClientBilling((current) => ({ ...current, phone: event.target.value }))} maxLength={50} className={fieldClass} /></FormField><FormField label="State"><GeoSelect kind="state" countryName={clients.find((client) => client.id === form.clientId)?.country || undefined} value={clientBilling.state} onChange={(value) => { setClientBilling((current) => ({ ...current, state: value })); setForm((current) => ({ ...current, placeOfSupply: value })); }} className={fieldClass} /></FormField><FormField label="GSTIN"><input value={clientBilling.gstNumber} onChange={(event) => setClientBilling((current) => ({ ...current, gstNumber: event.target.value }))} maxLength={30} className={fieldClass} /></FormField><FormField label="PAN"><input value={clientBilling.panNumber} onChange={(event) => setClientBilling((current) => ({ ...current, panNumber: event.target.value }))} maxLength={20} className={fieldClass} /></FormField><FormField label="Billing email"><input type="email" value={clientBilling.email} onChange={(event) => setClientBilling((current) => ({ ...current, email: event.target.value }))} maxLength={255} className={fieldClass} /></FormField></div></section>}
 
+            {form.clientId && !editingId && <section aria-label="Automatically add completed cases" className="overflow-hidden rounded-xl border border-[var(--primary)]/20 bg-gradient-to-br from-[var(--primary)]/[0.07] via-[var(--surface)] to-[var(--surface)]">
+              <div className="flex items-start gap-3 border-b border-[var(--border)]/70 p-4 sm:p-5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><CalendarDays size={17} /></span>
+                <div><h3 className="text-sm font-semibold">Auto-add completed BGV cases</h3><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Completed cases within the selected date range are shown. You can select unbilled cases or re-bill cases that were included on another invoice.</p></div>
+              </div>
+              <div className="grid gap-3 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end sm:p-5">
+                <FormField label="Completed from"><input type="date" value={completedFrom} max={completedTo || undefined} onChange={(event) => { setCompletedFrom(event.target.value); clearCompletedSearch(); }} className={fieldClass} /></FormField>
+                <FormField label="Completed to"><input type="date" value={completedTo} min={completedFrom || undefined} max={today()} onChange={(event) => { setCompletedTo(event.target.value); clearCompletedSearch(); }} className={fieldClass} /></FormField>
+                <button type="button" onClick={() => void findCompletedCases()} disabled={completedLoading || !form.clientId} className="inline-flex items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-[var(--primary-foreground)] disabled:opacity-60">{completedLoading ? <LoaderCircle size={15} className="animate-spin" /> : <Search size={15} />}{completedLoading ? 'Finding cases…' : 'Find completed cases'}</button>
+              </div>
+              {completedSearchDone && <div className="border-t border-[var(--border)] bg-[var(--surface)]/70">
+                {completedCases.length > 0 ? <>
+                  <div className="px-4 pt-4 sm:px-5">
+                    <label className="relative block">
+                      <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+                      <input value={completedCaseSearch} onChange={(event) => setCompletedCaseSearch(event.target.value)} placeholder="Search candidate, case number, or package" className={`${fieldClass} pl-9`} aria-label="Search completed cases" />
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-5">
+                    <div><p className="text-sm font-semibold">{completedCases.length} completed {completedCases.length === 1 ? 'case' : 'cases'} available</p><p className="mt-0.5 text-xs text-[var(--muted)]">{selectedCompletedCaseIds.length} selected and added to invoice lines</p></div>
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-[var(--primary)]">
+                      <input
+                        type="checkbox"
+                        checked={visibleUnbilledCases.length > 0 && visibleUnbilledCases.every((item) => selectedCompletedCaseIds.includes(item.id) || isCandidateAlreadyLinked(item) || isCandidateAlreadySelected(item))}
+                        onChange={(event) => event.target.checked ? selectAllUniqueCandidates() : clearVisibleUnbilledSelection()}
+                        disabled={!visibleUnbilledCases.length}
+                        className="h-4 w-4 accent-[var(--primary)]"
+                      />
+                      Select all unbilled
+                    </label>
+                  </div>
+                  {visibleUnbilledCases.length > 0 && <div className="max-h-56 divide-y divide-[var(--border)] overflow-y-auto border-y border-[var(--border)]">
+                    {visibleUnbilledCases.map((item) => <label key={item.id} className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-[var(--surface-muted)] sm:px-5">
+                      <input type="checkbox" checked={selectedCompletedCaseIds.includes(item.id)} disabled={!selectedCompletedCaseIds.includes(item.id) && (isCandidateAlreadyLinked(item) || isCandidateAlreadySelected(item))} onChange={(event) => updateCompletedCaseSelection(event.target.checked ? [...selectedCompletedCaseIds, item.id] : selectedCompletedCaseIds.filter((id) => id !== item.id))} className="h-4 w-4 accent-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-40" />
+                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.candidateName}</span><span className="mt-0.5 block truncate text-xs text-[var(--muted)]">{item.caseNumber}{item.packageName ? ` · ${item.packageName}` : ''}</span></span>
+                      <time className="shrink-0 text-xs text-[var(--muted)]">{item.completedAt ? dateLabel(item.completedAt) : ''}</time>
+                    </label>)}
+                  </div>}
+                  {visibleBilledCases.length > 0 && <div className="border-t border-[var(--border)]">
+                    <div className="px-4 py-3 sm:px-5"><p className="text-sm font-semibold text-[var(--muted)]">{visibleBilledCases.length} previously billed {visibleBilledCases.length === 1 ? 'case' : 'cases'}</p><p className="mt-0.5 text-xs text-[var(--muted)]">Use Re-bill to add one to this invoice. Uncheck or Remove to take it off.</p></div>
+                    <div className="max-h-48 divide-y divide-[var(--border)] overflow-y-auto">
+                      {visibleBilledCases.map((item) => {
+                        const isSelected = selectedCompletedCaseIds.includes(item.id);
+                        return <div key={item.id} className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-muted)] sm:px-5">
+                          <input type="checkbox" checked={isSelected} onChange={(event) => updateCompletedCaseSelection(event.target.checked ? [...selectedCompletedCaseIds, item.id] : selectedCompletedCaseIds.filter((id) => id !== item.id))} className="h-4 w-4 accent-[var(--primary)]" aria-label={`${isSelected ? 'Remove' : 'Re-bill'} ${item.caseNumber}`} />
+                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.candidateName}</span><span className="mt-0.5 block truncate text-xs text-[var(--muted)]">{item.caseNumber}{item.packageName ? ` · ${item.packageName}` : ''}</span></span>
+                          <time className="shrink-0 text-xs text-[var(--muted)]">{item.completedAt ? dateLabel(item.completedAt) : ''}</time>
+                          <button type="button" onClick={() => updateCompletedCaseSelection(isSelected ? selectedCompletedCaseIds.filter((id) => id !== item.id) : [...selectedCompletedCaseIds, item.id])} className="shrink-0 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-xs font-semibold hover:bg-[var(--surface)]">
+                            {isSelected ? 'Remove' : 'Re-bill'}
+                          </button>
+                        </div>;
+                      })}
+                    </div>
+                  </div>}
+                  {!visibleUnbilledCases.length && !visibleBilledCases.length && <p role="status" className="px-4 py-5 text-center text-sm text-[var(--muted)]">No completed cases match this search.</p>}
+                  <p className="px-4 py-3 text-xs text-[var(--muted)] sm:px-5">Checking a case adds it to the invoice lines immediately. Uncheck it to remove it.</p>
+                </> : <p role="status" className="border-t border-[var(--border)] px-4 py-5 text-center text-sm text-[var(--muted)]">No completed cases were found for this client and date range.</p>}
+              </div>}
+            </section>}
+
             <section>
               <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold">Services and individuals</h3>
-                  <p className="mt-1 text-xs text-[var(--muted)]">Link a BGV case or add a manual service. Line items stay in the order shown.</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">Completed cases can be added automatically. You can also link cases or add manual services.</p>
                 </div>
                 <button type="button" onClick={() => setLines((current) => [...current, newLine()])} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-muted)]"><Plus size={14} />Add line</button>
               </div>
-              {form.clientId && <div className="mb-4 flex items-center gap-2 rounded-md bg-[var(--surface-muted)] px-3 py-2 text-xs text-[var(--muted)]"><FileText size={14} />{casesLoading ? 'Loading client cases…' : `${cases.length} client cases available to link`}</div>}
+              {form.clientId && <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)]/60 p-4">
+                <div className="mb-3"><h4 className="text-xs font-semibold">Quick pricing for all line items</h4><p className="mt-0.5 text-[11px] text-[var(--muted)]">Enter the common rate, discount, and tax once, then apply them to every current line. You can still fine-tune individual lines below.</p></div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+                  <FormField label={`Rate per case / line (${form.currency})`}><input type="number" min="0" step="0.01" value={bulkRate} onChange={(event) => setBulkRate(event.target.value)} placeholder="Enter common rate" className={fieldClass} /></FormField>
+                  <FormField label="Discount (%)"><input type="number" min="0" max="100" step="0.01" value={bulkDiscountPercent} onChange={(event) => setBulkDiscountPercent(event.target.value)} className={fieldClass} /></FormField>
+                  <FormField label="GST / tax (%)"><input type="number" min="0" max="100" step="0.01" value={bulkTaxPercent} onChange={(event) => setBulkTaxPercent(event.target.value)} className={fieldClass} /></FormField>
+                  <button type="button" onClick={applyBulkPricing} disabled={!lines.length} className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-xs font-semibold hover:bg-[var(--surface-muted)] disabled:opacity-50">Apply to all lines</button>
+                </div>
+              </div>}
+              {form.clientId && <div className="mb-4 flex items-center gap-2 rounded-md bg-[var(--surface-muted)] px-3 py-2 text-xs text-[var(--muted)]"><FileText size={14} />{editingId ? `${cases.length} client cases available to link` : completedSearchDone ? `${completedCases.length} completed cases in the selected date range, including previously billed cases` : 'Search a completion date range to link completed cases'}</div>}
               {lines.map((line, index) => {
-                const linkedCase = cases.find((item) => item.id === line.caseId);
+                const selectableCases = editingId ? cases : completedCases;
+                const linkedCase = selectableCases.find((item) => item.id === line.caseId);
                 return <div key={`line-${index}`} className="mb-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
                   <div className="mb-4 flex items-center justify-between border-b border-[var(--border)] pb-3">
                     <span className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--foreground)]">
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--primary)]/10 text-[var(--primary)]">{index + 1}</span>
                       Line item
                     </span>
-                    <button type="button" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))} title="Remove line" aria-label={`Remove line item ${index + 1}`} className="rounded-md p-2 text-[var(--muted)] hover:bg-rose-500/10 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={15} /></button>
+                    <button type="button" onClick={() => {
+                      setLines((current) => current.filter((_, lineIndex) => lineIndex !== index));
+                      if (line.caseId) setSelectedCompletedCaseIds((current) => current.filter((id) => id !== line.caseId));
+                    }} title="Remove line" aria-label={`Remove line item ${index + 1}`} className="rounded-md p-2 text-[var(--muted)] hover:bg-rose-500/10 hover:text-rose-600"><Trash2 size={15} /></button>
                   </div>
                   <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-12">
                     <FormField label="Service description" className="sm:col-span-2 lg:col-span-5"><input value={line.description} onChange={(event) => setLineValue(index, 'description', event.target.value)} placeholder="Background verification service" maxLength={500} required className={fieldClass} /></FormField>
-                    <FormField label="Link BGV case (optional)" className="lg:col-span-3"><select value={line.caseId} disabled={!form.clientId || casesLoading} onChange={(event) => {
-                      const selectedCase = cases.find((item) => item.id === event.target.value);
+                    <FormField label="Link BGV case (optional)" className="lg:col-span-3"><select value={line.caseId} disabled={!form.clientId || casesLoading || (!editingId && !completedSearchDone)} onChange={(event) => {
+                      const selectedCase = selectableCases.find((item) => item.id === event.target.value);
+                      if (selectedCase && isCandidateLinkedOnAnotherLine(selectedCase, index)) {
+                        setFormError('This candidate is already included on another invoice line.');
+                        return;
+                      }
                       setLines((current) => current.map((entry, lineIndex) => lineIndex === index ? { ...entry, caseId: event.target.value, candidateName: selectedCase?.candidateName || '', description: selectedCase ? selectedCase.caseNumber : entry.description } : entry));
-                    }} className={fieldClass}><option value="">No case link</option>{cases.map((item) => <option key={item.id} value={item.id}>{item.caseNumber} · {item.candidateName}</option>)}</select></FormField>
-                    <FormField label="Individual / candidate" className="lg:col-span-4"><input value={line.candidateName} onChange={(event) => setLineValue(index, 'candidateName', event.target.value)} placeholder={linkedCase?.candidateName || 'Optional'} maxLength={255} className={fieldClass} /></FormField>
+                      if (!editingId) {
+                        setSelectedCompletedCaseIds((current) => [
+                          ...current.filter((id) => id !== line.caseId && id !== event.target.value),
+                          ...(selectedCase && completedCases.some((item) => item.id === selectedCase.id) ? [selectedCase.id] : []),
+                        ]);
+                      }
+                      setFormError('');
+                    }} className={fieldClass}><option value="">No case link</option>{selectableCases.map((item) => <option key={item.id} value={item.id} disabled={isCandidateLinkedOnAnotherLine(item, index)}>{item.caseNumber} · {item.candidateName}</option>)}</select></FormField>
+                    <FormField label="Individual / candidate" className="lg:col-span-4"><input value={line.candidateName} onChange={(event) => setCandidateName(index, event.target.value)} placeholder={linkedCase?.candidateName || 'Optional'} maxLength={255} className={fieldClass} /></FormField>
                     <FormField label="Service / HSN code" className="lg:col-span-3"><input value={line.serviceCode} onChange={(event) => setLineValue(index, 'serviceCode', event.target.value)} placeholder="Optional" maxLength={30} className={fieldClass} /></FormField>
                     <FormField label="Quantity" className="lg:col-span-2"><input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => setLineValue(index, 'quantity', event.target.value)} required className={fieldClass} /></FormField>
                     <FormField label={`Rate (${form.currency})`} className="lg:col-span-3"><input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => setLineValue(index, 'unitPrice', event.target.value)} required className={fieldClass} /></FormField>
@@ -650,6 +932,7 @@ export default function InvoicesPage() {
                   </div>
                 </div>;
               })}
+              {!lines.length && <p className="rounded-md border border-dashed border-[var(--border)] px-4 py-5 text-center text-sm text-[var(--muted)]">No line items yet. Select completed cases above or click Add line.</p>}
             </section>
 
             <section className="grid gap-5 border-t border-[var(--border)] pt-5 lg:grid-cols-[1fr_300px]">

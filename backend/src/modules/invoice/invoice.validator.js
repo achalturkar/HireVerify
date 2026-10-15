@@ -18,6 +18,12 @@ const listValidator = [
   query('dueDateTo').optional().isISO8601({ strict: true }),
 ];
 
+const completedCasesValidator = [
+  query('clientId').isUUID(),
+  query('completedFrom').isISO8601({ strict: true }),
+  query('completedTo').isISO8601({ strict: true }),
+];
+
 const invoiceBody = [
   body('clientId').isUUID(),
   body('clientAddress').optional({ values: 'falsy' }).isString().trim().isLength({ max: 1000 }),
@@ -34,7 +40,7 @@ const invoiceBody = [
   body('purchaseOrderNumber').optional({ values: 'falsy' }).isString().trim().isLength({ max: 100 }),
   body('notes').optional({ values: 'falsy' }).isString().isLength({ max: 3000 }),
   body('terms').optional({ values: 'falsy' }).isString().isLength({ max: 3000 }),
-  body('items').isArray({ min: 1, max: 100 }),
+  body('items').isArray({ min: 1, max: 500 }),
   body('items.*.description').isString().trim().isLength({ min: 1, max: 500 }),
   body('items.*.quantity').isFloat({ gt: 0, max: 100000 }),
   body('items.*.unitPrice').isFloat({ min: 0, max: 100000000 }),
@@ -75,4 +81,4 @@ const paymentValidator = [
   body('notes').optional({ values: 'falsy' }).isString().isLength({ max: 1000 }),
 ];
 
-module.exports = { idParamValidator, listValidator, invoiceBody, profileValidator, emailValidator, paymentValidator, statusValidator };
+module.exports = { idParamValidator, listValidator, completedCasesValidator, invoiceBody, profileValidator, emailValidator, paymentValidator, statusValidator };

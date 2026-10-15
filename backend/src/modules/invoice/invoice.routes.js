@@ -12,6 +12,7 @@ router.use(authenticate);
 router.get('/platform', requireRole({ superAdmin: true }), authorize('invoice.view'), validate(v.listValidator), controller.listPlatform);
 router.get('/profile', authorize('invoice.view'), controller.getProfile);
 router.put('/profile', authorize('invoice.update'), validate(v.profileValidator), controller.saveProfile);
+router.get('/completed-cases', authorize('invoice.create'), validate(v.completedCasesValidator), controller.listCompletedCases);
 router.get('/cases', authorize('invoice.view'), controller.listCases);
 router.get('/', authorize('invoice.view'), validate(v.listValidator), controller.list);
 router.post('/', authorize('invoice.create'), validate(v.invoiceBody), controller.create);

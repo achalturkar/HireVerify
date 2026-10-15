@@ -1,4 +1,5 @@
 import type { CandidateFormConfig, ClientPortalPermission } from '@/src/types/client';
+import { ApiError, authFetch } from './http';
 
 const API_BASE = process.env.NEXT_PUBLIC_API ?? '/api/v1';
 
@@ -88,11 +89,124 @@ export interface PortalPage<T> {
   totalPages: number;
 }
 
+export interface PortalDashboardSummary {
+  permissions: { candidates: boolean; cases: boolean; reports: boolean; invoices: boolean };
+  counts: {
+    candidates: number | null;
+    cases: number | null;
+    openCases: number | null;
+    completedCases: number | null;
+    reports: number | null;
+    invoices: number | null;
+  };
+  monthlyActivity: { key: string; month: string; candidates?: number; cases?: number; invoices?: number }[];
+  recentCases: {
+    id: string;
+    caseNumber: string;
+    status: string;
+    createdAt: string;
+    candidate: PortalCase['candidate'];
+  }[];
+  recentReports: {
+    id: string;
+    caseNumber: string;
+    completedAt: string;
+    candidate: PortalCase['candidate'];
+  }[];
+  recentInvoices: Pick<PortalInvoice, 'id' | 'invoiceNumber' | 'status' | 'invoiceDate' | 'currency' | 'total'>[];
+}
+
+export interface PortalListFilters {
+  search?: string;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export interface PortalInvoice {
+  id: string;
+  invoiceNumber: string;
+  status: string;
+  invoiceDate: string;
+  dueDate: string;
+  currency: string;
+  total: number;
+  amountPaid: number;
+  balanceDue: number;
+}
+
+export type ClientRequestStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+export type ClientRequestCategory = 'ACCOUNT' | 'CANDIDATE' | 'CASE' | 'REPORT' | 'INVOICE' | 'TECHNICAL_SUPPORT' | 'OTHER';
+
+export interface ClientRequest {
+  id: string;
+  clientId: string;
+  client: { id: string; name: string; clientCode: string };
+  category: ClientRequestCategory;
+  subject: string;
+  description: string;
+  status: ClientRequestStatus;
+  adminResponse: string | null;
+  respondedAt: string | null;
+  respondedBy: { id: string; firstName: string; lastName: string } | null;
+  submittedBy: { id: string; firstName: string; lastName: string; email: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClientRequestPage {
+  items: ClientRequest[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+}
+
 export class ClientPortalApiError extends Error {
   constructor(message: string, public status: number) {
     super(message);
     this.name = 'ClientPortalApiError';
   }
+}
+
+async function requestClientRequests<T>(path: string, token: string | null, init: RequestInit = {}): Promise<T> {
+  try {
+    const body = await authFetch(`/client-requests${path}`, token, init);
+    return body?.data as T;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw new ClientPortalApiError(error.message, error.status);
+    }
+    throw error;
+  }
+}
+
+export async function listClientRequests(
+  token: string | null,
+  filters: { page?: number; status?: string; search?: string } = {},
+): Promise<ClientRequestPage> {
+  const query = new URLSearchParams({ page: String(filters.page ?? 1), limit: '20' });
+  if (filters.status) query.set('status', filters.status);
+  if (filters.search) query.set('search', filters.search);
+  return requestClientRequests<ClientRequestPage>(`?${query.toString()}`, token);
+}
+
+export async function createClientRequest(
+  payload: Pick<ClientRequest, 'category' | 'subject' | 'description'>,
+  token: string | null,
+): Promise<ClientRequest> {
+  return requestClientRequests<ClientRequest>('', token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateClientRequest(
+  id: string,
+  payload: { status?: ClientRequestStatus; adminResponse?: string },
+  token: string | null,
+): Promise<ClientRequest> {
+  return requestClientRequests<ClientRequest>(`/${id}`, token, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
 }
 
 async function request<T>(
@@ -118,9 +232,13 @@ async function request<T>(
   return body?.data as T;
 }
 
-async function list<T>(path: string, page: number, token: string | null): Promise<PortalPage<T>> {
+async function list<T>(path: string, page: number, token: string | null, filters: PortalListFilters = {}): Promise<PortalPage<T>> {
+  const query = new URLSearchParams({ page: String(page), limit: '20' });
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) query.set(key, value);
+  });
   const result = await request<{ data: T[]; meta?: { total?: number; totalPages?: number } }>(
-    `${path}?page=${page}&limit=10`,
+    `${path}?${query.toString()}`,
     token,
   );
   return {
@@ -130,8 +248,13 @@ async function list<T>(path: string, page: number, token: string | null): Promis
   };
 }
 
-export const listPortalCandidates = (page: number, token: string | null) =>
-  list<PortalCandidate>('/candidates', page, token);
+export async function getPortalDashboard(token: string | null): Promise<PortalDashboardSummary> {
+  const result = await request<{ data: PortalDashboardSummary }>('/dashboard', token);
+  return result.data;
+}
+
+export const listPortalCandidates = (page: number, token: string | null, filters?: PortalListFilters) =>
+  list<PortalCandidate>('/candidates', page, token, filters);
 
 export async function getPortalCandidateFormConfig(token: string | null): Promise<CandidateFormConfig> {
   const result = await request<{ data: CandidateFormConfig }>('/candidate-form-config', token);
@@ -166,16 +289,33 @@ export async function setPortalCandidateAccess(id: string, locked: boolean, toke
   return result.data;
 }
 
-export const listPortalCases = (page: number, token: string | null) =>
-  list<PortalCase>('/cases', page, token);
+export const listPortalCases = (page: number, token: string | null, filters?: PortalListFilters) =>
+  list<PortalCase>('/cases', page, token, filters);
 
 export async function getPortalCase(id: string, token: string | null): Promise<PortalCaseDetail> {
   const result = await request<{ data: PortalCaseDetail }>(`/cases/${id}`, token);
   return result.data;
 }
 
-export const listPortalReports = (page: number, token: string | null) =>
-  list<PortalReport>('/reports', page, token);
+export const listPortalReports = (page: number, token: string | null, filters?: PortalListFilters) =>
+  list<PortalReport>('/reports', page, token, filters);
+
+export const listPortalInvoices = (page: number, token: string | null, filters?: PortalListFilters) =>
+  list<PortalInvoice>('/invoices', page, token, filters);
+
+export async function downloadPortalInvoice(id: string, token: string | null): Promise<Blob> {
+  const response = await fetch(`${API_BASE}/client-portal/invoices/${id}/pdf`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message = typeof body?.message === 'string'
+      ? body.message
+      : body?.message?.message ?? `Could not download invoice (${response.status})`;
+    throw new ClientPortalApiError(message, response.status);
+  }
+  return response.blob();
+}
 
 export async function savePortalCandidate(
   payload: Record<string, string | number | null>,

@@ -29,8 +29,11 @@ export interface InvoiceProfile {
 
 export interface InvoiceCase {
   id: string;
+  candidateId: string;
   caseNumber: string;
   status: string;
+  isBilled?: boolean;
+  completedAt?: string | null;
   packageName: string | null;
   candidateName: string;
   candidate: { firstName: string; lastName: string; candidateCode: string };
@@ -208,6 +211,19 @@ export async function saveInvoiceProfile(profile: Omit<InvoiceProfile, 'id' | 'n
 
 export async function listInvoiceCases(clientId: string, token: string | null): Promise<InvoiceCase[]> {
   const result = await request<{ data: InvoiceCase[] }>(`/invoices/cases${query({ clientId })}`, token);
+  return result.data;
+}
+
+export async function listCompletedInvoiceCases(
+  clientId: string,
+  completedFrom: string,
+  completedTo: string,
+  token: string | null,
+): Promise<InvoiceCase[]> {
+  const result = await request<{ data: InvoiceCase[] }>(
+    `/invoices/completed-cases${query({ clientId, completedFrom, completedTo })}`,
+    token,
+  );
   return result.data;
 }
 

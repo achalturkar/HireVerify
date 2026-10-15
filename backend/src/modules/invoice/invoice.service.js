@@ -86,11 +86,52 @@ const listCases = async ({ companyId, clientId }) => {
   if (!client) throw new NotFoundError('Client not found');
   const cases = await prisma.bGVCase.findMany({
     where: { companyId, clientId },
-    select: { id: true, caseNumber: true, status: true, packageName: true, candidate: { select: { firstName: true, lastName: true, candidateCode: true } } },
+    select: { id: true, candidateId: true, caseNumber: true, status: true, packageName: true, candidate: { select: { firstName: true, lastName: true, candidateCode: true } } },
     orderBy: { createdAt: 'desc' },
     take: 250,
   });
   return cases.map((item) => ({ ...item, candidateName: `${item.candidate.firstName} ${item.candidate.lastName}`.trim() }));
+};
+
+const listCompletedCases = async ({ companyId, clientId, completedFrom, completedTo }) => {
+  const client = await prisma.client.findFirst({
+    where: { id: clientId, companyId, isDeleted: false },
+    select: { id: true },
+  });
+  if (!client) throw new NotFoundError('Client not found');
+
+  const billedItems = await prisma.invoiceItem.findMany({
+    where: {
+      caseId: { not: null },
+      invoice: { companyId, clientId, status: { not: 'VOID' } },
+    },
+    select: { caseId: true },
+    distinct: ['caseId'],
+  });
+  const billedCaseIds = billedItems.map((item) => item.caseId).filter(Boolean);
+  const cases = await prisma.bGVCase.findMany({
+    where: {
+      companyId,
+      clientId,
+      status: 'COMPLETED',
+      completedAt: { gte: toDate(completedFrom), lte: new Date(`${completedTo}T23:59:59.999Z`) },
+    },
+    select: {
+      id: true,
+      candidateId: true,
+      caseNumber: true,
+      status: true,
+      packageName: true,
+      completedAt: true,
+      candidate: { select: { firstName: true, lastName: true, candidateCode: true } },
+    },
+    orderBy: [{ completedAt: 'asc' }, { caseNumber: 'asc' }],
+  });
+  return cases.map((item) => ({
+    ...item,
+    candidateName: `${item.candidate.firstName} ${item.candidate.lastName}`.trim(),
+    isBilled: billedCaseIds.includes(item.id),
+  }));
 };
 
 const calculateItems = (items) => {
@@ -147,10 +188,31 @@ const getParties = async ({ companyId, clientId }) => {
 const buildInvoiceData = async ({ payload, companyId, clientId }) => {
   const { company, client, admin } = await getParties({ companyId, clientId });
   if (toDate(payload.dueDate) < toDate(payload.invoiceDate)) throw new BadRequestError('Due date cannot be before invoice date.');
-  const itemCaseIds = [...new Set(payload.items.map((item) => item.caseId).filter(Boolean))];
+  const linkedCaseIds = payload.items.map((item) => item.caseId).filter(Boolean);
+  const itemCaseIds = [...new Set(linkedCaseIds)];
+  if (itemCaseIds.length !== linkedCaseIds.length) {
+    throw new BadRequestError('A BGV case can only be included once on an invoice.');
+  }
+  const manualCandidateNames = payload.items
+    .filter((item) => !item.caseId)
+    .map((item) => item.candidateName?.trim().toLocaleLowerCase())
+    .filter(Boolean);
+  if (new Set(manualCandidateNames).size !== manualCandidateNames.length) {
+    throw new BadRequestError('A candidate can only be included once on an invoice.');
+  }
   if (itemCaseIds.length) {
-    const ownedCases = await prisma.bGVCase.findMany({ where: { id: { in: itemCaseIds }, companyId, clientId }, select: { id: true } });
+    const ownedCases = await prisma.bGVCase.findMany({
+      where: { id: { in: itemCaseIds }, companyId, clientId },
+      select: { id: true, candidateId: true, candidate: { select: { firstName: true, lastName: true } } },
+    });
     if (ownedCases.length !== itemCaseIds.length) throw new BadRequestError('Every linked BGV case must belong to the selected client.');
+    if (new Set(ownedCases.map((item) => item.candidateId)).size !== ownedCases.length) {
+      throw new BadRequestError('A candidate can only be included once on an invoice.');
+    }
+    const linkedCandidateNames = new Set(ownedCases.map((item) => `${item.candidate.firstName} ${item.candidate.lastName}`.trim().toLocaleLowerCase()));
+    if (manualCandidateNames.some((name) => linkedCandidateNames.has(name))) {
+      throw new BadRequestError('A candidate can only be included once on an invoice.');
+    }
   }
   const { items, totals } = calculateItems(payload.items);
   const anyTaxable = items.some((item) => item.taxAmount > 0);
@@ -439,4 +501,4 @@ const changeStatus = async ({ id, status, companyId, currentUser }) => {
   return getById({ id, companyId });
 };
 
-module.exports = { getProfile, saveProfile, listCases, list, getById, create, update, remove, recordPayment, markSent, voidInvoice, changeStatus };
+module.exports = { getProfile, saveProfile, listCases, listCompletedCases, list, getById, create, update, remove, recordPayment, markSent, voidInvoice, changeStatus };

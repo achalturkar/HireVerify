@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import { Building2, FileCheck2, FileText, KeyRound, LogOut, Menu, Users, X } from 'lucide-react';
+import { Building2, FileCheck2, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageSquareText, Receipt, Users, X } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { ThemeToggle } from '@/src/components/layout/theme-toggle';
 import { hasPortalPermission } from '@/src/lib/api/client-portal';
@@ -12,9 +12,12 @@ import { resolveLogoUrl } from '@/src/lib/logo';
 import type { ClientPortalPermission } from '@/src/types/client';
 
 const sections: { id: string; label: string; icon: typeof Users; permission?: ClientPortalPermission }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'candidates', label: 'Candidates', icon: Users, permission: 'clientportal.candidates.view' },
   { id: 'cases', label: 'BGV cases', icon: FileCheck2, permission: 'clientportal.cases.view' },
   { id: 'reports', label: 'Reports', icon: FileText, permission: 'clientportal.reports.view' },
+  { id: 'invoices', label: 'Invoices', icon: Receipt, permission: 'clientportal.invoices.view' },
+  { id: 'requests', label: 'My requests', icon: MessageSquareText },
 ];
 
 function Brand({ src, name, fallback }: { src: string | null | undefined; name: string; fallback: ReactNode }) {
@@ -37,7 +40,7 @@ export default function ClientPortalLayout({ children }: { children: ReactNode }
   const client = user?.client;
   const company = user?.company;
   const links = sections.filter((item) => !item.permission || hasPortalPermission(permissions, item.permission));
-  const section = pathname.split('/')[2] || links[0]?.id || 'candidates';
+  const section = pathname.split('/')[2] || 'dashboard';
   const configuredColor = company?.primaryColor || '#3FDCC0';
   const primaryColor = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(configuredColor) ? configuredColor : '#3FDCC0';
   const normalizedColor = primaryColor.length === 4 ? primaryColor.slice(1).split('').map((part) => part + part).join('') : primaryColor.slice(1);
@@ -57,7 +60,7 @@ export default function ClientPortalLayout({ children }: { children: ReactNode }
       <nav aria-label="Client portal navigation" className="flex-1 space-y-1 p-3">
         <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">Workspace</p>
         {links.map(({ id, label, icon: Icon }) => (
-          <Link key={id} href={`/client-portal/${id}`} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${section === id && !pathname.match(/\/(candidates|cases)\/[^/]+/) ? 'bg-[var(--primary)]/10 text-[var(--primary)]' : 'text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]'}`}>
+          <Link key={id} href={id === 'dashboard' ? '/client-portal' : `/client-portal/${id}`} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${section === id && !pathname.match(/\/(candidates|cases)\/[^/]+/) ? 'bg-[var(--primary)]/10 text-[var(--primary)]' : 'text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]'}`}>
             <Icon size={17} />{label}
           </Link>
         ))}

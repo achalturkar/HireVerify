@@ -53,7 +53,7 @@ export interface UpdateUserPayload {
 export interface UpdateProfilePayload {
   firstName?: string;
   lastName?: string;
-  phone?: string;
+  phone?: string | null;
 }
 
 export interface ChangePasswordPayload {

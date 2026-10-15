@@ -20,6 +20,7 @@ import {
   Receipt,
   UserRound,
   Megaphone,
+  MessageSquareText,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { resolveLogoUrl } from '@/src/lib/logo';
@@ -47,6 +48,7 @@ const menuGroups: { label: string; items: CompanyMenuItem[] }[] = [
     label: 'Engagement',
     items: [
       { name: 'Clients', href: '/company/clients', icon: Users, permission: 'client.view' },
+      { name: 'Client requests', href: '/company/client-requests', icon: MessageSquareText, permission: 'client.view' },
       { name: 'Candidates', href: '/company/candidates', icon: Contact, permission: 'candidate.view' },
     ],
   },

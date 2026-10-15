@@ -8,6 +8,7 @@ const { authorize } = require('../../middleware/authorize.middleware');
 const { validate } = require('../../middleware/validate.middleware');
 const { ForbiddenError } = require('../../utils/errors');
 const candidatePortalService = require('../candidate-portal/candidate-portal.service');
+const invoiceValidator = require('../invoice/invoice.validator');
 
 const router = express.Router();
 router.use(authenticate, (req, _res, next) => {
@@ -22,6 +23,14 @@ const listValidator = {
     page: Joi.number().integer().min(1),
     limit: Joi.number().integer().min(1).max(100),
     search: Joi.string().max(100).allow(''),
+    status: Joi.string().valid(
+      'PENDING', 'INVITED', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'ON_HOLD',
+      'DRAFT', 'INITIATED', 'CONSENT_PENDING', 'UNDER_REVIEW', 'CANCELLED',
+      'CLEAR', 'MINOR_DISCREPANCY', 'MAJOR_DISCREPANCY', 'UNABLE_TO_VERIFY', 'REQUIRES_REVIEW',
+      'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE',
+    ).allow(''),
+    dateFrom: Joi.date().iso(),
+    dateTo: Joi.date().iso().min(Joi.ref('dateFrom')),
   }),
 };
 const candidateFields = {
@@ -78,6 +87,7 @@ const portalAccessValidator = {
 };
 
 router.get('/candidate-form-config', authorize('clientportal.candidates.view'), controller.getCandidateFormConfig);
+router.get('/dashboard', controller.getDashboard);
 router.get('/candidates', authorize('clientportal.candidates.view'), validate(listValidator), controller.listCandidates);
 router.post('/candidates', authorize('clientportal.candidates.create'), validate(createCandidateValidator), controller.createCandidate);
 router.put('/candidates/:id', authorize('clientportal.candidates.update'), validate(updateCandidateValidator), controller.updateCandidate);
@@ -90,5 +100,7 @@ router.get('/cases', authorize('clientportal.cases.view'), validate(listValidato
 router.get('/cases/:id', authorize('clientportal.cases.view'), validate(reportValidator), controller.getCase);
 router.get('/reports', authorize('clientportal.reports.view'), validate(listValidator), controller.listReports);
 router.get('/reports/:id/download', authorize('clientportal.reports.download'), validate(reportValidator), controller.downloadReport);
+router.get('/invoices', authorize('clientportal.invoices.view'), validate(listValidator), controller.listInvoices);
+router.get('/invoices/:id/pdf', authorize('clientportal.invoices.view'), validate(invoiceValidator.idParamValidator), controller.downloadInvoice);
 
 module.exports = router;

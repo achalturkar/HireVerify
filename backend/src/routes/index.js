@@ -26,6 +26,7 @@ const verifierRoutes = require('../modules/verifier/verifier.routes');
 const verificationModeRoutes = require('../modules/verification-mode/verification-mode.routes');
 const marketingRoutes = require('../modules/marketing/marketing.routes');
 const clientPortalRoutes = require('../modules/client-portal/client-portal.routes');
+const clientRequestRoutes = require('../modules/client-request/client-request.routes');
 
 const router = express.Router();
 
@@ -44,6 +45,7 @@ router.use('/platform/branding', platformBrandingRoutes);
 router.use('/platform/locations', platformLocationsRoutes);
 router.use('/clients', clientRoutes);
 router.use('/client-portal', clientPortalRoutes);
+router.use('/client-requests', clientRequestRoutes);
 
 
 // NEW

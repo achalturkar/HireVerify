@@ -41,6 +41,7 @@ const PORTAL_PERMISSION_OPTIONS: { key: ClientPortalPermission; label: string; d
   { key: 'clientportal.candidates.invite', label: 'Invite candidates', description: 'Send candidates a secure link to complete their profile. Also enables candidate viewing.' },
   { key: 'clientportal.candidates.portal.manage', label: 'Manage candidate portal access', description: 'Lock and unlock candidate portal links. Also enables candidate viewing.' },
   { key: 'clientportal.cases.view', label: 'View case progress', description: 'View BGV case numbers, statuses and outcomes.' },
+  { key: 'clientportal.invoices.view', label: 'View invoices', description: 'View issued invoices, payment status, amounts, and download invoice PDFs.' },
   { key: 'clientportal.reports.view', label: 'View completed reports', description: 'View completed report listings.' },
   { key: 'clientportal.reports.download', label: 'Download reports', description: 'Download completed PDFs. Also enables report listing.' },
 ];

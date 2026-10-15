@@ -76,6 +76,7 @@ model Company {
   impersonationSessions ImpersonationSession[]
   marketingLeads      MarketingLead[]
   marketingCampaigns  MarketingCampaign[]
+  clientRequests      ClientRequest[]
 
   @@index([status])
   @@index([isDeleted])
@@ -194,6 +195,8 @@ model User {
   refreshTokens RefreshToken[]
 
   auditLogs AuditLog[]
+  submittedClientRequests ClientRequest[] @relation("ClientRequestSubmitter")
+  respondedClientRequests ClientRequest[] @relation("ClientRequestResponder")
   startedImpersonationSessions ImpersonationSession[] @relation("ImpersonationActor")
   targetedImpersonationSessions ImpersonationSession[] @relation("ImpersonationTarget")
 
@@ -345,11 +348,47 @@ model Client {
   bgvCases   BGVCase[]
   reports    BGVReport[]
   invoices   Invoice[]
+  requests   ClientRequest[]
 
   @@index([companyId])
   @@index([status])
   @@index([companyId, isDeleted])
   @@map("clients")
+}
+
+enum ClientRequestStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model ClientRequest {
+  id String @id @default(uuid()) @db.Uuid
+
+  companyId String @map("company_id") @db.Uuid
+  clientId String @map("client_id") @db.Uuid
+  submittedById String? @map("submitted_by_id") @db.Uuid
+  respondedById String? @map("responded_by_id") @db.Uuid
+
+  category String @db.VarChar(50)
+  subject String @db.VarChar(180)
+  description String
+  status ClientRequestStatus @default(OPEN)
+  adminResponse String? @map("admin_response")
+  respondedAt DateTime? @map("responded_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  submittedBy User? @relation("ClientRequestSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  respondedBy User? @relation("ClientRequestResponder", fields: [respondedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, createdAt])
+  @@index([clientId, createdAt])
+  @@map("client_requests")
 }
 
 // ============================================================

@@ -10,11 +10,6 @@ const findById = (id, companyId, { includeDeleted = false } = {}) =>
     include: { client: { select: { id: true, name: true, clientCode: true, contactEmail: true, contactPhone: true } }, _count: { select: { bgvCases: true } }, documents: true, portalInvitation: { select: { activatedAt: true, lastSentAt: true, expiresAt: true, revokedAt: true, reminderCount: true, lastRemindedAt: true } } },
   });
 
-const findByEmail = (companyId, clientId, email) =>
-  prisma.candidate.findFirst({
-    where: { companyId, clientId, email: { equals: email, mode: 'insensitive' }, isDeleted: false },
-  });
-
 const update = (id, data) => prisma.candidate.update({ where: { id }, data });
 
 const softDelete = (id) => prisma.candidate.update({
@@ -22,12 +17,13 @@ const softDelete = (id) => prisma.candidate.update({
   data: { isDeleted: true, deletedAt: new Date() },
 });
 
-const list = async ({ companyId, skip, limit, search, clientId, status, sortBy, sortOrder, includeDeleted }) => {
+const list = async ({ companyId, skip, limit, search, clientId, status, dateFrom, dateTo, sortBy, sortOrder, includeDeleted }) => {
   const where = {
     companyId,
     ...(includeDeleted ? {} : { isDeleted: false }),
     ...(clientId ? { clientId } : {}),
     ...(status ? { status } : {}),
+    ...(dateFrom || dateTo ? { createdAt: { ...(dateFrom ? { gte: new Date(dateFrom) } : {}), ...(dateTo ? { lte: new Date(`${String(dateTo).slice(0, 10)}T23:59:59.999Z`) } : {}) } } : {}),
     ...(search ? {
       OR: [
         { candidateCode: { contains: search, mode: 'insensitive' } },
@@ -53,4 +49,4 @@ const list = async ({ companyId, skip, limit, search, clientId, status, sortBy, 
   return { items, total };
 };
 
-module.exports = { create, findById, findByEmail, update, softDelete, list };
+module.exports = { create, findById, update, softDelete, list };

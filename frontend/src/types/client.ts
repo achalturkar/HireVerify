@@ -130,6 +130,7 @@ export interface UpdateClientPayload {
 
 export type ClientPortalPermission =
   | 'clientportal.cases.view'
+  | 'clientportal.invoices.view'
   | 'clientportal.reports.view'
   | 'clientportal.reports.download'
   | 'clientportal.candidates.view'

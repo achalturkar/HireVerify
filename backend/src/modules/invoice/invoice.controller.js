@@ -17,6 +17,24 @@ const listCases = asyncHandler(async (req, res) => {
   if (!req.query.clientId) throw new BadRequestError('Select a client first.');
   return success(res, { message: 'Cases for client', data: await service.listCases({ companyId: req.user.companyId, clientId: req.query.clientId }) });
 });
+const listCompletedCases = asyncHandler(async (req, res) => {
+  const { clientId, completedFrom, completedTo } = req.query;
+  if (!clientId || !completedFrom || !completedTo) {
+    throw new BadRequestError('Select a client and completion date range.');
+  }
+  if (completedFrom > completedTo) {
+    throw new BadRequestError('The completion start date must be on or before the end date.');
+  }
+  return success(res, {
+    message: 'Completed cases',
+    data: await service.listCompletedCases({
+      companyId: req.user.companyId,
+      clientId,
+      completedFrom,
+      completedTo,
+    }),
+  });
+});
 const list = asyncHandler(async (req, res) => {
   const pagination = parsePagination(req.query);
   const result = await service.list({ companyId: req.user.companyId, query: { ...pagination, search: req.query.search, clientId: req.query.clientId, status: req.query.status, currency: req.query.currency, invoiceDateFrom: req.query.invoiceDateFrom, invoiceDateTo: req.query.invoiceDateTo, dueDateFrom: req.query.dueDateFrom, dueDateTo: req.query.dueDateTo } });
@@ -87,4 +105,4 @@ const changeStatus = asyncHandler(async (req, res) => {
   return success(res, { message: `Invoice status changed to ${invoice.status}.`, data: invoice });
 });
 
-module.exports = { getProfile, saveProfile, listCases, list, listPlatform, getById, create, update, remove, downloadPdf, send, recordPayment, voidInvoice, changeStatus };
+module.exports = { getProfile, saveProfile, listCases, listCompletedCases, list, listPlatform, getById, create, update, remove, downloadPdf, send, recordPayment, voidInvoice, changeStatus };
