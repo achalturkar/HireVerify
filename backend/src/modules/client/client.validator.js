@@ -176,6 +176,35 @@ const updateValidator = [
     .isIn(['ACTIVE', 'INACTIVE']),
 ];
 
+const subclientFieldValidators = (isUpdate = false) => [
+  body('name').if(() => !isUpdate).trim().notEmpty().isLength({ min: 2, max: 255 }),
+  body('name').if(() => isUpdate).optional({ values: 'falsy' }).trim().isLength({ min: 2, max: 255 }),
+  body('clientCode').if(() => !isUpdate).trim().notEmpty().isLength({ min: 2, max: 50 }),
+  body('clientCode').if(() => isUpdate).optional({ values: 'falsy' }).trim().isLength({ min: 2, max: 50 }),
+  body('industry').optional({ values: 'falsy' }).isLength({ max: 150 }),
+  body('contactName').optional({ values: 'falsy' }).isLength({ max: 150 }),
+  body('contactEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
+  body('contactPhone').optional({ values: 'falsy' }).isLength({ max: 50 }),
+  body('gstNumber').optional({ values: 'falsy' }).isLength({ max: 30 }),
+  body('panNumber').optional({ values: 'falsy' }).isLength({ max: 20 }),
+  body('addressLine1').optional({ values: 'falsy' }).isLength({ max: 500 }),
+  body('addressLine2').optional({ values: 'falsy' }).isLength({ max: 500 }),
+  body('city').optional({ values: 'falsy' }).isLength({ max: 100 }),
+  body('state').optional({ values: 'falsy' }).isLength({ max: 100 }),
+  body('country').optional({ values: 'falsy' }).isLength({ max: 100 }),
+  body('postalCode').optional({ values: 'falsy' }).isLength({ max: 20 }),
+  body('serviceRates').optional().isArray(),
+  body('packageRate').optional().isFloat({ min: 0, max: 100000000 }),
+];
+const createSubclientValidator = [param('id').isUUID(), ...subclientFieldValidators()];
+const updateSubclientValidator = [
+  param('id').isUUID(),
+  param('subclientId').isUUID(),
+  ...subclientFieldValidators(true),
+  body('status').optional().isIn(['ACTIVE', 'INACTIVE']),
+];
+const subclientIdValidator = [param('id').isUUID(), param('subclientId').isUUID()];
+
 /**
  * ID Validation
  */
@@ -249,6 +278,9 @@ const listValidator = [
 module.exports = {
   createValidator,
   updateValidator,
+  createSubclientValidator,
+  updateSubclientValidator,
+  subclientIdValidator,
   idParamValidator,
   portalUsersValidator,
   portalUserIdValidator,

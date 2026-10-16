@@ -86,7 +86,7 @@ export default function ClientPortalAccountPage() {
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace('/login');
-    else if (!user.role.isClientUser) router.replace(user.role.isSuperAdmin ? '/super-admin/dashboard' : '/company/dashboard');
+    else if (!user.role.isClientUser && !user.role.isCompanyAdmin) router.replace(user.role.isSuperAdmin ? '/super-admin/dashboard' : '/company/dashboard');
   }, [loading, router, user]);
 
   const client = user?.client;
@@ -182,7 +182,7 @@ export default function ClientPortalAccountPage() {
     setEditingProfile(false);
   };
 
-  if (loading || !user?.role.isClientUser) {
+  if (loading || (!user?.role.isClientUser && !user?.role.isCompanyAdmin)) {
     return <div className="flex min-h-[50vh] items-center justify-center text-sm text-[var(--muted)]">Loading account information…</div>;
   }
 

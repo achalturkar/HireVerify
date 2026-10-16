@@ -36,6 +36,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { ApiError, activateCandidatePortal, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
+import { formatCandidateName } from '@/src/lib/candidate-name';
 import { listBGVCases } from '@/src/lib/api/bgv';
 import type { BGVCase } from '@/src/types/bgv';
 import type { Candidate } from '@/src/types/candidate';
@@ -46,7 +47,7 @@ import type { Candidate } from '@/src/types/candidate';
 type CandidateDocument = { id: string; documentType: string; documentNumber?: string | null; fileName: string; fileUrl: string; verificationStatus: string; uploadedAt: string };
 type CandidateDetail = Candidate & { documents?: CandidateDocument[] };
 type Tab = 'summary' | 'personal' | 'family' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal';
-type ProfileKey = keyof Pick<Candidate, 'firstName' | 'lastName' | 'email' | 'phone' | 'dateOfBirth' | 'gender' | 'fatherName' | 'motherName' | 'aadhaarNumber' | 'panNumber' | 'uanNumber' | 'passportNumber' | 'drivingLicenseNumber' | 'voterIdNumber' | 'highestQualification' | 'courseName' | 'institutionName' | 'universityName' | 'yearOfPassing' | 'gradeOrPercentage' | 'employeeId' | 'employeeDesignation' | 'employeeDepartment' | 'employmentType' | 'joiningDate' | 'workLocation' | 'currentEmployer' | 'currentAddress' | 'permanentAddress'>;
+type ProfileKey = keyof Pick<Candidate, 'fullName' | 'firstName' | 'middleName' | 'lastName' | 'email' | 'phone' | 'dateOfBirth' | 'gender' | 'fatherName' | 'motherName' | 'aadhaarNumber' | 'panNumber' | 'uanNumber' | 'passportNumber' | 'drivingLicenseNumber' | 'voterIdNumber' | 'highestQualification' | 'courseName' | 'institutionName' | 'universityName' | 'yearOfPassing' | 'gradeOrPercentage' | 'employeeId' | 'employeeDesignation' | 'employeeDepartment' | 'employmentType' | 'joiningDate' | 'workLocation' | 'currentEmployer' | 'currentAddress' | 'permanentAddress'>;
 type ProfileDraft = Record<ProfileKey, string>;
 type PortalState = 'none' | 'active' | 'expiring' | 'expired' | 'locked';
 type Category = 'identity' | 'education' | 'employment' | 'address' | 'other';
@@ -74,7 +75,7 @@ const CATEGORY_TYPES: Record<Exclude<Category, 'other'>, string[]> = {
 const CATEGORY_LABEL: Record<Category, string> = { identity: 'Identity', education: 'Education', employment: 'Employment', address: 'Address', other: 'Other' };
 
 const PROFILE_SECTIONS: { label: string; fields: string[] }[] = [
-  { label: 'Personal', fields: ['firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender'] },
+  { label: 'Personal', fields: ['fullName', 'email', 'phone', 'dateOfBirth', 'gender'] },
   { label: 'Identity', fields: IDENTITY_ITEMS.map((item) => item.fieldKey) },
   { label: 'Education', fields: ['highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage'] },
   { label: 'Employment', fields: ['employeeId', 'currentEmployer', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation'] },
@@ -96,14 +97,14 @@ const humanize = (value: string) => value.replaceAll('_', ' ').toLowerCase().rep
 const isFilled = (value: unknown) => value !== null && value !== undefined && String(value).trim() !== '';
 const valueOrDash = (value: unknown) => (isFilled(value) ? String(value) : 'Not provided');
 const editableProfileFields: ProfileKey[] = [
-  'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName',
+  'fullName', 'firstName', 'middleName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName',
   'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber',
   'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage',
   'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation',
   'currentEmployer', 'currentAddress', 'permanentAddress',
 ];
 const toProfileDraft = (candidate: CandidateDetail): ProfileDraft => Object.fromEntries(
-  editableProfileFields.map((key) => [key, ['dateOfBirth', 'joiningDate'].includes(key) ? String(candidate[key] || '').slice(0, 10) : String(candidate[key] ?? '')]),
+  editableProfileFields.map((key) => [key, key === 'fullName' ? formatCandidateName(candidate) : ['dateOfBirth', 'joiningDate'].includes(key) ? String(candidate[key] || '').slice(0, 10) : String(candidate[key] ?? '')]),
 ) as ProfileDraft;
 
 const parseDate = (value: unknown): Date | null => {
@@ -598,9 +599,9 @@ export default function CandidateDetailPage() {
           <div className="flex items-center gap-4">
             <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[var(--surface-muted)] text-lg font-semibold text-[var(--primary)]" aria-hidden="true">{initials}</span>
             <div className="min-w-0">
-              <h1 className="truncate text-2xl font-semibold">{candidate.firstName} {candidate.lastName}</h1>
+              <h1 className="truncate text-2xl font-semibold">{formatCandidateName(candidate)}</h1>
               <p className="mt-0.5 text-sm text-[var(--muted)]">{candidate.candidateCode}{candidate.email ? `, ${candidate.email}` : ''}{candidate.phone ? `, ${candidate.phone}` : ''}</p>
-              {candidate.client && <p className="mt-0.5 text-xs text-[var(--muted)]">Requested by {candidate.client.name}</p>}
+              {candidate.client && <p className="mt-0.5 text-xs text-[var(--muted)]">Client: {candidate.client.name}{candidate.subclient?.name ? ` · Subclient: ${candidate.subclient.name}` : ''}</p>}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -646,7 +647,7 @@ export default function CandidateDetailPage() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{bgvCase.caseNumber}</p>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    {bgvCase.client?.name || candidate.client?.name || 'Client'} · {humanize(bgvCase.status)}
+                    {bgvCase.client?.name || candidate.client?.name || 'Client'}{bgvCase.subclient?.name ? ` · ${bgvCase.subclient.name}` : ''} · {humanize(bgvCase.status)}
                   </p>
                 </div>
                 <button
@@ -767,7 +768,10 @@ export default function CandidateDetailPage() {
       {tab === 'personal' && (
         <Panel title="Personal information" description="Contact and identity details submitted by the candidate.">
           {profileValues && <EditableFields rows={[
-            { key: 'firstName', label: 'First name' }, { key: 'lastName', label: 'Last name' }, { key: 'email', label: 'Email', type: 'email' },
+            ...(editingProfile
+              ? [{ key: 'fullName' as const, label: 'Full name' }]
+              : [{ key: 'fullName' as const, label: 'Full name' }, { key: 'firstName' as const, label: 'First name' }, { key: 'middleName' as const, label: 'Middle name' }, { key: 'lastName' as const, label: 'Last name' }]),
+            { key: 'email', label: 'Email', type: 'email' },
             { key: 'phone', label: 'Phone' }, { key: 'dateOfBirth', label: 'Date of birth', type: 'date' }, { key: 'gender', label: 'Gender', type: 'gender' },
           ]} editing={editingProfile} values={profileValues} onChange={(key, value) => setProfileValues((current) => current ? { ...current, [key]: value } : current)} />}
         </Panel>

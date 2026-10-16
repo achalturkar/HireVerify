@@ -6,16 +6,50 @@ const controller = require('./client-portal.controller');
 const { authenticate } = require('../../middleware/auth.middleware');
 const { authorize } = require('../../middleware/authorize.middleware');
 const { validate } = require('../../middleware/validate.middleware');
-const { ForbiddenError } = require('../../utils/errors');
+const { ForbiddenError, BadRequestError } = require('../../utils/errors');
+const { prisma } = require('../../common/prisma');
 const candidatePortalService = require('../candidate-portal/candidate-portal.service');
 const invoiceValidator = require('../invoice/invoice.validator');
+const SUBCLIENT_CHECK_TYPES = ['PAN', 'UAN', 'COURT', 'IDENTITY', 'ADDRESS', 'ADDRESS_PHYSICAL', 'EDUCATION', 'EMPLOYMENT', 'GAP', 'REFERENCE', 'CV', 'SOCIAL_MEDIA', 'DOCUMENT', 'DOCUMENT_FORGERY', 'CIBIL', 'TWENTY_SIX_AS', 'POLICE', 'POLICE_RECORD'];
+const COMPANY_ADMIN_PORTAL_PERMISSIONS = [
+  'clientportal.cases.view',
+  'clientportal.invoices.view',
+  'clientportal.reports.view',
+  'clientportal.reports.download',
+  'clientportal.candidates.view',
+  'clientportal.candidates.create',
+  'clientportal.candidates.update',
+  'clientportal.candidates.invite',
+  'clientportal.candidates.portal.manage',
+  'clientportal.subclients.view',
+  'clientportal.subclients.manage',
+];
 
 const router = express.Router();
-router.use(authenticate, (req, _res, next) => {
-  if (!req.user.role?.isClientUser || !req.user.clientId) {
-    return next(new ForbiddenError('Client portal account required.'));
+router.use(authenticate, async (req, _res, next) => {
+  try {
+    if (req.user.role?.isCompanyAdmin) {
+      const selectedClientId = req.get('x-client-portal-client-id') || req.query.portalClientId;
+      if (!selectedClientId) throw new BadRequestError('Select a client to access the client portal.');
+      const { error: clientIdError } = Joi.string().uuid().validate(selectedClientId);
+      if (clientIdError) throw new BadRequestError('Select a valid client to access the client portal.');
+      const client = await prisma.client.findFirst({
+        where: { id: selectedClientId, companyId: req.user.companyId, parentClientId: null, isDeleted: false, status: 'ACTIVE' },
+        select: { id: true, name: true, logoUrl: true, clientCode: true, industry: true, contactName: true, contactEmail: true, contactPhone: true },
+      });
+      if (!client) throw new ForbiddenError('The selected client is unavailable in your company.');
+      req.user.clientId = client.id;
+      req.user.client = client;
+      for (const permission of COMPANY_ADMIN_PORTAL_PERMISSIONS) req.permissions.add(permission);
+      return next();
+    }
+    if (!req.user.role?.isClientUser || !req.user.clientId) {
+      throw new ForbiddenError('Client portal account required.');
+    }
+    return next();
+  } catch (error) {
+    return next(error);
   }
-  return next();
 });
 
 const listValidator = {
@@ -23,6 +57,7 @@ const listValidator = {
     page: Joi.number().integer().min(1),
     limit: Joi.number().integer().min(1).max(100),
     search: Joi.string().max(100).allow(''),
+    subclientId: Joi.alternatives().try(Joi.string().uuid(), Joi.string().valid('none')),
     status: Joi.string().valid(
       'PENDING', 'INVITED', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'ON_HOLD',
       'DRAFT', 'INITIATED', 'CONSENT_PENDING', 'UNDER_REVIEW', 'CANCELLED',
@@ -34,7 +69,10 @@ const listValidator = {
   }),
 };
 const candidateFields = {
+  subclientId: Joi.string().uuid().allow(null),
+  fullName: Joi.string().trim().max(255),
   firstName: Joi.string().trim().min(1).max(100),
+  middleName: Joi.string().trim().max(100).allow(null, ''),
   lastName: Joi.string().trim().min(1).max(100),
   email: Joi.string().email().allow(null, ''),
   phone: Joi.string().max(50).allow(null, ''),
@@ -67,8 +105,6 @@ const candidateFields = {
 const createCandidateValidator = {
   body: Joi.object({
     ...candidateFields,
-    firstName: candidateFields.firstName.required(),
-    lastName: candidateFields.lastName.required(),
   }).required(),
 };
 const updateCandidateValidator = {
@@ -85,9 +121,29 @@ const portalAccessValidator = {
   params: Joi.object({ id: Joi.string().uuid().required() }),
   body: Joi.object({ locked: Joi.boolean().required() }).required(),
 };
+const subclientPayload = Joi.object({
+  name: Joi.string().trim().min(2).max(255).required(),
+  clientCode: Joi.string().trim().min(2).max(50).required(),
+  contactName: Joi.string().max(150).allow(null, ''),
+  contactEmail: Joi.string().email().max(255).allow(null, ''),
+  contactPhone: Joi.string().max(50).allow(null, ''),
+  packageRate: Joi.number().min(0).max(100000000).required(),
+  serviceRates: Joi.array().items(Joi.object({
+    checkType: Joi.string().valid(...SUBCLIENT_CHECK_TYPES).required(),
+    rate: Joi.number().min(0).max(100000000).required(),
+  })).required(),
+});
+const createSubclientValidator = { body: subclientPayload.required() };
+const updateSubclientValidator = {
+  params: Joi.object({ subclientId: Joi.string().uuid().required() }),
+  body: subclientPayload.keys({ status: Joi.string().valid('ACTIVE', 'INACTIVE') }).min(1).required(),
+};
 
 router.get('/candidate-form-config', authorize('clientportal.candidates.view'), controller.getCandidateFormConfig);
 router.get('/dashboard', controller.getDashboard);
+router.get('/subclients', authorize(['clientportal.subclients.view', 'clientportal.subclients.manage'], { any: true }), controller.listSubclients);
+router.post('/subclients', authorize('clientportal.subclients.manage'), validate(createSubclientValidator), controller.createSubclient);
+router.put('/subclients/:subclientId', authorize('clientportal.subclients.manage'), validate(updateSubclientValidator), controller.updateSubclient);
 router.get('/candidates', authorize('clientportal.candidates.view'), validate(listValidator), controller.listCandidates);
 router.post('/candidates', authorize('clientportal.candidates.create'), validate(createCandidateValidator), controller.createCandidate);
 router.put('/candidates/:id', authorize('clientportal.candidates.update'), validate(updateCandidateValidator), controller.updateCandidate);

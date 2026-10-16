@@ -624,6 +624,7 @@ async function buildReport(item) {
   const portalName = 'Hireverify Brainhunt Ventures';
   const companyCode = company?.shortCode || 'BGV';
   const candidate = item.candidate || {};
+  const candidateFullName = candidate.fullName || [candidate.firstName, candidate.lastName].filter(Boolean).join(' ').trim();
   const doc = new PDFDocument({ size: 'A4', margin: 48, autoFirstPage: false });
   doc.reportColors = reportColors(company?.primaryColor);
   const logoAssets = await Promise.all([
@@ -654,10 +655,11 @@ async function buildReport(item) {
   doc.y += 18;
 
   drawBand(doc, 'CANDIDATE VERIFICATION INFORMATION');
-  drawFullRow(doc, 'NAME OF CANDIDATE', `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim());
+  drawFullRow(doc, 'NAME OF CANDIDATE', candidateFullName || '-');
   drawPairedRow(doc, { label: 'GENDER', value: candidate.gender || '-' }, { label: 'DATE OF BIRTH', value: reportDate(candidate.dateOfBirth) || '-' });
   drawPairedRow(doc, { label: 'DATE INITIATED', value: reportDate(item.initiatedAt) || '-' }, { label: 'DATE OF COMPLETION', value: reportDate(item.completedAt) || '-' });
   drawPairedRow(doc, { label: `${companyCode} REF NO`, value: item.caseNumber }, { label: 'CLIENT REF NO', value: item.clientReference || '-' });
+  drawPairedRow(doc, { label: 'CLIENT', value: clientName }, { label: 'SUBCLIENT', value: item.subclient?.name || '-' });
   drawPairedRow(
     doc,
     { label: 'ENTITY / PACKAGE', value: item.packageName || '-' },

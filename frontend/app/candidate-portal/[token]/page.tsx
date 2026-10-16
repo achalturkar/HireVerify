@@ -29,7 +29,9 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import api from '@/services/api';
+import DateInput from '@/src/components/DateInput';
 import CandidateDocumentUpload from '@/src/components/candidate-portal/CandidateDocumentUpload';
+import { formatCandidateName, splitCandidateName } from '@/src/lib/candidate-name';
 import { resolveLogoUrl } from '@/src/lib/logo';
 import { DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
 import type { CandidateFormConfig } from '@/src/types/client';
@@ -93,6 +95,7 @@ const upperAlnum = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, 
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const splitFullName = splitCandidateName;
 
 /* ------------------------------------------------------------------ */
 /* Field configuration                                                 */
@@ -100,8 +103,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 /* accepts. Rename them here if your backend uses different names.     */
 /* ------------------------------------------------------------------ */
 const DETAILS_FIELDS: FieldDef[] = [
-  { key: 'firstName', label: 'First name', required: true },
-  { key: 'lastName', label: 'Last name', required: true },
+  { key: 'fullName', label: 'Full name', required: true, wide: true, validate: (value) => (splitFullName(value) ? null : 'Enter your first and last name.') },
   { key: 'email', label: 'Email address', type: 'email', required: true, validate: (v) => (EMAIL_PATTERN.test(v) ? null : 'Enter a valid email address.') },
   { key: 'phone', label: 'Mobile number', type: 'tel', validate: (v) => (/^[+()\-\s\d]{7,18}$/.test(v) ? null : 'Enter a valid phone number.') },
   { key: 'dateOfBirth', label: 'Date of birth', type: 'date', validate: (v) => (v > todayISO() ? 'Date of birth cannot be in the future.' : null) },
@@ -269,6 +271,12 @@ const requestMessage = (error: unknown, fallback: string): string => {
 const toForm = (candidate: Record<string, string | null>): FormState =>
   Object.fromEntries(
     EDITABLE_KEYS.map((key) => {
+      if (key === 'fullName') return [key, formatCandidateName({
+        fullName: candidate.fullName,
+        firstName: candidate.firstName,
+        middleName: candidate.middleName,
+        lastName: candidate.lastName,
+      })];
       const value = candidate[key];
       if (value === null || value === undefined || value === '') return [key, ''];
       const text = DATE_KEYS.has(key) ? String(value).slice(0, 10) : String(value);
@@ -349,6 +357,15 @@ function Field({ def, value, error, onChange, disabled = false }: { def: FieldDe
           <option value="">Select {def.label.toLowerCase()}</option>
           {def.options.map((option) => <option key={option} value={option}>{humanize(option)}</option>)}
         </select>
+      ) : def.type === 'date' ? (
+        <DateInput
+          value={value}
+          onChange={onChange}
+          className={classes}
+          ariaLabel={def.label}
+          max={def.key === 'dateOfBirth' ? todayISO() : undefined}
+          required={def.required}
+        />
       ) : (
         <input
           id={id}
@@ -788,6 +805,16 @@ export default function CandidatePortalPage() {
     fields.forEach((field) => {
       const raw = (form[field.key] ?? '').trim();
       saved[field.key] = raw;
+      if (field.key === 'fullName') {
+        const name = splitFullName(raw);
+        if (name) {
+          payload.fullName = name.fullName;
+          payload.firstName = name.firstName;
+          payload.middleName = name.middleName || '';
+          payload.lastName = name.lastName;
+        }
+        return;
+      }
       const value = field.normalize ? field.normalize(raw) : raw;
       if (value === '' && DATE_KEYS.has(field.key)) return;
       payload[field.key] = value;
@@ -837,7 +864,14 @@ export default function CandidatePortalPage() {
   const { progress } = portal;
   const totalSteps = Math.max(progress.pendingCount + portal.documents.length + (progress.profileComplete ? 1 : 0) + (progress.consentComplete ? 1 : 0), 1);
   const percent = progress.pendingCount === 0 ? 100 : Math.round(((totalSteps - progress.pendingCount) / totalSteps) * 100);
-  const firstName = portal.candidate.firstName || 'there';
+  const nameParts = splitFullName(form.fullName || '');
+  const firstName = nameParts?.firstName || portal.candidate.firstName || 'there';
+  const candidateName = form.fullName?.trim() || formatCandidateName({
+    fullName: portal.candidate.fullName,
+    firstName: portal.candidate.firstName,
+    middleName: portal.candidate.middleName,
+    lastName: portal.candidate.lastName,
+  });
   const companyLogo = resolveLogoUrl(portal.company.logoUrl);
   const companyMonogram = portal.company.name.trim().split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase() || 'C';
 
@@ -945,6 +979,16 @@ export default function CandidatePortalPage() {
                   ))}
                 </ul>
               )}
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+              <h2 className="text-base font-semibold">Your name</h2>
+              <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Full name</dt><dd className="mt-1 font-medium">{candidateName || 'Not provided'}</dd></div>
+                <div><dt className="text-xs text-slate-500">First name</dt><dd className="mt-1 font-medium">{nameParts?.firstName || 'Not provided'}</dd></div>
+                <div><dt className="text-xs text-slate-500">Middle name</dt><dd className="mt-1 font-medium">{nameParts?.middleName || 'Not provided'}</dd></div>
+                <div><dt className="text-xs text-slate-500">Last name</dt><dd className="mt-1 font-medium">{nameParts?.lastName || 'Not provided'}</dd></div>
+              </dl>
             </section>
 
             <SectionCard icon={ShieldCheck} title="How it works" description="You can come back to this link any time before it expires.">

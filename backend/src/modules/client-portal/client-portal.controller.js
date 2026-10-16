@@ -6,12 +6,56 @@ const { success, created } = require('../../utils/response');
 const { parsePagination, buildMeta } = require('../../utils/pagination');
 const { NotFoundError, BadRequestError, ConflictError } = require('../../utils/errors');
 const candidateService = require('../candidate/candidate.services');
+const clientService = require('../client/client.service');
 const caseService = require('../bgv-case/bgv-case.service');
 const { buildReport, getOverallVerificationStatus } = require('../bgv-case/bgv-report.generator');
 const candidatePortalService = require('../candidate-portal/candidate-portal.service');
 const { IDENTITY_FIELDS, normalizeConfig } = require('../client/candidate-intake-config');
 const { buildInvoicePdf } = require('../invoice/invoice.pdf');
 const invoiceService = require('../invoice/invoice.service');
+
+const subclientDto = (item) => ({
+  id: item.id,
+  parentClientId: item.parentClientId,
+  name: item.name,
+  clientCode: item.clientCode,
+  contactName: item.contactName,
+  contactEmail: item.contactEmail,
+  contactPhone: item.contactPhone,
+  serviceRates: item.serviceRates || [],
+  packageRate: item.packageRate,
+  status: item.status,
+  candidateCount: item.candidateCount ?? 0,
+  bgvCaseCount: item.bgvCaseCount ?? 0,
+});
+
+const listSubclients = asyncHandler(async (req, res) => {
+  const items = await clientService.getSubclients({
+    parentClientId: req.user.clientId,
+    companyId: req.user.companyId,
+  });
+  return success(res, { message: 'Client subclients', data: items.map(subclientDto) });
+});
+
+const createSubclient = asyncHandler(async (req, res) => {
+  const item = await clientService.createSubclient({
+    parentClientId: req.user.clientId,
+    companyId: req.user.companyId,
+    payload: req.body,
+    currentUser: req.user,
+  });
+  return created(res, { message: 'Subclient created successfully.', data: subclientDto(item) });
+});
+
+const updateSubclient = asyncHandler(async (req, res) => {
+  const item = await clientService.updateSubclient({
+    parentClientId: req.user.clientId,
+    subclientId: req.params.subclientId,
+    companyId: req.user.companyId,
+    payload: req.body,
+  });
+  return success(res, { message: 'Subclient updated successfully.', data: subclientDto(item) });
+});
 
 const getCandidateFormConfig = asyncHandler(async (req, res) => {
   const client = await prisma.client.findFirst({
@@ -28,19 +72,21 @@ const getDashboard = asyncHandler(async (req, res) => {
   const canViewCases = req.permissions.has('clientportal.cases.view');
   const canViewReports = req.permissions.has('clientportal.reports.view');
   const canViewInvoices = req.permissions.has('clientportal.invoices.view');
+  const canViewSubclients = req.permissions.has('clientportal.subclients.view') || req.permissions.has('clientportal.subclients.manage');
   const scope = { companyId: req.user.companyId, clientId: req.user.clientId };
   const monthStart = new Date();
   monthStart.setUTCDate(1);
   monthStart.setUTCHours(0, 0, 0, 0);
   monthStart.setUTCMonth(monthStart.getUTCMonth() - 11);
   const invoiceWhere = { ...scope, status: { notIn: ['DRAFT', 'VOID'] } };
-  const [candidateCount, caseCount, openCaseCount, completedCaseCount, reportCount, invoiceCount, chartCandidates, chartCases, chartInvoices, recentCases, recentReports, recentInvoices] = await Promise.all([
+  const [candidateCount, caseCount, openCaseCount, completedCaseCount, reportCount, invoiceCount, subclientCount, chartCandidates, chartCases, chartReports, chartInvoices, recentCases, recentReports, recentInvoices] = await Promise.all([
     canViewCandidates ? prisma.candidate.count({ where: { ...scope, isDeleted: false } }) : null,
     canViewCases ? prisma.bGVCase.count({ where: scope }) : null,
     canViewCases ? prisma.bGVCase.count({ where: { ...scope, status: { notIn: ['COMPLETED', 'CANCELLED'] } } }) : null,
     canViewCases ? prisma.bGVCase.count({ where: { ...scope, status: 'COMPLETED' } }) : null,
     canViewReports ? prisma.bGVCase.count({ where: { ...scope, status: 'COMPLETED' } }) : null,
     canViewInvoices ? prisma.invoice.count({ where: invoiceWhere }) : null,
+    canViewSubclients ? prisma.client.count({ where: { companyId: req.user.companyId, parentClientId: req.user.clientId, isDeleted: false } }) : null,
     canViewCandidates ? prisma.candidate.findMany({
       where: { ...scope, isDeleted: false, createdAt: { gte: monthStart } },
       select: { createdAt: true },
@@ -48,6 +94,10 @@ const getDashboard = asyncHandler(async (req, res) => {
     canViewCases ? prisma.bGVCase.findMany({
       where: { ...scope, createdAt: { gte: monthStart } },
       select: { createdAt: true, status: true },
+    }) : [],
+    canViewReports ? prisma.bGVCase.findMany({
+      where: { ...scope, status: 'COMPLETED', completedAt: { gte: monthStart } },
+      select: { completedAt: true },
     }) : [],
     canViewInvoices ? prisma.invoice.findMany({
       where: { ...invoiceWhere, invoiceDate: { gte: monthStart } },
@@ -62,7 +112,7 @@ const getDashboard = asyncHandler(async (req, res) => {
         caseNumber: true,
         status: true,
         createdAt: true,
-        candidate: { select: { firstName: true, lastName: true, candidateCode: true } },
+        candidate: { select: { fullName: true, firstName: true, middleName: true, lastName: true, candidateCode: true } },
       },
     }) : [],
     canViewReports ? prisma.bGVCase.findMany({
@@ -73,7 +123,7 @@ const getDashboard = asyncHandler(async (req, res) => {
         id: true,
         caseNumber: true,
         completedAt: true,
-        candidate: { select: { firstName: true, lastName: true, candidateCode: true } },
+        candidate: { select: { fullName: true, firstName: true, middleName: true, lastName: true, candidateCode: true } },
       },
     }) : [],
     canViewInvoices ? prisma.invoice.findMany({
@@ -90,6 +140,7 @@ const getDashboard = asyncHandler(async (req, res) => {
       month: date.toLocaleDateString('en-IN', { month: 'short', year: '2-digit', timeZone: 'UTC' }),
       candidates: 0,
       cases: 0,
+      reports: 0,
       invoices: 0,
     };
   });
@@ -103,6 +154,10 @@ const getDashboard = asyncHandler(async (req, res) => {
     if (index === undefined) continue;
     months[index].cases += 1;
   }
+  for (const item of chartReports) {
+    const index = monthIndex.get(item.completedAt.toISOString().slice(0, 7));
+    if (index !== undefined) months[index].reports += 1;
+  }
   for (const item of chartInvoices) {
     const index = monthIndex.get(item.invoiceDate.toISOString().slice(0, 7));
     if (index !== undefined) months[index].invoices += 1;
@@ -110,7 +165,7 @@ const getDashboard = asyncHandler(async (req, res) => {
   return success(res, {
     message: 'Client dashboard summary',
     data: {
-      permissions: { candidates: canViewCandidates, cases: canViewCases, reports: canViewReports, invoices: canViewInvoices },
+      permissions: { candidates: canViewCandidates, cases: canViewCases, reports: canViewReports, invoices: canViewInvoices, subclients: canViewSubclients },
       counts: {
         candidates: candidateCount,
         cases: caseCount,
@@ -118,12 +173,14 @@ const getDashboard = asyncHandler(async (req, res) => {
         completedCases: completedCaseCount,
         reports: reportCount,
         invoices: invoiceCount,
+        subclients: subclientCount,
       },
-      monthlyActivity: canViewCandidates || canViewCases || canViewInvoices ? months.map(({ key, month, candidates, cases, invoices }) => ({
+      monthlyActivity: canViewCandidates || canViewCases || canViewReports || canViewInvoices ? months.map(({ key, month, candidates, cases, reports, invoices }) => ({
         key,
         month,
         ...(canViewCandidates ? { candidates } : {}),
         ...(canViewCases ? { cases } : {}),
+        ...(canViewReports ? { reports } : {}),
         ...(canViewInvoices ? { invoices } : {}),
       })) : [],
       recentCases,
@@ -148,19 +205,24 @@ const getDashboard = asyncHandler(async (req, res) => {
 const candidateSummary = (candidate) => ({
   id: candidate.id,
   candidateCode: candidate.candidateCode,
+  fullName: candidate.fullName,
   firstName: candidate.firstName,
+  middleName: candidate.middleName,
   lastName: candidate.lastName,
   email: candidate.email,
   phone: candidate.phone,
   status: candidate.status,
   createdAt: candidate.createdAt,
+  subclient: candidate.subclient
+    ? { id: candidate.subclient.id, name: candidate.subclient.name, clientCode: candidate.subclient.clientCode }
+    : null,
 });
 
 const listCandidates = asyncHandler(async (req, res) => {
   const pagination = parsePagination(req.query);
   const { items, total } = await candidateService.list({
     companyId: req.user.companyId,
-    query: { ...pagination, clientId: req.user.clientId, search: req.query.search, status: req.query.status, dateFrom: req.query.dateFrom, dateTo: req.query.dateTo, sortBy: 'createdAt', sortOrder: 'desc' },
+    query: { ...pagination, clientId: req.user.clientId, subclientId: req.query.subclientId, search: req.query.search, status: req.query.status, dateFrom: req.query.dateFrom, dateTo: req.query.dateTo, sortBy: 'createdAt', sortOrder: 'desc' },
   });
   return success(res, {
     message: 'Client candidates',
@@ -210,7 +272,7 @@ const getCandidate = asyncHandler(async (req, res) => {
   const candidate = await prisma.candidate.findFirst({
     where: { id: req.params.id, companyId: req.user.companyId, clientId: req.user.clientId, isDeleted: false },
     select: {
-      id: true, candidateCode: true, firstName: true, lastName: true, email: true, phone: true, status: true,
+      id: true, candidateCode: true, fullName: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, status: true,
       dateOfBirth: true, gender: true, fatherName: true, motherName: true, aadhaarNumber: true, panNumber: true,
       uanNumber: true, passportNumber: true, drivingLicenseNumber: true, voterIdNumber: true,
       highestQualification: true, courseName: true, institutionName: true, universityName: true, yearOfPassing: true,
@@ -287,11 +349,14 @@ const listCases = asyncHandler(async (req, res) => {
   const where = {
     companyId: req.user.companyId,
     clientId: req.user.clientId,
+    ...(req.query.subclientId === 'none' ? { subclientId: null } : req.query.subclientId ? { subclientId: req.query.subclientId } : {}),
     ...(req.query.status ? { status: req.query.status } : {}),
     ...(req.query.dateFrom || req.query.dateTo ? { createdAt: { ...(req.query.dateFrom ? { gte: new Date(req.query.dateFrom) } : {}), ...(req.query.dateTo ? { lte: new Date(`${req.query.dateTo.slice(0, 10)}T23:59:59.999Z`) } : {}) } } : {}),
     ...(search ? { OR: [
       { caseNumber: { contains: search, mode: 'insensitive' } },
+      { candidate: { fullName: { contains: search, mode: 'insensitive' } } },
       { candidate: { firstName: { contains: search, mode: 'insensitive' } } },
+      { candidate: { middleName: { contains: search, mode: 'insensitive' } } },
       { candidate: { lastName: { contains: search, mode: 'insensitive' } } },
       { candidate: { candidateCode: { contains: search, mode: 'insensitive' } } },
     ] } : {}),
@@ -311,7 +376,7 @@ const listCases = asyncHandler(async (req, res) => {
         completedAt: true,
         createdAt: true,
         checks: { select: { status: true } },
-        candidate: { select: { firstName: true, lastName: true, candidateCode: true } },
+        candidate: { select: { fullName: true, firstName: true, middleName: true, lastName: true, candidateCode: true } },
       },
     }),
     prisma.bGVCase.count({ where }),
@@ -333,11 +398,14 @@ const listReports = asyncHandler(async (req, res) => {
     companyId: req.user.companyId,
     clientId: req.user.clientId,
     status: 'COMPLETED',
+    ...(req.query.subclientId === 'none' ? { subclientId: null } : req.query.subclientId ? { subclientId: req.query.subclientId } : {}),
     ...(req.query.status ? { overallResult: req.query.status } : {}),
     ...(req.query.dateFrom || req.query.dateTo ? { completedAt: { ...(req.query.dateFrom ? { gte: new Date(req.query.dateFrom) } : {}), ...(req.query.dateTo ? { lte: new Date(`${req.query.dateTo.slice(0, 10)}T23:59:59.999Z`) } : {}) } } : {}),
     ...(search ? { OR: [
       { caseNumber: { contains: search, mode: 'insensitive' } },
+      { candidate: { fullName: { contains: search, mode: 'insensitive' } } },
       { candidate: { firstName: { contains: search, mode: 'insensitive' } } },
+      { candidate: { middleName: { contains: search, mode: 'insensitive' } } },
       { candidate: { lastName: { contains: search, mode: 'insensitive' } } },
       { candidate: { candidateCode: { contains: search, mode: 'insensitive' } } },
     ] } : {}),
@@ -354,7 +422,7 @@ const listReports = asyncHandler(async (req, res) => {
         completedAt: true,
         overallResult: true,
         checks: { select: { type: true, status: true, result: true, resultData: true, remarks: true, documents: { select: { id: true } } } },
-        candidate: { select: { firstName: true, lastName: true, candidateCode: true } },
+        candidate: { select: { fullName: true, firstName: true, middleName: true, lastName: true, candidateCode: true } },
       },
     }),
     prisma.bGVCase.count({ where }),
@@ -385,7 +453,9 @@ const getCase = asyncHandler(async (req, res) => {
     candidate: item.candidate ? {
       id: item.candidate.id,
       candidateCode: item.candidate.candidateCode,
+      fullName: item.candidate.fullName,
       firstName: item.candidate.firstName,
+      middleName: item.candidate.middleName,
       lastName: item.candidate.lastName,
       email: item.candidate.email,
       phone: item.candidate.phone,
@@ -491,4 +561,4 @@ const downloadInvoice = asyncHandler(async (req, res) => {
   res.send(pdf);
 });
 
-module.exports = { getCandidateFormConfig, getDashboard, listCandidates, createCandidate, updateCandidate, getCandidate, inviteCandidate, getCandidatePortalAccess, remindCandidate, updateCandidatePortalAccess, listCases, getCase, listReports, downloadReport, listInvoices, downloadInvoice };
+module.exports = { getCandidateFormConfig, listSubclients, createSubclient, updateSubclient, getDashboard, listCandidates, createCandidate, updateCandidate, getCandidate, inviteCandidate, getCandidatePortalAccess, remindCandidate, updateCandidatePortalAccess, listCases, getCase, listReports, downloadReport, listInvoices, downloadInvoice };

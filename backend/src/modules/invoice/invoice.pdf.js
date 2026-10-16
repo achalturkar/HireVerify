@@ -214,7 +214,7 @@ const drawParties = (doc, invoice, y, theme) => {
   return Math.max(fromEnd, toEnd);
 };
 
-const drawTableHeader = (doc, y, theme) => {
+const drawTableHeader = (doc, y, theme, invoice) => {
   doc.roundedRect(L, y, W, 24, 4).fill(theme.accent);
   doc.fillColor(colors.white).font('Helvetica-Bold').fontSize(7.5);
   const t = (label, c, align) => doc.text(label, c.x, y + 8, { width: c.w, align, characterSpacing: 0.6, lineBreak: false });
@@ -222,7 +222,7 @@ const drawTableHeader = (doc, y, theme) => {
   t('DESCRIPTION', COL.desc, 'left');
   t('QTY', COL.qty, 'right');
   t('RATE', COL.rate, 'right');
-  t('TAX', COL.tax, 'right');
+  t(invoice.supplierGst ? 'GST %' : 'TAX %', COL.tax, 'right');
   t('AMOUNT', COL.amt, 'right');
   return y + 24;
 };
@@ -238,6 +238,7 @@ const itemDescription = (item) => {
   const title = item.case?.caseNumber || item.description || item.title || '-';
   const subs = [];
   if (item.candidateName) subs.push(`Candidate: ${item.candidateName}`);
+  if (item.case?.subclient?.name) subs.push(`Subclient: ${item.case.subclient.name}`);
   if (item.serviceCode) subs.push(`Service code: ${item.serviceCode}`);
   return { title, sub: subs.join('   ·   ') };
 };
@@ -257,14 +258,14 @@ const drawItems = (doc, invoice, startY, theme) => {
     doc.addPage();
     startY = drawContinuationHeader(doc, invoice, theme) + 4;
   }
-  let y = drawTableHeader(doc, startY, theme);
+  let y = drawTableHeader(doc, startY, theme, invoice);
 
   items.forEach((item, index) => {
     const { title, sub, titleH, rowH } = measureItemRow(doc, item);
 
     if (y + rowH > ROWS_BOTTOM) {
       doc.addPage();
-      y = drawTableHeader(doc, drawContinuationHeader(doc, invoice, theme), theme);
+      y = drawTableHeader(doc, drawContinuationHeader(doc, invoice, theme), theme, invoice);
     }
 
     if (index % 2 === 1) doc.rect(L, y, W, rowH).fill(colors.pale);
@@ -296,9 +297,10 @@ const drawTotals = (doc, invoice, startY, theme) => {
   const rows = [['Subtotal', num(invoice.subtotal)]];
   if (num(invoice.discountTotal) > 0) rows.push(['Discount', -num(invoice.discountTotal)]);
   if (invoice.taxType === 'CGST_SGST') {
-    rows.push(['CGST', num(invoice.taxTotal) / 2], ['SGST', num(invoice.taxTotal) / 2]);
+    const cgst = Math.round((num(invoice.taxTotal) / 2 + Number.EPSILON) * 100) / 100;
+    rows.push(['Central GST (CGST)', cgst], ['State GST (SGST)', num(invoice.taxTotal) - cgst]);
   } else if (invoice.taxType === 'IGST') {
-    rows.push(['IGST', num(invoice.taxTotal)]);
+    rows.push(['Integrated GST (IGST)', num(invoice.taxTotal)]);
   } else if (num(invoice.taxTotal) > 0) {
     rows.push(['Tax', num(invoice.taxTotal)]);
   }
@@ -323,8 +325,8 @@ const drawTotals = (doc, invoice, startY, theme) => {
 
   y += 4;
   rows.forEach(([label, value]) => {
-    doc.fillColor(colors.muted).font('Helvetica').fontSize(8.5).text(label, bx + 12, y, { width: 100, lineBreak: false });
-    doc.fillColor(colors.ink).font('Helvetica').fontSize(8.5).text(money(invoice, value), bx + 100, y, { width: bw - 112, align: 'right', lineBreak: false });
+    doc.fillColor(colors.muted).font('Helvetica').fontSize(8).text(label, bx + 12, y, { width: 118, lineBreak: false });
+    doc.fillColor(colors.ink).font('Helvetica').fontSize(8.5).text(money(invoice, value), bx + 130, y, { width: bw - 142, align: 'right', lineBreak: false });
     y += 16;
   });
   y += 1;

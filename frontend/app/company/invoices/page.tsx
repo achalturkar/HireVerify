@@ -104,9 +104,37 @@ const datePlusDays = (dayCount: number) => {
 };
 const amount = (value: string | number | null | undefined) => Number(value || 0);
 const money = (value: string | number, currency = 'INR') => new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(amount(value));
-const dateLabel = (value: string) => new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+const dateLabel = (value: string) => {
+  const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? '—'
+    : new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+};
 const dateInput = (value: string) => value.slice(0, 10);
+const displayDateInput = (value: string) => {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : '';
+};
+const parseDisplayDate = (value: string) => {
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const [, day, month, year] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() !== Number(month) - 1 || date.getUTCDate() !== Number(day)) return null;
+  return `${year}-${month}-${day}`;
+};
 const newLine = (): DraftLine => ({ caseId: '', description: '', candidateName: '', serviceCode: '', quantity: '1', unitPrice: '0', discountPercent: '0', taxPercent: '0' });
+const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+const taxBreakdown = (taxType: string, taxTotal: number): Array<[string, number]> => {
+  if (taxType === 'CGST_SGST') {
+    const cgst = roundMoney(taxTotal / 2);
+    return [['Central GST (CGST)', cgst], ['State GST (SGST)', roundMoney(taxTotal - cgst)]];
+  }
+  if (taxType === 'IGST') return [['Integrated GST (IGST)', taxTotal]];
+  return taxTotal > 0 ? [['Tax', taxTotal]] : [];
+};
 
 function statusTone(status: InvoiceStatus) {
   if (status === 'PAID') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
@@ -122,6 +150,83 @@ function StatusTag({ status }: { status: InvoiceStatus }) {
 
 function FormField({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
   return <div className={className}><label className={labelClass}>{label}</label>{children}</div>;
+}
+
+function InvoiceDateInput({ value, onChange, min, max, required, className = fieldClass, ariaLabel }: {
+  value: string;
+  onChange: (value: string) => void;
+  min?: string;
+  max?: string;
+  required?: boolean;
+  className?: string;
+  ariaLabel?: string;
+}) {
+  const [draft, setDraft] = useState(() => ({ sourceValue: value, displayValue: displayDateInput(value) }));
+  const displayValue = draft.sourceValue === value ? draft.displayValue : displayDateInput(value);
+  const textInputRef = useRef<HTMLInputElement>(null);
+  const pickerRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const parsed = parseDisplayDate(displayValue);
+    textInputRef.current?.setCustomValidity(
+      displayValue && !parsed
+        ? 'Enter a valid date in DD/MM/YYYY format.'
+        : parsed && ((min && parsed < min) || (max && parsed > max))
+          ? 'Enter a date within the allowed range.'
+          : ''
+    );
+  }, [displayValue, max, min]);
+
+  const updateDisplayValue = (nextValue: string) => {
+    setDraft({ sourceValue: value, displayValue: nextValue });
+    const parsed = parseDisplayDate(nextValue);
+    if (!nextValue || !parsed) {
+      textInputRef.current?.setCustomValidity(nextValue ? 'Enter a valid date in DD/MM/YYYY format.' : '');
+      if (!nextValue) onChange('');
+      return;
+    }
+    if ((min && parsed < min) || (max && parsed > max)) {
+      textInputRef.current?.setCustomValidity('Enter a date within the allowed range.');
+      return;
+    }
+    textInputRef.current?.setCustomValidity('');
+    onChange(parsed);
+  };
+
+  const selectPickerDate = (nextValue: string) => {
+    onChange(nextValue);
+    setDraft({ sourceValue: nextValue, displayValue: displayDateInput(nextValue) });
+    textInputRef.current?.setCustomValidity('');
+  };
+
+  return (
+    <div className="relative">
+      <input
+        ref={textInputRef}
+        type="text"
+        inputMode="numeric"
+        placeholder="DD/MM/YYYY"
+        value={displayValue}
+        onChange={(event) => updateDisplayValue(event.target.value)}
+        required={required}
+        aria-label={ariaLabel}
+        autoComplete="off"
+        className={`${className} pr-10`}
+      />
+      <CalendarDays aria-hidden="true" size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+      <input
+        ref={pickerRef}
+        type="date"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(event) => selectPickerDate(event.target.value)}
+        aria-label={ariaLabel ? `Choose ${ariaLabel.toLowerCase()}` : 'Choose date'}
+        title="Choose date"
+        className="absolute right-0 top-0 h-full w-10 cursor-pointer opacity-0"
+      />
+    </div>
+  );
 }
 
 function BillingProfileDialog({ profile, token, onClose, onSaved }: {
@@ -290,15 +395,23 @@ export default function InvoicesPage() {
   }, [notice]);
 
   const draftTotals = useMemo(() => lines.reduce((result, item) => {
-    const subtotal = amount(item.quantity) * amount(item.unitPrice);
-    const discount = subtotal * amount(item.discountPercent) / 100;
-    const tax = (subtotal - discount) * amount(item.taxPercent) / 100;
-    result.subtotal += subtotal;
-    result.discount += discount;
-    result.tax += tax;
-    result.total += subtotal - discount + tax;
+    const subtotal = roundMoney(amount(item.quantity) * amount(item.unitPrice));
+    const discount = roundMoney(subtotal * amount(item.discountPercent) / 100);
+    const taxableAmount = roundMoney(subtotal - discount);
+    const tax = roundMoney(taxableAmount * amount(item.taxPercent) / 100);
+    result.subtotal = roundMoney(result.subtotal + subtotal);
+    result.discount = roundMoney(result.discount + discount);
+    result.tax = roundMoney(result.tax + tax);
+    result.total = roundMoney(result.total + taxableAmount + tax);
     return result;
   }, { subtotal: 0, discount: 0, tax: 0, total: 0 }), [lines]);
+  const draftPlaceOfSupply = form.placeOfSupply.trim() || clientBilling.state.trim();
+  const draftTaxType = !profile?.gstNumber || draftTotals.tax <= 0
+    ? 'NONE'
+    : profile.state.trim().localeCompare(draftPlaceOfSupply, undefined, { sensitivity: 'accent' }) === 0
+      ? 'CGST_SGST'
+      : 'IGST';
+  const draftTaxRows = taxBreakdown(draftTaxType, draftTotals.tax);
   const selectedBilling = analytics.currencies.find((entry) => entry.currency === selectedCurrency);
   const missingClientBillingFields = [!clientBilling.address.trim() && 'address', !clientBilling.state.trim() && 'state', !clientBilling.gstNumber.trim() && 'GSTIN'].filter(Boolean);
   const monthlyBilled = selectedBilling?.monthly.reduce((sum, month) => sum + amount(month.billed), 0) || 0;
@@ -435,7 +548,7 @@ export default function InvoicesPage() {
       candidateName: item.candidateName,
       serviceCode: '',
       quantity: '1',
-      unitPrice: bulkRate || '0',
+      unitPrice: bulkRate !== '' ? bulkRate : String(item.suggestedRate ?? 0),
       discountPercent: bulkDiscountPercent,
       taxPercent: bulkTaxPercent,
     }));
@@ -758,30 +871,30 @@ export default function InvoicesPage() {
         <select value={clientFilter} onChange={(event) => { setClientFilter(event.target.value); setPage(1); }} className={fieldClass} aria-label="Filter by client"><option value="">All clients</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select>
         <select value={status} onChange={(event) => { setStatus(event.target.value as InvoiceStatus | ''); setPage(1); }} className={fieldClass} aria-label="Filter by invoice status"><option value="">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select>
         <select value={currencyFilter} onChange={(event) => { setCurrencyFilter(event.target.value); setPage(1); }} className={fieldClass} aria-label="Filter by currency"><option value="">All currencies</option>{['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'].map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select>
-        <label className="text-[10px] font-medium text-[var(--muted)]">Invoice date from<input type="date" value={invoiceDateFrom} max={invoiceDateTo || undefined} onChange={(event) => { setInvoiceDateFrom(event.target.value); setPage(1); }} className={`${fieldClass} mt-1`} /></label>
-        <label className="text-[10px] font-medium text-[var(--muted)]">Invoice date to<input type="date" value={invoiceDateTo} min={invoiceDateFrom || undefined} onChange={(event) => { setInvoiceDateTo(event.target.value); setPage(1); }} className={`${fieldClass} mt-1`} /></label>
-        <label className="text-[10px] font-medium text-[var(--muted)]">Due date from<input type="date" value={dueDateFrom} max={dueDateTo || undefined} onChange={(event) => { setDueDateFrom(event.target.value); setPage(1); }} className={`${fieldClass} mt-1`} /></label>
-        <label className="text-[10px] font-medium text-[var(--muted)]">Due date to<input type="date" value={dueDateTo} min={dueDateFrom || undefined} onChange={(event) => { setDueDateTo(event.target.value); setPage(1); }} className={`${fieldClass} mt-1`} /></label>
+        <label className="text-[10px] font-medium text-[var(--muted)]">Invoice date from<InvoiceDateInput value={invoiceDateFrom} max={invoiceDateTo || undefined} onChange={(value) => { setInvoiceDateFrom(value); setPage(1); }} className={`${fieldClass} mt-1`} ariaLabel="Invoice date from" /></label>
+        <label className="text-[10px] font-medium text-[var(--muted)]">Invoice date to<InvoiceDateInput value={invoiceDateTo} min={invoiceDateFrom || undefined} onChange={(value) => { setInvoiceDateTo(value); setPage(1); }} className={`${fieldClass} mt-1`} ariaLabel="Invoice date to" /></label>
+        <label className="text-[10px] font-medium text-[var(--muted)]">Due date from<InvoiceDateInput value={dueDateFrom} max={dueDateTo || undefined} onChange={(value) => { setDueDateFrom(value); setPage(1); }} className={`${fieldClass} mt-1`} ariaLabel="Due date from" /></label>
+        <label className="text-[10px] font-medium text-[var(--muted)]">Due date to<InvoiceDateInput value={dueDateTo} min={dueDateFrom || undefined} onChange={(value) => { setDueDateTo(value); setPage(1); }} className={`${fieldClass} mt-1`} ariaLabel="Due date to" /></label>
         {(search || status || clientFilter || currencyFilter || invoiceDateFrom || invoiceDateTo || dueDateFrom || dueDateTo) && <button type="button" onClick={() => { setSearch(''); setStatus(''); setClientFilter(''); setCurrencyFilter(''); setInvoiceDateFrom(''); setInvoiceDateTo(''); setDueDateFrom(''); setDueDateTo(''); setPage(1); }} className="justify-self-start px-2 text-xs font-semibold text-[var(--primary)] hover:underline">Clear filters</button>}
       </div>
 
-      <div className="overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)]">
+      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[850px] border-collapse text-left text-sm">
-            <thead className="bg-[var(--surface-muted)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
+          <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+            <thead className="border-b border-[var(--border)] bg-[var(--surface-muted)]/70 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
               <tr><th className="px-4 py-3 font-semibold">Invoice</th><th className="px-4 py-3 font-semibold">Client</th><th className="px-4 py-3 font-semibold">Issued / Due</th><th className="px-4 py-3 text-right font-semibold">Total</th><th className="px-4 py-3 text-right font-semibold">Balance</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 text-right font-semibold">Actions</th></tr>
             </thead>
-            <tbody className="divide-y divide-[var(--border)]">
+            <tbody className="divide-y divide-[var(--border)]/80">
               {loading ? <tr><td colSpan={7} className="py-16 text-center text-[var(--muted)]"><LoaderCircle size={20} className="mx-auto mb-2 animate-spin" />Loading invoices</td></tr>
                 : invoices.length === 0 ? <tr><td colSpan={7} className="py-16 text-center"><FileText size={24} className="mx-auto mb-2 text-[var(--muted)]" /><p className="font-medium">No invoices found</p><p className="mt-1 text-xs text-[var(--muted)]">Create a client invoice to begin tracking billing here.</p></td></tr>
-                  : invoices.map((invoice) => <tr key={invoice.id} className="transition-colors hover:bg-[var(--surface-muted)]/60">
-                    <td className="px-4 py-3"><button onClick={() => selectInvoice(invoice)} className="font-semibold text-[var(--primary)] hover:underline">{invoice.invoiceNumber}</button>{invoice.purchaseOrderNumber && <p className="mt-0.5 text-xs text-[var(--muted)]">PO {invoice.purchaseOrderNumber}</p>}</td>
-                    <td className="px-4 py-3"><p className="font-medium">{invoice.clientName}</p><p className="mt-0.5 text-xs text-[var(--muted)]">{invoice.clientEmail || 'No billing email'}</p></td>
-                    <td className="px-4 py-3 text-xs"><p>{dateLabel(invoice.invoiceDate)}</p><p className="mt-1 text-[var(--muted)]">Due {dateLabel(invoice.dueDate)}</p></td>
-                    <td className="px-4 py-3 text-right font-medium">{money(invoice.total, invoice.currency)}</td>
-                    <td className="px-4 py-3 text-right">{money(invoice.balanceDue, invoice.currency)}</td>
-                    <td className="px-4 py-3"><StatusTag status={invoice.status} /></td>
-                    <td className="px-4 py-3"><div className="flex justify-end gap-1">
+                  : invoices.map((invoice) => <tr key={invoice.id} className="transition-colors hover:bg-[var(--surface-muted)]/50">
+                    <td className="px-4 py-4"><button onClick={() => selectInvoice(invoice)} className="font-semibold text-[var(--primary)] hover:underline">{invoice.invoiceNumber}</button>{invoice.purchaseOrderNumber && <p className="mt-1 text-[11px] text-[var(--muted)]">PO {invoice.purchaseOrderNumber}</p>}</td>
+                    <td className="px-4 py-4"><p className="font-medium">{invoice.clientName}</p><p className="mt-1 text-xs text-[var(--muted)]">{invoice.clientEmail || 'No billing email'}</p></td>
+                    <td className="px-4 py-4 text-xs"><p className="font-medium tabular-nums">{dateLabel(invoice.invoiceDate)}</p><p className="mt-1 text-[var(--muted)]">Due <span className="tabular-nums">{dateLabel(invoice.dueDate)}</span></p></td>
+                    <td className="px-4 py-4 text-right font-semibold tabular-nums">{money(invoice.total, invoice.currency)}</td>
+                    <td className="px-4 py-4 text-right tabular-nums">{money(invoice.balanceDue, invoice.currency)}</td>
+                    <td className="px-4 py-4"><StatusTag status={invoice.status} /></td>
+                    <td className="px-4 py-4"><div className="flex justify-end gap-1">
                       {invoice.status === 'DRAFT' && <button onClick={() => void openComposer(invoice)} title="Edit draft" aria-label="Edit draft" className="rounded p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"><Pencil size={15} /></button>}
                       <button onClick={() => void download(invoice)} title="Download PDF" aria-label="Download PDF" disabled={actionId === `download-${invoice.id}`} className="rounded p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"><Download size={15} /></button>
                       <button onClick={() => selectInvoice(invoice)} title="View invoice" className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--surface-muted)]"><Eye size={14} />View</button>
@@ -804,8 +917,8 @@ export default function InvoicesPage() {
           <div className="space-y-6 p-5 sm:p-7">
             <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <FormField label="Bill to client"><select value={form.clientId} onChange={(event) => void chooseClient(event.target.value)} required className={fieldClass}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></FormField>
-              <FormField label="Invoice date"><input type="date" value={form.invoiceDate} onChange={(event) => setFormValue('invoiceDate', event.target.value)} required className={fieldClass} /></FormField>
-              <FormField label="Due date"><input type="date" value={form.dueDate} min={form.invoiceDate} onChange={(event) => setFormValue('dueDate', event.target.value)} required className={fieldClass} /></FormField>
+              <FormField label="Invoice date"><InvoiceDateInput value={form.invoiceDate} onChange={(value) => setFormValue('invoiceDate', value)} required className={fieldClass} ariaLabel="Invoice date" /></FormField>
+              <FormField label="Due date"><InvoiceDateInput value={form.dueDate} min={form.invoiceDate} onChange={(value) => setFormValue('dueDate', value)} required className={fieldClass} ariaLabel="Due date" /></FormField>
               <FormField label="Currency"><select value={form.currency} onChange={(event) => setFormValue('currency', event.target.value)} className={fieldClass}>{['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'].map((currency) => <option key={currency}>{currency}</option>)}</select></FormField>
               <FormField label="Place of supply"><GeoSelect kind="state" countryName={clients.find((client) => client.id === form.clientId)?.country || undefined} value={form.placeOfSupply} onChange={(value) => setFormValue('placeOfSupply', value)} className={fieldClass} /></FormField>
               <FormField label="Purchase order number"><input value={form.purchaseOrderNumber} onChange={(event) => setFormValue('purchaseOrderNumber', event.target.value)} placeholder="Optional" maxLength={100} className={fieldClass} /></FormField>
@@ -820,8 +933,8 @@ export default function InvoicesPage() {
                 <div><h3 className="text-sm font-semibold">Auto-add completed BGV cases</h3><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Completed cases within the selected date range are shown. You can select unbilled cases or re-bill cases that were included on another invoice.</p></div>
               </div>
               <div className="grid gap-3 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end sm:p-5">
-                <FormField label="Completed from"><input type="date" value={completedFrom} max={completedTo || undefined} onChange={(event) => { setCompletedFrom(event.target.value); clearCompletedSearch(); }} className={fieldClass} /></FormField>
-                <FormField label="Completed to"><input type="date" value={completedTo} min={completedFrom || undefined} max={today()} onChange={(event) => { setCompletedTo(event.target.value); clearCompletedSearch(); }} className={fieldClass} /></FormField>
+                <FormField label="Completed from"><InvoiceDateInput value={completedFrom} max={completedTo || undefined} onChange={(value) => { setCompletedFrom(value); clearCompletedSearch(); }} className={fieldClass} ariaLabel="Completed from" /></FormField>
+                <FormField label="Completed to"><InvoiceDateInput value={completedTo} min={completedFrom || undefined} max={today()} onChange={(value) => { setCompletedTo(value); clearCompletedSearch(); }} className={fieldClass} ariaLabel="Completed to" /></FormField>
                 <button type="button" onClick={() => void findCompletedCases()} disabled={completedLoading || !form.clientId} className="inline-flex items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-[var(--primary-foreground)] disabled:opacity-60">{completedLoading ? <LoaderCircle size={15} className="animate-spin" /> : <Search size={15} />}{completedLoading ? 'Finding cases…' : 'Find completed cases'}</button>
               </div>
               {completedSearchDone && <div className="border-t border-[var(--border)] bg-[var(--surface)]/70">
@@ -848,7 +961,7 @@ export default function InvoicesPage() {
                   {visibleUnbilledCases.length > 0 && <div className="max-h-56 divide-y divide-[var(--border)] overflow-y-auto border-y border-[var(--border)]">
                     {visibleUnbilledCases.map((item) => <label key={item.id} className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-[var(--surface-muted)] sm:px-5">
                       <input type="checkbox" checked={selectedCompletedCaseIds.includes(item.id)} disabled={!selectedCompletedCaseIds.includes(item.id) && (isCandidateAlreadyLinked(item) || isCandidateAlreadySelected(item))} onChange={(event) => updateCompletedCaseSelection(event.target.checked ? [...selectedCompletedCaseIds, item.id] : selectedCompletedCaseIds.filter((id) => id !== item.id))} className="h-4 w-4 accent-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-40" />
-                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.candidateName}</span><span className="mt-0.5 block truncate text-xs text-[var(--muted)]">{item.caseNumber}{item.packageName ? ` · ${item.packageName}` : ''}</span></span>
+                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.candidateName}</span><span className="mt-0.5 block truncate text-xs text-[var(--muted)]">{item.caseNumber}{item.packageName ? ` · ${item.packageName}` : ''}{item.subclientName ? ` · ${item.subclientName}` : ''}{item.suggestedRate != null ? ` · Suggested ${money(item.suggestedRate, form.currency)}` : ''}</span></span>
                       <time className="shrink-0 text-xs text-[var(--muted)]">{item.completedAt ? dateLabel(item.completedAt) : ''}</time>
                     </label>)}
                   </div>}
@@ -859,7 +972,7 @@ export default function InvoicesPage() {
                         const isSelected = selectedCompletedCaseIds.includes(item.id);
                         return <div key={item.id} className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-muted)] sm:px-5">
                           <input type="checkbox" checked={isSelected} onChange={(event) => updateCompletedCaseSelection(event.target.checked ? [...selectedCompletedCaseIds, item.id] : selectedCompletedCaseIds.filter((id) => id !== item.id))} className="h-4 w-4 accent-[var(--primary)]" aria-label={`${isSelected ? 'Remove' : 'Re-bill'} ${item.caseNumber}`} />
-                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.candidateName}</span><span className="mt-0.5 block truncate text-xs text-[var(--muted)]">{item.caseNumber}{item.packageName ? ` · ${item.packageName}` : ''}</span></span>
+                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.candidateName}</span><span className="mt-0.5 block truncate text-xs text-[var(--muted)]">{item.caseNumber}{item.packageName ? ` · ${item.packageName}` : ''}{item.subclientName ? ` · ${item.subclientName}` : ''}{item.suggestedRate != null ? ` · Suggested ${money(item.suggestedRate, form.currency)}` : ''}</span></span>
                           <time className="shrink-0 text-xs text-[var(--muted)]">{item.completedAt ? dateLabel(item.completedAt) : ''}</time>
                           <button type="button" onClick={() => updateCompletedCaseSelection(isSelected ? selectedCompletedCaseIds.filter((id) => id !== item.id) : [...selectedCompletedCaseIds, item.id])} className="shrink-0 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-xs font-semibold hover:bg-[var(--surface)]">
                             {isSelected ? 'Remove' : 'Re-bill'}
@@ -887,7 +1000,7 @@ export default function InvoicesPage() {
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
                   <FormField label={`Rate per case / line (${form.currency})`}><input type="number" min="0" step="0.01" value={bulkRate} onChange={(event) => setBulkRate(event.target.value)} placeholder="Enter common rate" className={fieldClass} /></FormField>
                   <FormField label="Discount (%)"><input type="number" min="0" max="100" step="0.01" value={bulkDiscountPercent} onChange={(event) => setBulkDiscountPercent(event.target.value)} className={fieldClass} /></FormField>
-                  <FormField label="GST / tax (%)"><input type="number" min="0" max="100" step="0.01" value={bulkTaxPercent} onChange={(event) => setBulkTaxPercent(event.target.value)} className={fieldClass} /></FormField>
+                  <FormField label={profile.gstNumber ? 'GST rate (%)' : 'Tax rate (%)'}><input type="number" min="0" max="100" step="0.01" value={bulkTaxPercent} onChange={(event) => setBulkTaxPercent(event.target.value)} className={fieldClass} /></FormField>
                   <button type="button" onClick={applyBulkPricing} disabled={!lines.length} className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-xs font-semibold hover:bg-[var(--surface-muted)] disabled:opacity-50">Apply to all lines</button>
                 </div>
               </div>}
@@ -928,7 +1041,7 @@ export default function InvoicesPage() {
                     <FormField label="Quantity" className="lg:col-span-2"><input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => setLineValue(index, 'quantity', event.target.value)} required className={fieldClass} /></FormField>
                     <FormField label={`Rate (${form.currency})`} className="lg:col-span-3"><input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => setLineValue(index, 'unitPrice', event.target.value)} required className={fieldClass} /></FormField>
                     <FormField label="Discount %" className="lg:col-span-2"><input type="number" min="0" max="100" step="0.01" value={line.discountPercent} onChange={(event) => setLineValue(index, 'discountPercent', event.target.value)} className={fieldClass} /></FormField>
-                    <FormField label="GST / tax %" className="lg:col-span-2"><input type="number" min="0" max="100" step="0.01" value={line.taxPercent} onChange={(event) => setLineValue(index, 'taxPercent', event.target.value)} className={fieldClass} /></FormField>
+                    <FormField label={profile.gstNumber ? 'GST rate (%)' : 'Tax rate (%)'} className="lg:col-span-2"><input type="number" min="0" max="100" step="0.01" value={line.taxPercent} onChange={(event) => setLineValue(index, 'taxPercent', event.target.value)} className={fieldClass} /></FormField>
                   </div>
                 </div>;
               })}
@@ -943,9 +1056,9 @@ export default function InvoicesPage() {
               <div className="rounded-md bg-[var(--surface-muted)] p-4">
                 <div className="flex justify-between py-1.5 text-sm"><span className="text-[var(--muted)]">Subtotal</span><span>{money(draftTotals.subtotal, form.currency)}</span></div>
                 <div className="flex justify-between py-1.5 text-sm"><span className="text-[var(--muted)]">Discount</span><span>-{money(draftTotals.discount, form.currency)}</span></div>
-                <div className="flex justify-between py-1.5 text-sm"><span className="text-[var(--muted)]">Tax</span><span>{money(draftTotals.tax, form.currency)}</span></div>
+                {draftTaxRows.map(([label, value]) => <div key={label} className="flex justify-between py-1.5 text-sm"><span className="text-[var(--muted)]">{label}</span><span>{money(value, form.currency)}</span></div>)}
                 <div className="mt-2 flex justify-between border-t border-[var(--border)] pt-3 text-base font-semibold"><span>Total</span><span>{money(draftTotals.total, form.currency)}</span></div>
-                {profile.gstNumber && <p className="mt-2 text-[10px] text-[var(--muted)]">GST split (CGST/SGST or IGST) is determined from supplier state and place of supply.</p>}
+                {profile.gstNumber && <p className="mt-2 text-[10px] text-[var(--muted)]">{draftTaxType === 'CGST_SGST' ? 'Intra-state supply: GST is split equally between CGST and SGST.' : draftTaxType === 'IGST' ? 'Inter-state supply: GST is charged as IGST.' : 'GST breakdown appears when a taxable line is added.'}</p>}
               </div>
             </section>
             {formError && <p role="alert" className="rounded-md bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">{formError}</p>}
@@ -964,8 +1077,8 @@ export default function InvoicesPage() {
           <div className="flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
             <div className="grid grid-cols-2 gap-3"><div className="rounded-md border border-[var(--border)] p-3"><p className="text-xs text-[var(--muted)]">Invoice date</p><p className="mt-1 text-sm font-medium">{dateLabel(selected.invoiceDate)}</p></div><div className="rounded-md border border-[var(--border)] p-3"><p className="text-xs text-[var(--muted)]">Due date</p><p className="mt-1 text-sm font-medium">{dateLabel(selected.dueDate)}</p></div></div>
             <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Billed to</h3><div className="text-sm font-semibold">{selected.clientName}</div><p className="mt-1 whitespace-pre-line text-xs leading-5 text-[var(--muted)]">{selected.clientAddress || 'No billing address on file'}</p><div className="mt-2 grid gap-1 text-xs text-[var(--muted)] sm:grid-cols-2"><p>Contact: {selected.clientContactName || 'Not provided'}</p><p>Phone: {selected.clientPhone || 'Not provided'}</p><p>State: {selected.clientState || selected.placeOfSupply || 'Not provided'}</p><p>GSTIN: {selected.clientGst || 'Not provided'}</p><p>PAN: {selected.clientPan || 'Not provided'}</p><p>Email: {selected.clientEmail || 'Not provided'}</p></div></section>
-            <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Line items</h3><div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">{selected.items.map((item) => <div key={item.id} className="flex items-start justify-between gap-4 p-3"><div className="min-w-0"><p className="text-sm font-medium">{item.case?.caseNumber || item.description}</p>{item.candidateName && <p className="mt-0.5 text-xs text-[var(--muted)]">{item.candidateName}</p>}<p className="mt-1 text-xs text-[var(--muted)]">{amount(item.quantity)} × {money(item.unitPrice, selected.currency)}{Number(item.discountPercent) > 0 ? ` · ${item.discountPercent}% discount` : ''} · {item.taxPercent}% tax</p></div><span className="shrink-0 text-sm font-semibold">{money(item.total, selected.currency)}</span></div>)}</div>
-              <div className="ml-auto mt-3 max-w-xs space-y-1.5 text-sm"><div className="flex justify-between text-[var(--muted)]"><span>Subtotal</span><span>{money(selected.subtotal, selected.currency)}</span></div><div className="flex justify-between text-[var(--muted)]"><span>Discount</span><span>-{money(selected.discountTotal, selected.currency)}</span></div><div className="flex justify-between text-[var(--muted)]"><span>{selected.taxType === 'CGST_SGST' ? 'CGST + SGST' : selected.taxType === 'IGST' ? 'IGST' : 'Tax'}</span><span>{money(selected.taxTotal, selected.currency)}</span></div><div className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold"><span>Total</span><span>{money(selected.total, selected.currency)}</span></div><div className="flex justify-between text-emerald-700 dark:text-emerald-300"><span>Paid</span><span>{money(selected.amountPaid, selected.currency)}</span></div><div className="flex justify-between font-semibold"><span>Balance due</span><span>{money(selected.balanceDue, selected.currency)}</span></div></div>
+            <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Line items</h3><div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">{selected.items.map((item) => <div key={item.id} className="flex items-start justify-between gap-4 p-3"><div className="min-w-0"><p className="text-sm font-medium">{item.case?.caseNumber || item.description}</p>{item.candidateName && <p className="mt-0.5 text-xs text-[var(--muted)]">{item.candidateName}</p>}{item.case?.subclient?.name && <p className="mt-0.5 text-xs text-[var(--muted)]">Subclient: {item.case.subclient.name}</p>}<p className="mt-1 text-xs text-[var(--muted)]">{amount(item.quantity)} × {money(item.unitPrice, selected.currency)}{Number(item.discountPercent) > 0 ? ` · ${item.discountPercent}% discount` : ''} · {item.taxPercent}% {selected.taxType === 'NONE' ? 'tax' : 'GST'}</p></div><span className="shrink-0 text-sm font-semibold">{money(item.total, selected.currency)}</span></div>)}</div>
+              <div className="ml-auto mt-3 max-w-xs space-y-1.5 text-sm"><div className="flex justify-between text-[var(--muted)]"><span>Subtotal</span><span>{money(selected.subtotal, selected.currency)}</span></div><div className="flex justify-between text-[var(--muted)]"><span>Discount</span><span>-{money(selected.discountTotal, selected.currency)}</span></div>{taxBreakdown(selected.taxType, amount(selected.taxTotal)).map(([label, value]) => <div key={label} className="flex justify-between text-[var(--muted)]"><span>{label}</span><span>{money(value, selected.currency)}</span></div>)}<div className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold"><span>Total</span><span>{money(selected.total, selected.currency)}</span></div><div className="flex justify-between text-emerald-700 dark:text-emerald-300"><span>Paid</span><span>{money(selected.amountPaid, selected.currency)}</span></div><div className="flex justify-between font-semibold"><span>Balance due</span><span>{money(selected.balanceDue, selected.currency)}</span></div></div>
             </section>
             {selected.payments.length > 0 && <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Payments</h3><div className="space-y-2">{selected.payments.map((entry) => <div key={entry.id} className="flex justify-between rounded-md bg-[var(--surface-muted)] px-3 py-2 text-xs"><span>{dateLabel(entry.paymentDate)} · {(entry.method || 'Payment').replaceAll('_', ' ')}{entry.reference ? ` · ${entry.reference}` : ''}</span><strong>{money(entry.amount, selected.currency)}</strong></div>)}</div></section>}
             {selected.notes && <section><h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Notes</h3><p className="whitespace-pre-line text-sm">{selected.notes}</p></section>}
@@ -977,7 +1090,7 @@ export default function InvoicesPage() {
             <div className="flex flex-wrap gap-2"><button onClick={() => void openPdfPreview(selected)} disabled={previewLoading} className="inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Eye size={14} />{previewLoading ? 'Opening PDF…' : 'Preview PDF'}</button><button onClick={() => void download(selected)} disabled={actionId === `download-${selected.id}`} className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-muted)]"><Download size={14} />Download PDF</button>{selected.status === 'DRAFT' && <><button onClick={() => { setSelected(null); void openComposer(selected); }} className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-muted)]"><Pencil size={14} />Edit draft</button><button onClick={() => void removeDraft()} disabled={Boolean(actionId)} className="inline-flex items-center gap-2 rounded-md border border-rose-500/30 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-500/10 dark:text-rose-300 disabled:opacity-50"><Trash2 size={14} />Delete draft</button></>}</div>
             {(selected.status === 'DRAFT' || (selected.status !== 'VOID' && selected.status !== 'PAID' && amount(selected.amountPaid) === 0)) && <div className="grid gap-2 border-t border-[var(--border)] pt-3 sm:grid-cols-[1fr_auto]"><div><label className={labelClass}>Change status</label><select value={statusChoice} onChange={(event) => setStatusChoice(event.target.value as 'SENT' | 'VOID')} className={fieldClass}>{selected.status === 'DRAFT' && <option value="SENT">Sent</option>}<option value="VOID">Void</option></select><p className="mt-1 text-[10px] text-[var(--muted)]">Paid status follows recorded payments; overdue is calculated from the due date.</p></div><button onClick={() => void saveStatus()} disabled={Boolean(actionId)} className="mt-auto rounded-md border border-[var(--border)] px-4 py-2 text-sm font-semibold hover:bg-[var(--surface-muted)] disabled:opacity-50">Update status</button></div>}
             {selected.status !== 'PAID' && selected.status !== 'VOID' && <div className="grid gap-2 sm:grid-cols-[1fr_auto]"><div><label className={labelClass}>Send invoice to</label><input type="email" value={recipient} onChange={(event) => setRecipient(event.target.value)} placeholder="billing@client.com" className={fieldClass} /></div><button onClick={() => void send()} disabled={Boolean(actionId) || !recipient} className="mt-auto inline-flex items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Mail size={15} />Email PDF</button></div>}
-            {selected.status !== 'DRAFT' && selected.status !== 'VOID' && selected.status !== 'PAID' && <div className="border-t border-[var(--border)] pt-3"><p className="mb-2 text-xs font-semibold">Record payment</p><div className="grid grid-cols-2 gap-2"><input aria-label="Payment amount" type="number" min="0.01" step="0.01" max={amount(selected.balanceDue)} value={payment.amount} onChange={(event) => setPayment((current) => ({ ...current, amount: event.target.value }))} placeholder="Amount" className={fieldClass} /><input aria-label="Payment date" type="date" value={payment.paymentDate} onChange={(event) => setPayment((current) => ({ ...current, paymentDate: event.target.value }))} className={fieldClass} /><select aria-label="Payment method" value={payment.method} onChange={(event) => setPayment((current) => ({ ...current, method: event.target.value }))} className={fieldClass}><option value="BANK_TRANSFER">Bank transfer</option><option value="UPI">UPI</option><option value="CARD">Card</option><option value="CASH">Cash</option><option value="CHEQUE">Cheque</option><option value="OTHER">Other</option></select><input aria-label="Payment reference" value={payment.reference} onChange={(event) => setPayment((current) => ({ ...current, reference: event.target.value }))} placeholder="Reference (optional)" className={fieldClass} /></div><button onClick={() => void savePayment()} disabled={Boolean(actionId) || !payment.amount} className="mt-2 inline-flex items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-muted)] disabled:opacity-50"><CircleDollarSign size={14} />Record payment</button></div>}
+            {selected.status !== 'DRAFT' && selected.status !== 'VOID' && selected.status !== 'PAID' && <div className="border-t border-[var(--border)] pt-3"><p className="mb-2 text-xs font-semibold">Record payment</p><div className="grid grid-cols-2 gap-2"><input aria-label="Payment amount" type="number" min="0.01" step="0.01" max={amount(selected.balanceDue)} value={payment.amount} onChange={(event) => setPayment((current) => ({ ...current, amount: event.target.value }))} placeholder="Amount" className={fieldClass} /><InvoiceDateInput ariaLabel="Payment date" value={payment.paymentDate} onChange={(value) => setPayment((current) => ({ ...current, paymentDate: value }))} className={fieldClass} /><select aria-label="Payment method" value={payment.method} onChange={(event) => setPayment((current) => ({ ...current, method: event.target.value }))} className={fieldClass}><option value="BANK_TRANSFER">Bank transfer</option><option value="UPI">UPI</option><option value="CARD">Card</option><option value="CASH">Cash</option><option value="CHEQUE">Cheque</option><option value="OTHER">Other</option></select><input aria-label="Payment reference" value={payment.reference} onChange={(event) => setPayment((current) => ({ ...current, reference: event.target.value }))} placeholder="Reference (optional)" className={fieldClass} /></div><button onClick={() => void savePayment()} disabled={Boolean(actionId) || !payment.amount} className="mt-2 inline-flex items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-muted)] disabled:opacity-50"><CircleDollarSign size={14} />Record payment</button></div>}
           </div>
         </aside>
       </div>}

@@ -5,14 +5,19 @@ const repo = require('./candidate.repository');
 
 const { NotFoundError, ConflictError, BadRequestError } = require('../../utils/errors');
 const { IDENTITY_FIELDS, normalizeConfig, normalizeIdentityValue, validateIdentityValues } = require('../client/candidate-intake-config');
+const { normalizeCandidateName, hasCandidateName } = require('../../utils/candidate-name');
 
 const toDto = (candidate) => ({
   id: candidate.id,
   companyId: candidate.companyId,
   clientId: candidate.clientId,
   client: candidate.client || null,
+  subclientId: candidate.subclientId || null,
+  subclient: candidate.subclient || null,
   candidateCode: candidate.candidateCode,
+  fullName: candidate.fullName,
   firstName: candidate.firstName,
+  middleName: candidate.middleName,
   lastName: candidate.lastName,
   email: candidate.email,
   phone: candidate.phone,
@@ -79,21 +84,32 @@ const normalizeDateOfBirth = (value) => {
 
 const assertClientBelongsToCompany = async (clientId, companyId) => {
   const client = await prisma.client.findFirst({
-    where: { id: clientId, companyId, isDeleted: false },
+    where: { id: clientId, companyId, parentClientId: null, isDeleted: false },
     select: { id: true, candidateFormConfig: true },
   });
 
   return client;
 };
 
+const assertSubclientBelongsToClient = async (subclientId, clientId, companyId) => {
+  if (!subclientId) return null;
+  const subclient = await prisma.client.findFirst({
+    where: { id: subclientId, parentClientId: clientId, companyId, isDeleted: false, status: 'ACTIVE' },
+    select: { id: true },
+  });
+  if (!subclient) throw new BadRequestError('Select an active subclient under the selected client.');
+  return subclient;
+};
+
 const create = async ({ payload, companyId, currentUser }) => {
-  const { clientId, firstName, lastName, email, phone } = payload;
+  const { clientId, subclientId, email, phone } = payload;
 
   if (!clientId) throw new BadRequestError('Client is required');
-  if (!firstName || !lastName) throw new BadRequestError('First name and last name are required');
+  const candidateName = normalizeCandidateName(payload);
   const normalizedEmail = email?.trim().toLowerCase() || null;
 
   const client = await assertClientBelongsToCompany(clientId, companyId);
+  await assertSubclientBelongsToClient(subclientId, clientId, companyId);
   validateIdentityValues(payload);
   const intakeConfig = normalizeConfig(client.candidateFormConfig);
   for (const { key, label } of IDENTITY_FIELDS) {
@@ -106,9 +122,9 @@ const create = async ({ payload, companyId, currentUser }) => {
   const candidate = await repo.create({
     companyId,
     clientId,
+    subclientId: subclientId || null,
     candidateCode: await createCandidateCode(clientId, companyId),
-    firstName,
-    lastName,
+    ...candidateName,
     email: normalizedEmail,
     phone: phone || null,
     dateOfBirth: normalizeDateOfBirth(payload.dateOfBirth) ?? null,
@@ -156,6 +172,7 @@ const list = async ({ companyId, query }) => {
     limit: query.limit,
     search: query.search,
     clientId: query.clientId,
+    subclientId: query.subclientId,
     status: query.status,
     dateFrom: query.dateFrom,
     dateTo: query.dateTo,
@@ -181,12 +198,18 @@ const update = async ({ id, companyId, payload, currentUser }) => {
   if (payload.clientId && payload.clientId !== existing.clientId) {
     await assertClientBelongsToCompany(payload.clientId, companyId);
   }
+  if (payload.subclientId !== undefined) {
+    await assertSubclientBelongsToClient(payload.subclientId, payload.clientId || existing.clientId, companyId);
+  } else if (payload.clientId && payload.clientId !== existing.clientId && existing.subclientId) {
+    await assertSubclientBelongsToClient(existing.subclientId, payload.clientId, companyId);
+  }
   validateIdentityValues(payload);
 
   const normalizedEmail = payload.email?.trim().toLowerCase() || null;
 
   const data = {};
-  ['clientId', 'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress', 'status']
+  if (hasCandidateName(payload)) Object.assign(data, normalizeCandidateName(payload, existing));
+  ['clientId', 'subclientId', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress', 'status']
     .forEach((field) => {
       if (payload[field] !== undefined) {
         data[field] = IDENTITY_FIELDS.some((identityField) => identityField.key === field)

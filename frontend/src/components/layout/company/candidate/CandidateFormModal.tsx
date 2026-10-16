@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Loader2, UserPlus, User, Mail, Phone, Users, CalendarDays, VenusAndMars, Copy } from 'lucide-react';
+import { X, Loader2, UserPlus, User, Mail, Phone, Users, VenusAndMars, Copy } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { listClients } from '@/src/lib/api/clients';
+import { listClients, listSubclients } from '@/src/lib/api/clients';
 import { sendCandidatePortalLink } from '@/src/lib/api/candidates';
+import DateInput from '@/src/components/DateInput';
+import { formatCandidateName, splitCandidateName } from '@/src/lib/candidate-name';
 import type { Client } from '@/src/types/client';
 import type { Candidate, CandidateFormValues } from '@/src/types/candidate';
 
@@ -12,10 +14,11 @@ interface Props {
   mode: 'create' | 'edit';
   candidate: Candidate | null;
   defaultClientId?: string;
+  canInvite?: boolean;
   submitting: boolean;
   error: string | null;
   onClose: () => void;
-  onSubmit: (values: CandidateFormValues) => void;
+  onSubmit: (values: CandidateFormValues, inviteByEmail: boolean) => void;
 }
 
 const inputClass = 'w-full rounded-lg bg-[var(--surface-muted)] border border-[var(--border)] px-3 py-2.5 text-[13.5px] text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none focus:border-[#3FDCC0]/50 focus:ring-1 focus:ring-[#3FDCC0]/30 transition-colors';
@@ -24,11 +27,14 @@ function Field({ label, icon: Icon, children }: { label: string; icon?: React.Co
   return <div className="space-y-1.5"><label className="text-[12px] text-[var(--muted)] flex items-center gap-1.5">{Icon && <Icon size={12} />}{label}</label>{children}</div>;
 }
 
-export default function CandidateFormModal({ mode, candidate, defaultClientId, submitting, error, onClose, onSubmit }: Props) {
+export default function CandidateFormModal({ mode, candidate, defaultClientId, canInvite = false, submitting, error, onClose, onSubmit }: Props) {
   const { accessToken } = useAuth();
   const [values, setValues] = useState<CandidateFormValues>({
     clientId: candidate?.clientId ?? defaultClientId ?? '',
+    subclientId: candidate?.subclientId ?? '',
+    fullName: candidate ? formatCandidateName(candidate) : '',
     firstName: candidate?.firstName ?? '',
+    middleName: candidate?.middleName ?? '',
     lastName: candidate?.lastName ?? '',
     email: candidate?.email ?? '',
     phone: candidate?.phone ?? '',
@@ -44,7 +50,11 @@ export default function CandidateFormModal({ mode, candidate, defaultClientId, s
     currentAddress: candidate?.currentAddress ?? '',
     permanentAddress: candidate?.permanentAddress ?? '',
   });
+  const [fullName, setFullName] = useState(candidate ? formatCandidateName(candidate) : '');
+  const [inviteByEmail, setInviteByEmail] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
+  const [subclients, setSubclients] = useState<Client[]>([]);
+  const [subclientsError, setSubclientsError] = useState<string | null>(null);
   const [loadingClients, setLoadingClients] = useState(mode === 'create');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [portalSending, setPortalSending] = useState(false);
@@ -62,14 +72,29 @@ export default function CandidateFormModal({ mode, candidate, defaultClientId, s
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [accessToken]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setSubclients([]);
+      setSubclientsError(null);
+      if (!values.clientId) return;
+      void listSubclients(values.clientId, accessToken)
+        .then((result) => { if (!cancelled) setSubclients(result.filter((subclient) => subclient.status === 'ACTIVE')); })
+        .catch((cause) => { if (!cancelled) setSubclientsError(cause instanceof Error ? cause.message : 'Could not load subclients.'); });
+    }, 0);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [accessToken, values.clientId]);
+
   const set = (field: keyof CandidateFormValues) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setValues((current) => ({ ...current, [field]: event.target.value }));
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     setValidationError(null);
     if (mode === 'create' && !values.clientId) return setValidationError('Select a client.');
-    if (!values.firstName.trim() || !values.lastName.trim()) return setValidationError('First and last name are required.');
-    onSubmit(values);
+    const candidateName = splitCandidateName(fullName);
+    if (!candidateName) return setValidationError('Enter the candidate’s full name, including first and last name.');
+    if (inviteByEmail && !values.email.trim()) return setValidationError('Enter an email address to invite the candidate.');
+    onSubmit({ ...values, ...candidateName }, inviteByEmail);
   };
 
   const sendPortal = async () => {
@@ -101,15 +126,18 @@ export default function CandidateFormModal({ mode, candidate, defaultClientId, s
       <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0"><div className="flex items-center gap-2.5"><span className="w-8 h-8 rounded-lg bg-[#3FDCC0]/15 text-[#3FDCC0] flex items-center justify-center"><UserPlus size={16} /></span><div><h2 className="text-[15px] font-semibold">{mode === 'create' ? 'Add candidate' : 'Edit candidate'}</h2><p className="text-[11px] text-[var(--muted)]">Candidate information for background verification</p></div></div><button onClick={onClose} aria-label="Close"><X size={16} /></button></div>
       <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 space-y-5">{(error || validationError) && <div className="rounded-lg bg-[#FF6B6B]/10 border border-[#FF6B6B]/25 text-[#FF6B6B] text-[13px] px-3.5 py-2.5">{validationError || error}</div>}
-          <section className="space-y-3"><h3 className="text-[11px] uppercase tracking-[0.12em]">Case relationship</h3><Field label="Client" icon={Users}><select value={values.clientId} onChange={(event) => setValues((current) => ({ ...current, clientId: event.target.value }))} disabled={loadingClients || Boolean(defaultClientId)} className={`${inputClass} disabled:opacity-60`}><option value="">{loadingClients ? 'Loading...' : 'Select client...'}</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name} ({client.clientCode})</option>)}</select></Field></section>
+          <section className="space-y-3"><h3 className="text-[11px] uppercase tracking-[0.12em]">Case relationship</h3><Field label="Client" icon={Users}><select value={values.clientId} onChange={(event) => setValues((current) => ({ ...current, clientId: event.target.value, subclientId: '' }))} disabled={loadingClients || Boolean(defaultClientId)} className={`${inputClass} disabled:opacity-60`}><option value="">{loadingClients ? 'Loading...' : 'Select client...'}</option>{clients.filter((client) => !client.parentClientId).map((client) => <option key={client.id} value={client.id}>{client.name} ({client.clientCode})</option>)}</select></Field><Field label="Subclient (optional)" icon={Users}><select value={values.subclientId || ''} onChange={(event) => setValues((current) => ({ ...current, subclientId: event.target.value }))} disabled={!values.clientId || subclients.length === 0} className={`${inputClass} disabled:opacity-60`}><option value="">{subclients.length ? 'Client-level candidate' : 'No active subclients'}</option>{subclients.map((subclient) => <option key={subclient.id} value={subclient.id}>{subclient.name} ({subclient.clientCode})</option>)}</select></Field>{subclientsError && <p role="alert" className="text-[11px] text-rose-600">{subclientsError}</p>}</section>
           <section className="space-y-3">
             <h3 className="text-[11px] uppercase tracking-[0.12em] text-[var(--muted)]">Personal information</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="First name" icon={User}><input required value={values.firstName} onChange={set('firstName')} className={inputClass} autoComplete="given-name" /></Field>
-              <Field label="Last name" icon={User}><input required value={values.lastName} onChange={set('lastName')} className={inputClass} autoComplete="family-name" /></Field>
-              <Field label="Email" icon={Mail}><input required={mode === 'create'} type="email" value={values.email} onChange={set('email')} className={inputClass} autoComplete="email" /></Field>
+              <Field label="Full name" icon={User}><input required value={fullName} onChange={(event) => setFullName(event.target.value)} className={inputClass} autoComplete="name" /></Field>
+              <Field label={`Email${inviteByEmail ? '' : ' (optional)'}`} icon={Mail}><input required={inviteByEmail} type="email" value={values.email} onChange={set('email')} className={inputClass} autoComplete="email" /></Field>
+              {mode === 'create' && canInvite && <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)]/60 p-3 text-[12px]">
+                <input type="checkbox" checked={inviteByEmail} onChange={(event) => setInviteByEmail(event.target.checked)} className="mt-0.5 accent-[var(--primary)]" />
+                <span><span className="block font-medium text-[var(--foreground)]">Invite candidate by email</span><span className="mt-0.5 block text-[11px] text-[var(--muted)]">Send a secure candidate portal link after saving.</span></span>
+              </label>}
               <Field label="Phone" icon={Phone}><input value={values.phone} onChange={set('phone')} className={inputClass} autoComplete="tel" /></Field>
-              <Field label="Date of birth" icon={CalendarDays}><input type="date" value={values.dateOfBirth} onChange={set('dateOfBirth')} className={inputClass} /></Field>
+              <Field label="Date of birth"><DateInput value={values.dateOfBirth} onChange={(value) => setValues((current) => ({ ...current, dateOfBirth: value }))} className={inputClass} ariaLabel="Date of birth" max={new Date().toISOString().slice(0, 10)} /></Field>
               <Field label="Gender" icon={VenusAndMars}><select value={values.gender} onChange={set('gender')} className={inputClass}><option value="">Prefer not to say</option><option value="FEMALE">Female</option><option value="MALE">Male</option><option value="NON_BINARY">Non-binary</option><option value="OTHER">Other</option></select></Field>
             </div>
           </section>

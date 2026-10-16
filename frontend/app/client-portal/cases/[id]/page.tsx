@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft, Download } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { ClientPortalApiError, downloadPortalReport, getPortalCase, hasPortalPermission, type PortalCaseDetail } from '@/src/lib/api/client-portal';
+import { formatCandidateName } from '@/src/lib/candidate-name';
 
 function dateLabel(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : '—';
@@ -20,12 +21,12 @@ function badgeClass(value: string) {
 
 export default function ClientPortalCasePage() {
   const { id } = useParams<{ id: string }>();
-  const { accessToken, permissions } = useAuth();
+  const { accessToken, permissions, user } = useAuth();
   const [caseData, setCaseData] = useState<PortalCaseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
-  const canDownload = hasPortalPermission(permissions, 'clientportal.reports.download');
+  const canDownload = hasPortalPermission(permissions, 'clientportal.reports.download', user?.role.isCompanyAdmin ?? false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,7 +73,7 @@ export default function ClientPortalCasePage() {
       <Link href="/client-portal/cases" className="inline-flex items-center gap-2 text-[12px] text-[var(--muted)] hover:text-[var(--foreground)]"><ArrowLeft size={15} />Back to BGV cases</Link>
       {error && <p role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-[12px] text-rose-700">{error}</p>}
       <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-        <div><p className="font-mono text-[11px] text-[var(--muted)]">{caseData.caseNumber}</p><h2 className="mt-1 text-xl font-semibold">BGV case status</h2><p className="mt-1 text-[12px] text-[var(--muted)]">{caseData.candidate?.firstName} {caseData.candidate?.lastName} · {caseData.candidate?.candidateCode}</p></div>
+        <div><p className="font-mono text-[11px] text-[var(--muted)]">{caseData.caseNumber}</p><h2 className="mt-1 text-xl font-semibold">BGV case status</h2><p className="mt-1 text-[12px] text-[var(--muted)]">{caseData.candidate ? formatCandidateName(caseData.candidate) : 'Candidate'} · {caseData.candidate?.candidateCode}</p></div>
         {caseData.status === 'COMPLETED' && canDownload && <button type="button" disabled={downloading} onClick={() => void downloadReport()} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Download size={14} />{downloading ? 'Preparing…' : 'Download report'}</button>}
       </section>
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

@@ -19,6 +19,8 @@ const CLIENT_PERMISSIONS = [
   'clientportal.candidates.update',
   'clientportal.candidates.invite',
   'clientportal.candidates.portal.manage',
+  'clientportal.subclients.view',
+  'clientportal.subclients.manage',
 ];
 
 const userDto = (user) => ({
@@ -53,10 +55,18 @@ const validatePermissions = (permissions, { allowEmpty = false } = {}) => {
   if (invalid) throw new BadRequestError(`Unsupported client portal permission: ${invalid}`);
   const uniquePermissions = [...new Set(permissions)];
   if (
-    (uniquePermissions.includes('clientportal.candidates.create') || uniquePermissions.includes('clientportal.candidates.update') || uniquePermissions.includes('clientportal.candidates.invite') || uniquePermissions.includes('clientportal.candidates.portal.manage')) &&
+    (
+      uniquePermissions.includes('clientportal.candidates.create') ||
+      uniquePermissions.includes('clientportal.candidates.update') ||
+      uniquePermissions.includes('clientportal.candidates.invite') ||
+      uniquePermissions.includes('clientportal.candidates.portal.manage')
+    ) &&
     !uniquePermissions.includes('clientportal.candidates.view')
   ) {
     throw new BadRequestError('Candidate create/update/invite/portal management access also requires view candidates permission.');
+  }
+  if (uniquePermissions.includes('clientportal.subclients.manage') && !uniquePermissions.includes('clientportal.subclients.view')) {
+    throw new BadRequestError('Subclient management access also requires view subclients permission.');
   }
   if (
     uniquePermissions.includes('clientportal.reports.download') &&

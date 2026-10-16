@@ -26,6 +26,7 @@ function money(value: number, currency: string) {
 export default function ClientInvoicesPage() {
   const router = useRouter();
   const { user, loading: authLoading, accessToken, permissions } = useAuth();
+  const isPortalAdmin = user?.role.isCompanyAdmin ?? false;
   const [invoices, setInvoices] = useState<PortalInvoice[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -38,9 +39,9 @@ export default function ClientInvoicesPage() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) router.replace('/login');
-    else if (!user.role.isClientUser) router.replace(user.role.isSuperAdmin ? '/super-admin/dashboard' : '/company/dashboard');
-    else if (!permissions.includes('clientportal.invoices.view')) router.replace('/client-portal');
-  }, [authLoading, permissions, router, user]);
+    else if (!user.role.isClientUser && !user.role.isCompanyAdmin) router.replace(user.role.isSuperAdmin ? '/super-admin/dashboard' : '/company/dashboard');
+    else if (!isPortalAdmin && !permissions.includes('clientportal.invoices.view')) router.replace('/client-portal');
+  }, [authLoading, isPortalAdmin, permissions, router, user]);
 
   const loadInvoices = useCallback(async () => {
     setLoading(true);
@@ -58,10 +59,10 @@ export default function ClientInvoicesPage() {
   }, [accessToken, filters, page]);
 
   useEffect(() => {
-    if (authLoading || !user?.role.isClientUser || !permissions.includes('clientportal.invoices.view')) return;
+    if (authLoading || (!user?.role.isClientUser && !isPortalAdmin) || (!isPortalAdmin && !permissions.includes('clientportal.invoices.view'))) return;
     const timer = window.setTimeout(() => { void loadInvoices(); }, 250);
     return () => window.clearTimeout(timer);
-  }, [authLoading, loadInvoices, permissions, user]);
+  }, [authLoading, isPortalAdmin, loadInvoices, permissions, user]);
 
   const updateFilter = (key: keyof PortalListFilters, value: string) => {
     setPage(1);
@@ -88,7 +89,7 @@ export default function ClientInvoicesPage() {
     }
   };
 
-  if (authLoading || !user?.role.isClientUser || !permissions.includes('clientportal.invoices.view')) {
+  if (authLoading || (!user?.role.isClientUser && !isPortalAdmin) || (!isPortalAdmin && !permissions.includes('clientportal.invoices.view'))) {
     return <div className="flex min-h-[50vh] items-center justify-center text-sm text-[var(--muted)]">Loading invoices…</div>;
   }
 
@@ -97,7 +98,7 @@ export default function ClientInvoicesPage() {
       <section>
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">Billing workspace</p>
         <h2 className="mt-1 text-2xl font-semibold">Invoices</h2>
-        <p className="mt-1 text-[12px] text-[var(--muted)]">View issued invoices, payment progress, and download invoice PDFs for {user.client?.name || 'your organization'}.</p>
+        <p className="mt-1 text-[12px] text-[var(--muted)]">View issued invoices, payment progress, and download invoice PDFs for {user?.client?.name || 'your organization'}.</p>
       </section>
 
       {error && <p role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-[12px] text-rose-700">{error}</p>}

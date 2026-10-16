@@ -7,6 +7,7 @@ import type {
   ClientPortalPermission,
   ClientPortalAccountMethod,
   ClientPortalUser,
+  ClientStatus,
 } from "@/src/types/client";
 
 const API_BASE =
@@ -41,28 +42,36 @@ type Envelope<T> = ApiResponse<{ message: string; data: T; meta?: PaginationMeta
  * validation failure (bad logoUrl, bad email, etc) silently collapsed
  * into "Request failed (400)" instead of telling you what was wrong.
  */
-function extractErrorMessage(body: any, status: number): string {
-  const raw = body?.message;
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function extractErrorMessage(body: unknown, status: number): string {
+  const payload = asRecord(body);
+  const raw = payload.message;
 
   if (typeof raw === "string" && raw.trim()) return raw;
 
   if (raw && typeof raw === "object") {
-    if (typeof raw.message === "string" && raw.message.trim()) return raw.message;
-    if (Array.isArray(raw.errors) && raw.errors.length > 0) {
-      const first = raw.errors[0];
+    const error = asRecord(raw);
+    if (typeof error.message === "string" && error.message.trim()) return error.message;
+    if (Array.isArray(error.errors) && error.errors.length > 0) {
+      const first = error.errors[0];
       if (typeof first === "string") return first;
-      if (first?.msg) return String(first.msg);
-      if (first?.message) return String(first.message);
+      const firstRecord = asRecord(first);
+      if (typeof firstRecord.msg === "string") return firstRecord.msg;
+      if (typeof firstRecord.message === "string") return firstRecord.message;
     }
   }
 
   // Some validate-middleware setups put `errors` at the top level instead
   // of nested under `message` — check there too before giving up.
-  if (Array.isArray(body?.errors) && body.errors.length > 0) {
-    const first = body.errors[0];
+  if (Array.isArray(payload.errors) && payload.errors.length > 0) {
+    const first = payload.errors[0];
     if (typeof first === "string") return first;
-    if (first?.msg) return String(first.msg);
-    if (first?.message) return String(first.message);
+    const firstRecord = asRecord(first);
+    if (typeof firstRecord.msg === "string") return firstRecord.msg;
+    if (typeof firstRecord.message === "string") return firstRecord.message;
   }
 
   return `Request failed (${status})`;
@@ -155,6 +164,51 @@ export async function getClient(
 ): Promise<Client> {
   const res = await request<Envelope<Client>>(`/clients/${id}`, accessToken);
   return res.data.data;
+}
+
+export type SubclientPayload = {
+  name: string;
+  clientCode: string;
+  industry?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  gstNumber?: string;
+  panNumber?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postalCode?: string;
+  status?: ClientStatus;
+  serviceRates: { checkType: string; rate: number }[];
+  packageRate: number;
+};
+
+export async function listSubclients(parentClientId: string, accessToken: string | null): Promise<Client[]> {
+  const res = await request<Envelope<Client[]>>(`/clients/${parentClientId}/subclients`, accessToken);
+  return res.data.data;
+}
+
+export async function createSubclient(parentClientId: string, payload: SubclientPayload, accessToken: string | null): Promise<Client> {
+  const res = await request<Envelope<Client>>(`/clients/${parentClientId}/subclients`, accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return res.data.data;
+}
+
+export async function updateSubclient(parentClientId: string, subclientId: string, payload: Partial<SubclientPayload>, accessToken: string | null): Promise<Client> {
+  const res = await request<Envelope<Client>>(`/clients/${parentClientId}/subclients/${subclientId}`, accessToken, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  return res.data.data;
+}
+
+export async function deleteSubclient(parentClientId: string, subclientId: string, accessToken: string | null): Promise<void> {
+  await request<ApiResponse<{ message: string }>>(`/clients/${parentClientId}/subclients/${subclientId}`, accessToken, { method: 'DELETE' });
 }
 
 /* -------------------------------------------------------------------------- */

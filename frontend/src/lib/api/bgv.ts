@@ -19,12 +19,12 @@ async function request<T>(path: string, token: string | null | undefined, init?:
 
 function query(params: Record<string, string | number | undefined>) { const values = new URLSearchParams(); Object.entries(params).forEach(([key, value]) => { if (value !== undefined && value !== '') values.set(key, String(value)); }); const text = values.toString(); return text ? `?${text}` : ''; }
 
-export async function listBGVCases(params: { page: number; limit: number; search?: string; companyId?: string; clientId?: string; candidateId?: string; status?: BGVCaseStatus | ''; overallResult?: BGVOverallResult | ''; initiatedFrom?: string; initiatedTo?: string; completedFrom?: string; completedTo?: string }, token: string | null): Promise<{ items: BGVCase[]; meta: PaginationMeta }> {
+export async function listBGVCases(params: { page: number; limit: number; search?: string; companyId?: string; clientId?: string; subclientId?: string; candidateId?: string; status?: BGVCaseStatus | ''; overallResult?: BGVOverallResult | ''; initiatedFrom?: string; initiatedTo?: string; completedFrom?: string; completedTo?: string }, token: string | null): Promise<{ items: BGVCase[]; meta: PaginationMeta }> {
   const data = await request<{ data: BGVCase[]; meta: PaginationMeta }>(`/bgv/cases${query(params)}`, token);
   return { items: data.data, meta: data.meta };
 }
 
-export async function exportBGVCases(params: { search?: string; clientId?: string; candidateId?: string; status?: BGVCaseStatus | ''; overallResult?: BGVOverallResult | ''; initiatedFrom?: string; initiatedTo?: string }, token: string | null): Promise<Blob> {
+export async function exportBGVCases(params: { search?: string; clientId?: string; subclientId?: string; candidateId?: string; status?: BGVCaseStatus | ''; overallResult?: BGVOverallResult | ''; initiatedFrom?: string; initiatedTo?: string }, token: string | null): Promise<Blob> {
   const response = await fetch(`${API_BASE}/bgv/cases/export${query(params)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   if (!response.ok) throw new ApiError('Could not export BGV cases', response.status);
   return response.blob();

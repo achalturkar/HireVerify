@@ -33,12 +33,15 @@ export interface CompanyRef {
 export interface Client {
   id: string;
   companyId: string;
+  parentClientId?: string | null;
   clientCode: string;
   name: string;
   logoUrl: string | null;
   reportShowCompanyBranding: boolean;
   reportShowClientBranding: boolean;
   candidateFormConfig: CandidateFormConfig;
+  serviceRates?: { checkType: string; rate: number }[];
+  packageRate?: number | null;
   website: string | null;
   industry: string | null;
   contactName: string | null;
@@ -137,7 +140,9 @@ export type ClientPortalPermission =
   | 'clientportal.candidates.create'
   | 'clientportal.candidates.update'
   | 'clientportal.candidates.invite'
-  | 'clientportal.candidates.portal.manage';
+  | 'clientportal.candidates.portal.manage'
+  | 'clientportal.subclients.view'
+  | 'clientportal.subclients.manage';
 
 export type ClientPortalAccountMethod = 'INVITATION' | 'PASSWORD';
 

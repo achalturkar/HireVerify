@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Search, X, ChevronDown, User, Building2, Loader2 } from 'lucide-react';
 import { searchCandidates, ApiError } from '@/src/lib/api/candidates';
+import { formatCandidateName } from '@/src/lib/candidate-name';
 import type { CandidateOption } from '@/src/types/candidate';
 
 interface Props {
@@ -118,7 +119,7 @@ export default function CandidatePicker({
             </div>
             <div className="min-w-0">
               <p className="text-[13px] text-[var(--foreground)] truncate">
-                {selected.firstName} {selected.lastName}
+                {formatCandidateName(selected)}
               </p>
               <p className="text-[11px] text-[var(--muted)] truncate flex items-center gap-1">
                 {selected.client?.name && (
@@ -194,7 +195,7 @@ export default function CandidatePicker({
                   </div>
                   <div className="min-w-0">
                     <p className="text-[13px] text-[var(--foreground)] truncate">
-                      {c.firstName} {c.lastName}
+                      {formatCandidateName(c)}
                     </p>
                     <p className="text-[11px] text-[var(--muted)] truncate flex items-center gap-1">
                       {c.client?.name && (

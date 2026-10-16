@@ -3,17 +3,19 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, Clock3, Copy, Download, FileCheck2, FileText, KeyRound, MessageSquareText, Plus, RefreshCw, Receipt, Sparkles, Users, X, Eye, Search } from 'lucide-react';
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Activity, ArrowRight, ArrowUpRight, Building2, CheckCircle2, Clock3, Copy, Download, FileCheck2, FileText, KeyRound, MessageSquareText, Plus, RefreshCw, Receipt, Sparkles, Users, X, Eye, Search } from 'lucide-react';
+import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { changePassword } from '@/src/lib/api/users';
 import { getReportVerificationStatus, getVerificationStatus } from '@/src/lib/verification-status';
+import { formatCandidateName, splitCandidateName } from '@/src/lib/candidate-name';
 import {
   ClientPortalApiError,
   downloadPortalReport,
   getPortalDashboard,
   hasPortalPermission,
   listPortalCandidates,
+  listPortalSubclients,
   listPortalCases,
   listPortalReports,
   invitePortalCandidate,
@@ -23,6 +25,7 @@ import {
   type PortalDashboardSummary,
   type PortalListFilters,
   type PortalReport,
+  type PortalSubclient,
 } from '@/src/lib/api/client-portal';
 import type { ClientPortalPermission } from '@/src/types/client';
 
@@ -35,7 +38,7 @@ const PERMISSION_TAB: Record<PortalTab, ClientPortalPermission> = {
   reports: 'clientportal.reports.view',
 };
 const EMPTY_CANDIDATE: CandidateValues = {
-  firstName: '', lastName: '', email: '', phone: '', dateOfBirth: '', gender: '',
+  fullName: '', email: '', phone: '', dateOfBirth: '', gender: '', subclientId: '',
 };
 
 function errorMessage(error: unknown, fallback: string) {
@@ -64,9 +67,11 @@ export default function ClientPortalPage() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, loading: authLoading, accessToken, permissions } = useAuth();
+  const isPortalAdmin = user?.role.isCompanyAdmin ?? false;
+  const isPortalUser = Boolean(user?.role.isClientUser || isPortalAdmin);
   const availableTabs = useMemo(
-    () => (['candidates', 'cases', 'reports'] as const).filter((key) => hasPortalPermission(permissions, PERMISSION_TAB[key])),
-    [permissions],
+    () => (['candidates', 'cases', 'reports'] as const).filter((key) => hasPortalPermission(permissions, PERMISSION_TAB[key], isPortalAdmin)),
+    [isPortalAdmin, permissions],
   );
   const section = pathname.split('/')[2] || 'dashboard';
   const tab = (['candidates', 'cases', 'reports'].includes(section) ? section : 'candidates') as PortalTab;
@@ -78,6 +83,8 @@ export default function ClientPortalPage() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [filters, setFilters] = useState<PortalListFilters>({ search: '', status: '', dateFrom: '', dateTo: '' });
+  const [subclients, setSubclients] = useState<PortalSubclient[]>([]);
+  const [subclientsError, setSubclientsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [candidateModal, setCandidateModal] = useState(false);
@@ -99,12 +106,28 @@ export default function ClientPortalPage() {
     setPage(1);
     setFilters((current) => ({ ...current, [key]: value }));
   };
+  const canViewSubclients =
+    hasPortalPermission(permissions, 'clientportal.subclients.view', isPortalAdmin) ||
+    hasPortalPermission(permissions, 'clientportal.subclients.manage', isPortalAdmin);
+
+  useEffect(() => {
+    if (!canViewSubclients) return;
+    let active = true;
+    listPortalSubclients(accessToken)
+      .then((result) => {
+        if (active) setSubclients(result);
+      })
+      .catch((loadError: unknown) => {
+        if (active) setSubclientsError(errorMessage(loadError, 'Could not load subclients.'));
+      });
+    return () => { active = false; };
+  }, [accessToken, canViewSubclients]);
 
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
       router.replace('/login');
-    } else if (!user.role.isClientUser) {
+    } else if (!user.role.isClientUser && !user.role.isCompanyAdmin) {
       router.replace(user.role.isSuperAdmin ? '/super-admin/dashboard' : '/company/dashboard');
     }
   }, [authLoading, router, user]);
@@ -112,19 +135,21 @@ export default function ClientPortalPage() {
   const loadTab = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const candidateFilters = filters;
+    const caseFilters = { search: filters.search, status: filters.status, dateFrom: filters.dateFrom, dateTo: filters.dateTo, subclientId: filters.subclientId };
     try {
-      if (activeTab === 'candidates' && hasPortalPermission(permissions, 'clientportal.candidates.view')) {
-        const result = await listPortalCandidates(page, accessToken, filters);
+      if (activeTab === 'candidates' && hasPortalPermission(permissions, 'clientportal.candidates.view', isPortalAdmin)) {
+        const result = await listPortalCandidates(page, accessToken, candidateFilters);
         setCandidates(result.items);
         setTotal(result.total);
         setTotalPages(result.totalPages);
-      } else if (activeTab === 'cases' && hasPortalPermission(permissions, 'clientportal.cases.view')) {
-        const result = await listPortalCases(page, accessToken, filters);
+      } else if (activeTab === 'cases' && hasPortalPermission(permissions, 'clientportal.cases.view', isPortalAdmin)) {
+        const result = await listPortalCases(page, accessToken, caseFilters);
         setCases(result.items);
         setTotal(result.total);
         setTotalPages(result.totalPages);
-      } else if (activeTab === 'reports' && hasPortalPermission(permissions, 'clientportal.reports.view')) {
-        const result = await listPortalReports(page, accessToken, filters);
+      } else if (activeTab === 'reports' && hasPortalPermission(permissions, 'clientportal.reports.view', isPortalAdmin)) {
+        const result = await listPortalReports(page, accessToken, caseFilters);
         setReports(result.items);
         setTotal(result.total);
         setTotalPages(result.totalPages);
@@ -137,13 +162,13 @@ export default function ClientPortalPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, activeTab, filters, page, permissions]);
+  }, [accessToken, activeTab, filters, isPortalAdmin, page, permissions]);
 
   useEffect(() => {
-    if (authLoading || !user?.role.isClientUser || !['candidates', 'cases', 'reports'].includes(section) || !availableTabs.includes(activeTab)) return;
+    if (authLoading || !isPortalUser || !['candidates', 'cases', 'reports'].includes(section) || !availableTabs.includes(activeTab)) return;
     const timer = window.setTimeout(() => { void loadTab(); }, 250);
     return () => window.clearTimeout(timer);
-  }, [activeTab, authLoading, availableTabs, loadTab, section, user]);
+  }, [activeTab, authLoading, availableTabs, isPortalUser, loadTab, section]);
 
   const loadDashboard = useCallback(async () => {
     setDashboardLoading(true);
@@ -158,10 +183,10 @@ export default function ClientPortalPage() {
   }, [accessToken]);
 
   useEffect(() => {
-    if (authLoading || !user?.role.isClientUser || section !== 'dashboard') return;
+    if (authLoading || !isPortalUser || section !== 'dashboard') return;
     const timer = window.setTimeout(() => { void loadDashboard(); }, 0);
     return () => window.clearTimeout(timer);
-  }, [authLoading, loadDashboard, section, user]);
+  }, [authLoading, isPortalUser, loadDashboard, section]);
 
   const openCreateCandidate = () => {
     setCandidateValues(EMPTY_CANDIDATE);
@@ -177,7 +202,17 @@ export default function ClientPortalPage() {
     setSavingCandidate(true);
     setCandidateError(null);
     try {
-      const payload = Object.fromEntries(Object.entries(candidateValues).map(([key, value]) => [key, value.trim() || null]));
+      const candidateName = splitCandidateName(candidateValues.fullName);
+      if (!candidateName) {
+        setCandidateError('Enter the candidate’s full name, including first and last name.');
+        return;
+      }
+      const payload = {
+        ...Object.fromEntries(Object.entries(candidateValues)
+          .filter(([key]) => key !== 'fullName')
+          .map(([key, value]) => [key, value.trim() || null])),
+        ...candidateName,
+      };
       const candidate = await savePortalCandidate(payload, accessToken);
       setCandidateModal(false);
       if (inviteAfterCreate && canInviteCandidates) {
@@ -249,13 +284,13 @@ export default function ClientPortalPage() {
     }
   };
 
-  if (authLoading || !user || !user.role.isClientUser) {
+  if (authLoading || !user || (!user.role.isClientUser && !user.role.isCompanyAdmin)) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-[var(--muted)]">Loading client portal…</div>;
   }
 
-  const canCreateCandidates = hasPortalPermission(permissions, 'clientportal.candidates.create');
-  const canInviteCandidates = hasPortalPermission(permissions, 'clientportal.candidates.invite') || canCreateCandidates;
-  const canDownloadReports = hasPortalPermission(permissions, 'clientportal.reports.download');
+  const canCreateCandidates = hasPortalPermission(permissions, 'clientportal.candidates.create', isPortalAdmin);
+  const canInviteCandidates = hasPortalPermission(permissions, 'clientportal.candidates.invite', isPortalAdmin) || canCreateCandidates;
+  const canDownloadReports = hasPortalPermission(permissions, 'clientportal.reports.download', isPortalAdmin);
   const client = user.client;
   if (section === 'account') {
     return (
@@ -324,8 +359,17 @@ export default function ClientPortalPage() {
         iconBg: 'bg-violet-500/10 text-violet-700',
         href: '/client-portal/invoices',
       }] : []),
+      ...(dashboard?.permissions.subclients ? [{
+        label: 'Subclients',
+        value: dashboard.counts.subclients,
+        icon: Building2,
+        href: '/client-portal/subclients',
+        detail: 'Organizations managed under your account',
+        accent: 'text-cyan-600 bg-cyan-500/10',
+        iconBg: 'bg-cyan-500/10 text-cyan-700',
+      }] : []),
     ];
-    const chartHasData = dashboard?.monthlyActivity.some((month) => (month.candidates ?? 0) > 0 || (month.cases ?? 0) > 0 || (month.invoices ?? 0) > 0) ?? false;
+    const chartHasData = dashboard?.monthlyActivity.some((month) => (month.candidates ?? 0) > 0 || (month.cases ?? 0) > 0 || (month.reports ?? 0) > 0 || (month.invoices ?? 0) > 0) ?? false;
     const quickLinks = [
       ...(dashboard?.permissions.cases ? [{
         label: 'Track case progress',
@@ -334,7 +378,7 @@ export default function ClientPortalPage() {
         icon: FileCheck2,
         accent: 'bg-emerald-500/10 text-emerald-700',
       }] : []),
-      ...(hasPortalPermission(permissions, 'clientportal.reports.view') ? [{
+      ...(hasPortalPermission(permissions, 'clientportal.reports.view', isPortalAdmin) ? [{
         label: 'View reports',
         description: 'Open completed verifications',
         href: '/client-portal/reports',
@@ -347,6 +391,13 @@ export default function ClientPortalPage() {
         href: '/client-portal/invoices',
         icon: Receipt,
         accent: 'bg-amber-500/10 text-amber-700',
+      }] : []),
+      ...(dashboard?.permissions.subclients ? [{
+        label: 'Manage subclients',
+        description: `${(dashboard.counts.subclients ?? 0).toLocaleString()} subclients in your account`,
+        href: '/client-portal/subclients',
+        icon: Building2,
+        accent: 'bg-cyan-500/10 text-cyan-700',
       }] : []),
       {
         label: 'Request support',
@@ -367,7 +418,7 @@ export default function ClientPortalPage() {
         accent: 'bg-amber-500/10 text-amber-700',
         latest: dashboard.recentCases[0] ? {
           title: `Case ${dashboard.recentCases[0].caseNumber}`,
-          detail: `${dashboard.recentCases[0].candidate.firstName} ${dashboard.recentCases[0].candidate.lastName} · ${dashboard.recentCases[0].status.replaceAll('_', ' ')}`,
+          detail: `${formatCandidateName(dashboard.recentCases[0].candidate)} · ${dashboard.recentCases[0].status.replaceAll('_', ' ')}`,
           date: dateTimeText(dashboard.recentCases[0].createdAt),
           href: `/client-portal/cases/${dashboard.recentCases[0].id}`,
           action: 'View case',
@@ -382,7 +433,7 @@ export default function ClientPortalPage() {
         icon: FileText,
         accent: 'bg-emerald-500/10 text-emerald-700',
         latest: dashboard.recentReports[0] ? {
-          title: `Report for ${dashboard.recentReports[0].candidate.firstName} ${dashboard.recentReports[0].candidate.lastName}`,
+          title: `Report for ${formatCandidateName(dashboard.recentReports[0].candidate)}`,
           detail: `${dashboard.recentReports[0].caseNumber} · Completed`,
           date: dateTimeText(dashboard.recentReports[0].completedAt),
           href: '/client-portal/reports',
@@ -404,6 +455,16 @@ export default function ClientPortalPage() {
           href: '/client-portal/invoices',
           action: 'View invoices',
         } : null,
+      }] : []),
+      ...(dashboard?.permissions.subclients ? [{
+        id: 'subclients',
+        title: 'Subclients',
+        count: dashboard.counts.subclients ?? 0,
+        countLabel: 'managed organizations',
+        href: '/client-portal/subclients',
+        icon: Building2,
+        accent: 'bg-cyan-500/10 text-cyan-700',
+        latest: null,
       }] : []),
     ];
 
@@ -427,7 +488,12 @@ export default function ClientPortalPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {hasPortalPermission(permissions, 'clientportal.candidates.create') && (
+              {dashboard?.permissions.subclients && (
+                <Link href="/client-portal/subclients" className="inline-flex w-fit shrink-0 items-center justify-center gap-2 rounded-xl border border-current/25 bg-black/5 px-4 py-2.5 text-[12px] font-semibold transition hover:bg-black/10">
+                  <Building2 size={15} />Manage subclients
+                </Link>
+              )}
+              {hasPortalPermission(permissions, 'clientportal.candidates.create', isPortalAdmin) && (
                 <Link href="/client-portal/candidates" className="inline-flex w-fit shrink-0 items-center justify-center gap-2 rounded-xl bg-[var(--primary-foreground)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary)] shadow-sm transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current">
                   <Plus size={15} />Add candidate
                 </Link>
@@ -529,20 +595,22 @@ export default function ClientPortalPage() {
                 <div className="grid gap-4 xl:grid-cols-[1.4fr_0.6fr]">
                   {dashboard.monthlyActivity.length > 0 && <section className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-6">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div><h3 className="text-[14px] font-semibold">Activity over time</h3><p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">A monthly view of new candidates, BGV cases, and invoices for your organization.</p></div>
+                      <div><h3 className="text-[14px] font-semibold">Activity over time</h3><p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Monthly candidates, BGV cases, completed reports, and invoices for your organization.</p></div>
                       <span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-medium text-[var(--muted)]">Last 12 months</span>
                     </div>
                     {chartHasData
-                      ? <div className="mt-5 h-[280px] w-full" role="img" aria-label="Line chart showing monthly candidate, BGV case, and invoice activity">
+                      ? <div className="mt-5 h-[300px] w-full" role="img" aria-label="Line chart showing monthly candidate, BGV case, completed report, and invoice activity">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={dashboard.monthlyActivity} margin={{ top: 10, right: 18, left: -18, bottom: 0 }}>
                             <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
                             <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
                             <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
                             <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--foreground)', fontSize: 12 }} />
+                            <Legend verticalAlign="bottom" height={28} wrapperStyle={{ fontSize: 11, color: 'var(--muted)' }} />
                             {dashboard.permissions.candidates && <Line type="monotone" dataKey="candidates" name="New candidates" stroke="#4D8FE8" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />}
                             {dashboard.permissions.cases && <Line type="monotone" dataKey="cases" name="BGV cases" stroke="#14A38B" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />}
-                            {dashboard.permissions.invoices && <Line type="monotone" dataKey="invoices" name="Invoices" stroke="#8B6BE8" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />}
+                            {dashboard.permissions.reports && <Line type="monotone" dataKey="reports" name="Completed reports" stroke="#8B6BE8" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />}
+                            {dashboard.permissions.invoices && <Line type="monotone" dataKey="invoices" name="Invoices" stroke="#E89B48" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />}
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
@@ -581,7 +649,7 @@ export default function ClientPortalPage() {
                       <thead className="bg-[var(--surface-muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted)]"><tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Created</th></tr></thead>
                       <tbody className="divide-y divide-[var(--border)]">{dashboard.recentCases.map((item) => <tr key={item.id}>
                         <td className="px-5 py-3.5"><Link href={`/client-portal/cases/${item.id}`} className="font-mono font-medium text-[var(--primary)] hover:underline">{item.caseNumber}</Link></td>
-                        <td className="px-5 py-3.5">{item.candidate.firstName} {item.candidate.lastName}<span className="block text-[10px] text-[var(--muted)]">{item.candidate.candidateCode}</span></td>
+                        <td className="px-5 py-3.5">{formatCandidateName(item.candidate)}<span className="block text-[10px] text-[var(--muted)]">{item.candidate.candidateCode}</span></td>
                         <td className="px-5 py-3.5"><Status value={item.status} /></td>
                         <td className="px-5 py-3.5 text-right text-[var(--muted)]">{dateText(item.createdAt)}</td>
                       </tr>)}</tbody>
@@ -625,7 +693,7 @@ export default function ClientPortalPage() {
             <div className="flex items-center justify-between gap-3">{portalNotice && <div role="status" className="flex flex-wrap items-center gap-3 text-[12px] text-emerald-700"><span>{portalNotice}</span>{candidateInviteUrl && <button type="button" onClick={copyCandidateInvite} className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 px-2.5 py-1.5 font-semibold"><Copy size={13} />Copy invitation link</button>}</div>}{activeTab === 'candidates' && canCreateCandidates && <button type="button" onClick={openCreateCandidate} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)]"><Plus size={14} />Add candidate</button>}</div>
 
             {error && <p role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-[12px] text-rose-700">{error}</p>}
-            <section aria-label={`${activeTab} filters`} className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:grid-cols-2 lg:grid-cols-4">
+            <section aria-label={`${activeTab} filters`} className="grid gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
               <label className="relative block text-[10px] font-medium text-[var(--muted)]">Search
                 <Search size={14} className="absolute left-3 top-[31px] text-[var(--muted)]" />
                 <input value={filters.search || ''} onChange={(event) => updateFilter('search', event.target.value)} placeholder={activeTab === 'candidates' ? 'Name, email, or reference' : 'Case or candidate'} className={`${inputClass} pl-9`} />
@@ -641,6 +709,14 @@ export default function ClientPortalPage() {
                   ).map((status) => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
                 </select>
               </label>
+              {canViewSubclients && <label className="block text-[10px] font-medium text-[var(--muted)]">Subclient
+                <select value={filters.subclientId || ''} onChange={(event) => updateFilter('subclientId', event.target.value)} className={inputClass}>
+                  <option value="">All {activeTab}</option>
+                  <option value="none">Direct client {activeTab}</option>
+                  {subclients.map((subclient) => <option key={subclient.id} value={subclient.id}>{subclient.name} ({subclient.clientCode})</option>)}
+                </select>
+                {subclientsError && <span className="mt-1 block text-rose-700">{subclientsError}</span>}
+              </label>}
               <label className="block text-[10px] font-medium text-[var(--muted)]">{activeTab === 'reports' ? 'Completed from' : 'Created from'}
                 <input type="date" value={filters.dateFrom || ''} max={filters.dateTo || undefined} onChange={(event) => updateFilter('dateFrom', event.target.value)} className={inputClass} />
               </label>
@@ -654,12 +730,12 @@ export default function ClientPortalPage() {
               {loading ? <p className="px-5 py-12 text-center text-[12px] text-[var(--muted)]">Loading…</p>
                 : activeTab === 'candidates' ? (
                   candidates.length === 0 ? <EmptyState icon={<Users size={19} />} message="No candidates are available." />
-                    : <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-[12px]"><thead className="bg-[var(--surface-muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted)]"><tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Email / phone</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Details</th></tr></thead><tbody className="divide-y divide-[var(--border)]">{candidates.map((candidate) => <tr key={candidate.id}><td className="px-5 py-3.5 font-mono text-[11px] text-[var(--muted)]">{candidate.candidateCode}</td><td className="px-5 py-3.5 font-medium">{candidate.firstName} {candidate.lastName}</td><td className="px-5 py-3.5 text-[var(--muted)]">{candidate.email || '—'}<span className="block text-[10px]">{candidate.phone || ''}</span></td><td className="px-5 py-3.5"><Status value={candidate.status} /></td><td className="px-5 py-3.5 text-right"><button type="button" onClick={() => router.push(`/client-portal/candidates/${candidate.id}`)} className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[11px] hover:bg-[var(--surface-muted)]"><Eye size={13} />View</button></td></tr>)}</tbody></table></div>
+                    : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-[12px]"><thead className="bg-[var(--surface-muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted)]"><tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Subclient</th><th className="px-5 py-3">Email / phone</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Details</th></tr></thead><tbody className="divide-y divide-[var(--border)]">{candidates.map((candidate) => <tr key={candidate.id}><td className="px-5 py-3.5 font-mono text-[11px] text-[var(--muted)]">{candidate.candidateCode}</td><td className="px-5 py-3.5 font-medium">{formatCandidateName(candidate)}</td><td className="px-5 py-3.5">{candidate.subclient ? <><span>{candidate.subclient.name}</span><span className="block font-mono text-[10px] text-[var(--muted)]">{candidate.subclient.clientCode}</span></> : <span className="text-[var(--muted)]">Direct client</span>}</td><td className="px-5 py-3.5 text-[var(--muted)]">{candidate.email || '—'}<span className="block text-[10px]">{candidate.phone || ''}</span></td><td className="px-5 py-3.5"><Status value={candidate.status} /></td><td className="px-5 py-3.5 text-right"><button type="button" onClick={() => router.push(`/client-portal/candidates/${candidate.id}`)} className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[11px] hover:bg-[var(--surface-muted)]"><Eye size={13} />View</button></td></tr>)}</tbody></table></div>
                 ) : activeTab === 'cases' ? (
                   cases.length === 0 ? <EmptyState icon={<FileCheck2 size={19} />} message="No BGV cases are available." />
-                    : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-[12px]"><thead className="bg-[var(--surface-muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted)]"><tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Verification status</th><th className="px-5 py-3">Initiated</th><th className="px-5 py-3">Completed</th><th className="px-5 py-3 text-right">Progress</th></tr></thead><tbody className="divide-y divide-[var(--border)]">{cases.map((item) => { const verification = getVerificationStatus(item.verificationStatuses); return <tr key={item.id}><td className="px-5 py-3.5 font-mono">{item.caseNumber}</td><td className="px-5 py-3.5">{item.candidate.firstName} {item.candidate.lastName}<span className="block text-[10px] text-[var(--muted)]">{item.candidate.candidateCode}</span></td><td className="px-5 py-3.5"><Status value={item.status} /></td><td className="px-5 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${verification.className}`}>{verification.label}</span></td><td className="px-5 py-3.5">{dateText(item.initiatedAt)}</td><td className="px-5 py-3.5">{dateText(item.completedAt)}</td><td className="px-5 py-3.5 text-right"><button type="button" onClick={() => router.push(`/client-portal/cases/${item.id}`)} className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[11px] hover:bg-[var(--surface-muted)]"><Eye size={13} />View</button></td></tr>; })}</tbody></table></div>
+                    : <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-[12px]"><thead className="bg-[var(--surface-muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted)]"><tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Verification status</th><th className="px-5 py-3">Initiated</th><th className="px-5 py-3">Completed</th><th className="px-5 py-3 text-right">Progress</th></tr></thead><tbody className="divide-y divide-[var(--border)]">{cases.map((item) => { const verification = getVerificationStatus(item.verificationStatuses); return <tr key={item.id}><td className="px-5 py-3.5 font-mono">{item.caseNumber}</td><td className="px-5 py-3.5">{formatCandidateName(item.candidate)}<span className="block text-[10px] text-[var(--muted)]">{item.candidate.candidateCode}</span></td><td className="px-5 py-3.5"><Status value={item.status} /></td><td className="px-5 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${verification.className}`}>{verification.label}</span></td><td className="px-5 py-3.5">{dateText(item.initiatedAt)}</td><td className="px-5 py-3.5">{dateText(item.completedAt)}</td><td className="px-5 py-3.5 text-right"><button type="button" onClick={() => router.push(`/client-portal/cases/${item.id}`)} className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[11px] hover:bg-[var(--surface-muted)]"><Eye size={13} />View</button></td></tr>; })}</tbody></table></div>
                 ) : reports.length === 0 ? <EmptyState icon={<FileText size={19} />} message="No completed reports are available." />
-                  : <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-[12px]"><thead className="bg-[var(--surface-muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted)]"><tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Completed</th><th className="px-5 py-3">Verification status</th><th className="px-5 py-3 text-right">Report</th></tr></thead><tbody className="divide-y divide-[var(--border)]">{reports.map((report) => { const verification = getReportVerificationStatus(report.reportVerificationStatus); return <tr key={report.id}><td className="px-5 py-3.5 font-mono">{report.caseNumber}</td><td className="px-5 py-3.5">{report.candidate.firstName} {report.candidate.lastName}<span className="block text-[10px] text-[var(--muted)]">{report.candidate.candidateCode}</span></td><td className="px-5 py-3.5">{dateText(report.completedAt)}</td><td className="px-5 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${verification.className}`}>{verification.label}</span></td><td className="px-5 py-3.5 text-right">{canDownloadReports && <button type="button" disabled={downloadingReport === report.id} onClick={() => void downloadReport(report)} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-medium hover:bg-[var(--surface-muted)] disabled:opacity-50"><Download size={13} />{downloadingReport === report.id ? 'Downloading…' : 'PDF'}</button>}</td></tr>; })}</tbody></table></div>}
+                  : <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-[12px]"><thead className="bg-[var(--surface-muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted)]"><tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Completed</th><th className="px-5 py-3">Verification status</th><th className="px-5 py-3 text-right">Report</th></tr></thead><tbody className="divide-y divide-[var(--border)]">{reports.map((report) => { const verification = getReportVerificationStatus(report.reportVerificationStatus); return <tr key={report.id}><td className="px-5 py-3.5 font-mono">{report.caseNumber}</td><td className="px-5 py-3.5">{formatCandidateName(report.candidate)}<span className="block text-[10px] text-[var(--muted)]">{report.candidate.candidateCode}</span></td><td className="px-5 py-3.5">{dateText(report.completedAt)}</td><td className="px-5 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${verification.className}`}>{verification.label}</span></td><td className="px-5 py-3.5 text-right">{canDownloadReports && <button type="button" disabled={downloadingReport === report.id} onClick={() => void downloadReport(report)} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-medium hover:bg-[var(--surface-muted)] disabled:opacity-50"><Download size={13} />{downloadingReport === report.id ? 'Downloading…' : 'PDF'}</button>}</td></tr>; })}</tbody></table></div>}
               <div className="flex flex-col items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3 text-[11px] text-[var(--muted)] sm:flex-row">
                 <span>{total === 0 ? '0 records' : `${(page - 1) * 20 + 1}–${Math.min(page * 20, total)} of ${total} records`} · 20 per page</span>
                 <div className="flex items-center gap-2"><span>Page {page} of {Math.max(1, totalPages)}</span><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Previous</button><button type="button" disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Next</button></div>
@@ -674,8 +750,8 @@ export default function ClientPortalPage() {
             <div className="border-b border-[var(--border)] pb-4">
               <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Personal information</p>
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="text-[12px] text-[var(--muted)]">First name<input required autoComplete="given-name" type="text" value={candidateValues.firstName} onChange={(event) => setCandidateValues((value) => ({ ...value, firstName: event.target.value }))} className={inputClass} /></label>
-                <label className="text-[12px] text-[var(--muted)]">Last name<input required autoComplete="family-name" type="text" value={candidateValues.lastName} onChange={(event) => setCandidateValues((value) => ({ ...value, lastName: event.target.value }))} className={inputClass} /></label>
+                <label className="text-[12px] text-[var(--muted)] sm:col-span-2">Full name<input required autoComplete="name" type="text" value={candidateValues.fullName} onChange={(event) => setCandidateValues((value) => ({ ...value, fullName: event.target.value }))} className={inputClass} /></label>
+                {canViewSubclients && <label className="text-[12px] text-[var(--muted)]">Assign to subclient<select value={candidateValues.subclientId} onChange={(event) => setCandidateValues((value) => ({ ...value, subclientId: event.target.value }))} className={inputClass}><option value="">Direct client candidate</option>{subclients.filter((subclient) => subclient.status === 'ACTIVE').map((subclient) => <option key={subclient.id} value={subclient.id}>{subclient.name} ({subclient.clientCode})</option>)}</select></label>}
                 <label className="text-[12px] text-[var(--muted)]">Email<input required={canInviteCandidates && inviteAfterCreate} autoComplete="email" type="email" value={candidateValues.email} onChange={(event) => setCandidateValues((value) => ({ ...value, email: event.target.value }))} className={inputClass} /></label>
                 <label className="text-[12px] text-[var(--muted)]">Phone<input autoComplete="tel" type="tel" value={candidateValues.phone} onChange={(event) => setCandidateValues((value) => ({ ...value, phone: event.target.value }))} className={inputClass} /></label>
                 <label className="text-[12px] text-[var(--muted)]">Date of birth<input type="date" value={candidateValues.dateOfBirth} onChange={(event) => setCandidateValues((value) => ({ ...value, dateOfBirth: event.target.value }))} className={inputClass} /></label>

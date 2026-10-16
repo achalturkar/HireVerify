@@ -77,6 +77,43 @@ const listClients = asyncHandler(async (req, res) => {
   });
 });
 
+const listSubclients = asyncHandler(async (req, res) => {
+  const data = await service.getSubclients({ parentClientId: req.params.id, companyId: req.user.companyId });
+  return success(res, { message: 'Subclients', data });
+});
+
+const createSubclient = asyncHandler(async (req, res) => {
+  const data = await service.createSubclient({
+    parentClientId: req.params.id,
+    companyId: req.user.companyId,
+    payload: req.body,
+    currentUser: req.user,
+  });
+  await writeAudit({ req, action: 'client.subclient.create', entity: 'Client', entityId: data.id, metadata: { parentClientId: req.params.id, clientCode: data.clientCode } });
+  return created(res, { message: 'Subclient created successfully.', data });
+});
+
+const updateSubclient = asyncHandler(async (req, res) => {
+  const data = await service.updateSubclient({
+    parentClientId: req.params.id,
+    subclientId: req.params.subclientId,
+    companyId: req.user.companyId,
+    payload: req.body,
+  });
+  await writeAudit({ req, action: 'client.subclient.update', entity: 'Client', entityId: data.id });
+  return success(res, { message: 'Subclient updated successfully.', data });
+});
+
+const deleteSubclient = asyncHandler(async (req, res) => {
+  await service.removeSubclient({
+    parentClientId: req.params.id,
+    subclientId: req.params.subclientId,
+    companyId: req.user.companyId,
+  });
+  await writeAudit({ req, action: 'client.subclient.delete', entity: 'Client', entityId: req.params.subclientId });
+  return success(res, { message: 'Subclient deactivated successfully.' });
+});
+
 /**
  * Update Client
  */
@@ -219,6 +256,10 @@ module.exports = {
   createClient,
   getClient,
   listClients,
+  listSubclients,
+  createSubclient,
+  updateSubclient,
+  deleteSubclient,
   updateClient,
   deleteClient,
   activateClient,

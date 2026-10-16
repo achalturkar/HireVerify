@@ -8,8 +8,9 @@ const create = (data) => prisma.bGVCase.create({ data });
 const findById = (id, companyId) => prisma.bGVCase.findFirst({
   where: { id, companyId },
   include: {
-    candidate: { select: { id: true, candidateCode: true, firstName: true, lastName: true, email: true, phone: true, gender: true, dateOfBirth: true, currentAddress: true, permanentAddress: true } },
+    candidate: { select: { id: true, candidateCode: true, fullName: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, gender: true, dateOfBirth: true, currentAddress: true, permanentAddress: true } },
     client: { select: { id: true, name: true, logoUrl: true, reportShowCompanyBranding: true, reportShowClientBranding: true, clientCode: true, contactEmail: true, company: { select: { name: true, contactEmail: true, shortCode: true, primaryColor: true, logoUrl: true, signatureUrl: true, stampUrl: true, address: true } } } },
+    subclient: { select: { id: true, name: true, clientCode: true } },
     checks: { include: { documents: true } },
     consents: {
       where: { consentType: 'BGV_CONSENT' },
@@ -23,10 +24,11 @@ const findById = (id, companyId) => prisma.bGVCase.findFirst({
 
 const findByCaseNumber = (caseNumber) => prisma.bGVCase.findUnique({ where: { caseNumber } });
 
-const list = async ({ companyId, clientId, candidateId, status, overallResult, search, initiatedFrom, initiatedTo, completedFrom, completedTo, skip, limit, sortBy, sortOrder }) => {
+const list = async ({ companyId, clientId, subclientId, candidateId, status, overallResult, search, initiatedFrom, initiatedTo, completedFrom, completedTo, skip, limit, sortBy, sortOrder }) => {
   const where = {
     companyId,
     ...(clientId ? { clientId } : {}),
+    ...(subclientId === 'none' ? { subclientId: null } : subclientId ? { subclientId } : {}),
     ...(candidateId ? { candidateId } : {}),
     ...(status ? { status } : {}),
     ...(overallResult ? { overallResult } : {}),
@@ -43,8 +45,9 @@ const list = async ({ companyId, clientId, candidateId, status, overallResult, s
     prisma.bGVCase.findMany({
       where, skip, take: limit, orderBy: { [sortBy]: sortOrder },
       include: {
-        candidate: { select: { id: true, candidateCode: true, firstName: true, lastName: true, email: true } },
+        candidate: { select: { id: true, candidateCode: true, fullName: true, firstName: true, middleName: true, lastName: true, email: true } },
         client: { select: { id: true, name: true, clientCode: true, contactEmail: true } },
+        subclient: { select: { id: true, name: true, clientCode: true } },
         checks: { select: { type: true, status: true, result: true, resultData: true, remarks: true, documents: { select: { id: true } } } },
         _count: { select: { checks: true } },
       },

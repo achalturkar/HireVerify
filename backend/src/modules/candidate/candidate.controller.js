@@ -21,7 +21,7 @@ const listCandidates = asyncHandler(async (req, res) => {
   const pagination = parsePagination(req.query);
   const { items, total } = await service.list({
     companyId: req.user.companyId,
-    query: { ...pagination, search: req.query.search, clientId: req.query.clientId, status: req.query.status, includeDeleted: req.query.includeDeleted, sortBy: req.query.sortBy, sortOrder: req.query.sortOrder },
+    query: { ...pagination, search: req.query.search, clientId: req.query.clientId, subclientId: req.query.subclientId, status: req.query.status, includeDeleted: req.query.includeDeleted, sortBy: req.query.sortBy, sortOrder: req.query.sortOrder },
   });
   return success(res, { message: 'Candidates', data: items, meta: buildMeta({ page: pagination.page, limit: pagination.limit, total }) });
 });

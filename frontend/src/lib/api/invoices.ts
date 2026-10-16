@@ -36,6 +36,8 @@ export interface InvoiceCase {
   completedAt?: string | null;
   packageName: string | null;
   candidateName: string;
+  subclientName?: string | null;
+  suggestedRate?: number | null;
   candidate: { firstName: string; lastName: string; candidateCode: string };
 }
 
@@ -71,7 +73,7 @@ export interface InvoiceInput {
 
 export interface InvoiceItem extends InvoiceItemInput {
   id: string;
-  case?: { caseNumber: string } | null;
+  case?: { caseNumber: string; subclient?: { name: string } | null } | null;
   subtotal: InvoiceAmount;
   discountAmount: InvoiceAmount;
   taxableAmount: InvoiceAmount;

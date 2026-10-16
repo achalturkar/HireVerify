@@ -1,11 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Activity, CheckCircle2, ChevronRight, Download, FileCheck2, FileSpreadsheet, Layers3, Loader2, Pencil, Plus, Search, Send } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { listClients } from '@/src/lib/api/clients';
+import { listClients, listSubclients } from '@/src/lib/api/clients';
 import { getVerificationStatus } from '@/src/lib/verification-status';
 import { createBGVCase, downloadBGVReport, exportBGVCases, getBGVCase, listBGVCases, transitionBGVCase, updateBGVCaseChecks, updateBGVCaseMeta, ApiError } from '@/src/lib/api/bgv';
 import BGVCaseWizardModal from '@/src/components/layout/company/bgv/BGVCaseWizardModal';
@@ -30,13 +29,16 @@ export default function BGVCaseListPage() {
   const initialCreateCandidateId = searchParams.get('createCandidateId') || '';
   const { accessToken } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
+  const [subclients, setSubclients] = useState<Client[]>([]);
   const [clientsLoading, setClientsLoading] = useState(true);
   const [clientLoadError, setClientLoadError] = useState<string | null>(null);
+  const [subclientLoadError, setSubclientLoadError] = useState<string | null>(null);
   const [items, setItems] = useState<BGVCase[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 20, total: 0, totalPages: 1 });
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [clientId, setClientId] = useState('');
+  const [subclientId, setSubclientId] = useState('');
   const [candidateId, setCandidateId] = useState(initialCreateCandidateId || initialCandidateId);
   const [status, setStatus] = useState<BGVCaseStatus | ''>(initialStatus);
   const [initiatedFrom, setInitiatedFrom] = useState('');
@@ -55,7 +57,7 @@ export default function BGVCaseListPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listBGVCases({ page, limit: 20, search, clientId: clientId || undefined, candidateId: candidateId || undefined, status, initiatedFrom, initiatedTo }, accessToken);
+      const data = await listBGVCases({ page, limit: 20, search, clientId: clientId || undefined, subclientId: subclientId || undefined, candidateId: candidateId || undefined, status, initiatedFrom, initiatedTo }, accessToken);
       setItems(data.items);
       setMeta(data.meta);
     } catch (err) {
@@ -63,9 +65,12 @@ export default function BGVCaseListPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, page, search, clientId, candidateId, status, initiatedFrom, initiatedTo]);
+  }, [accessToken, page, search, clientId, subclientId, candidateId, status, initiatedFrom, initiatedTo]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   useEffect(() => {
     let active = true;
@@ -87,6 +92,20 @@ export default function BGVCaseListPage() {
 
   useEffect(() => {
     let active = true;
+    if (!clientId) return () => { active = false; };
+    listSubclients(clientId, accessToken)
+      .then((result) => { if (active) setSubclients(result); })
+      .catch((cause: unknown) => {
+        if (active) {
+          setSubclients([]);
+          setSubclientLoadError(cause instanceof Error ? cause.message : 'Could not load subclients.');
+        }
+      });
+    return () => { active = false; };
+  }, [accessToken, clientId]);
+
+  useEffect(() => {
+    let active = true;
     const loadSummary = async () => {
       setSummaryLoading(true);
       setSummaryError(null);
@@ -95,6 +114,7 @@ export default function BGVCaseListPage() {
           page: 1,
           limit: 1,
           clientId: clientId || undefined,
+          subclientId: subclientId || undefined,
           candidateId: candidateId || undefined,
           status: cardStatus || undefined,
           initiatedFrom: initiatedFrom || undefined,
@@ -111,7 +131,7 @@ export default function BGVCaseListPage() {
     };
     void loadSummary();
     return () => { active = false; };
-  }, [accessToken, candidateId, clientId, initiatedFrom, initiatedTo]);
+  }, [accessToken, candidateId, clientId, subclientId, initiatedFrom, initiatedTo]);
 
   const move = async (item: BGVCase, next: BGVCaseStatus) => {
     try {
@@ -180,7 +200,7 @@ export default function BGVCaseListPage() {
     setActionId('export');
     setError(null);
     try {
-      const blob = await exportBGVCases({ search, clientId: clientId || undefined, status, initiatedFrom, initiatedTo }, accessToken);
+      const blob = await exportBGVCases({ search, clientId: clientId || undefined, subclientId: subclientId || undefined, status, initiatedFrom, initiatedTo }, accessToken);
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `bgv-cases-${initiatedFrom || 'all'}-to-${initiatedTo || 'all'}.xlsx`;
@@ -217,10 +237,10 @@ export default function BGVCaseListPage() {
             <h2 className="text-[15px] font-semibold">Case overview</h2>
             <p className="mt-0.5 text-[11px] text-[var(--muted)]">Choose a stage to filter the case list. Counts follow the selected initiation dates.</p>
           </div>
-          {(status || clientId || candidateId || initiatedFrom || initiatedTo) && (
+          {(status || clientId || subclientId || candidateId || initiatedFrom || initiatedTo) && (
             <button
               type="button"
-              onClick={() => { setPage(1); setStatus(''); setClientId(''); setCandidateId(''); setInitiatedFrom(''); setInitiatedTo(''); }}
+              onClick={() => { setPage(1); setStatus(''); setClientId(''); setSubclientId(''); setCandidateId(''); setInitiatedFrom(''); setInitiatedTo(''); }}
               className="text-[11px] font-semibold text-[var(--primary)] hover:underline"
             >
               Clear overview filters
@@ -297,14 +317,24 @@ export default function BGVCaseListPage() {
         </select>
         <select
           value={clientId}
-          onChange={(event) => { setPage(1); setClientId(event.target.value); }}
+          onChange={(event) => { setPage(1); setClientId(event.target.value); setSubclientId(''); setSubclients([]); setSubclientLoadError(null); }}
           className="min-w-48 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px]"
           aria-label="Filter cases by client"
           disabled={clientsLoading}
         >
           <option value="">{clientsLoading ? 'Loading clients...' : 'All clients'}</option>
-          {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
+          {clients.filter((client) => !client.parentClientId).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
         </select>
+        {clientId && <select
+          value={subclientId}
+          onChange={(event) => { setPage(1); setSubclientId(event.target.value); }}
+          className="min-w-48 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px]"
+          aria-label="Filter cases by subclient"
+        >
+          <option value="">All subclients</option>
+          <option value="none">Direct client cases</option>
+          {subclients.map((subclient) => <option key={subclient.id} value={subclient.id}>{subclient.name}</option>)}
+        </select>}
         <label className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-[11px] text-[var(--muted)]">
           Initiated from
           <input type="date" value={initiatedFrom} onChange={(event) => { setPage(1); setInitiatedFrom(event.target.value); }} className="bg-transparent text-[13px] text-[var(--foreground)] outline-none" />
@@ -315,6 +345,7 @@ export default function BGVCaseListPage() {
         </label>
       </div>
       {clientLoadError && <p role="alert" className="text-[12px] text-[#FF6B6B]">{clientLoadError}</p>}
+      {subclientLoadError && <p role="alert" className="text-[12px] text-[#FF6B6B]">{subclientLoadError}</p>}
 
       <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
         <div className="overflow-x-auto">
@@ -350,7 +381,7 @@ export default function BGVCaseListPage() {
                     <td className="px-5 py-4">
                       {item.candidate ? `${item.candidate.firstName} ${item.candidate.lastName}` : item.candidateId}
                     </td>
-                    <td className="px-5 py-4 text-[var(--muted)]">{item.client?.name ?? item.clientId}</td>
+                    <td className="px-5 py-4 text-[var(--muted)]"><p>{item.client?.name ?? item.clientId}</p>{item.subclient?.name && <p className="mt-0.5 text-[11px]">Subclient: {item.subclient.name}</p>}</td>
                     <td className="px-5 py-4">{item._count?.checks ?? item.checks?.length ?? 0}</td>
                     <td className="px-5 py-4">
                       {(() => {

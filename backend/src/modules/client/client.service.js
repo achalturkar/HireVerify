@@ -16,12 +16,15 @@ const {
 const toDto = (client) => ({
   id: client.id,
   companyId: client.companyId,
+  parentClientId: client.parentClientId || null,
   clientCode: client.clientCode,
   name: client.name,
   logoUrl: client.logoUrl,
   reportShowCompanyBranding: client.reportShowCompanyBranding,
   reportShowClientBranding: client.reportShowClientBranding,
   candidateFormConfig: normalizeConfig(client.candidateFormConfig),
+  serviceRates: Array.isArray(client.serviceRates) ? client.serviceRates : [],
+  packageRate: client.packageRate === null || client.packageRate === undefined ? null : Number(client.packageRate),
   website: client.website,
   industry: client.industry,
   contactName: client.contactName,
@@ -191,6 +194,128 @@ const list = async ({ companyId, query }) => {
     })),
     total: result.total,
   };
+};
+
+const CHECK_TYPES = new Set([
+  'PAN', 'UAN', 'COURT', 'IDENTITY', 'ADDRESS', 'ADDRESS_PHYSICAL', 'EDUCATION',
+  'EMPLOYMENT', 'GAP', 'REFERENCE', 'CV', 'SOCIAL_MEDIA', 'DOCUMENT',
+  'DOCUMENT_FORGERY', 'CIBIL', 'TWENTY_SIX_AS', 'POLICE', 'POLICE_RECORD',
+]);
+
+const normalizeServiceRates = (value) => {
+  if (!Array.isArray(value)) throw new BadRequestError('Checks and rates must be provided as a list.');
+  if (value.length === 0) throw new BadRequestError('Select at least one background check for the subclient package.');
+  const seen = new Set();
+  return value.map((entry) => {
+    const checkType = String(entry?.checkType || '').trim();
+    const rate = Number(entry?.rate);
+    if (!CHECK_TYPES.has(checkType)) throw new BadRequestError('Choose a valid background check for every subclient rate.');
+    if (seen.has(checkType)) throw new BadRequestError('A check can only be configured once per subclient.');
+    if (!Number.isFinite(rate) || rate < 0 || rate > 100000000) throw new BadRequestError('Each check rate must be between 0 and 100,000,000.');
+    seen.add(checkType);
+    return { checkType, rate };
+  });
+};
+
+const normalizePackageRate = (value) => {
+  const rate = Number(value);
+  if (!Number.isFinite(rate) || rate < 0 || rate > 100000000) {
+    throw new BadRequestError('Package rate must be between 0 and 100,000,000 INR.');
+  }
+  return rate;
+};
+
+const getSubclients = async ({ parentClientId, companyId }) => {
+  const parent = await prisma.client.findFirst({
+    where: { id: parentClientId, companyId, parentClientId: null, isDeleted: false },
+    select: { id: true },
+  });
+  if (!parent) throw new NotFoundError('Client not found');
+  return (await repo.listSubclients(parentClientId)).map((child) => ({
+    ...toDto(child),
+    candidateCount: child._count?.subclientCandidates ?? 0,
+    bgvCaseCount: child._count?.subclientCases ?? 0,
+  }));
+};
+
+const createSubclient = async ({ parentClientId, companyId, payload, currentUser }) => {
+  const parent = await prisma.client.findFirst({
+    where: { id: parentClientId, companyId, parentClientId: null, isDeleted: false },
+    select: { id: true },
+  });
+  if (!parent) throw new NotFoundError('Client not found');
+  const name = payload.name?.trim();
+  const clientCode = payload.clientCode?.trim();
+  if (!name || !clientCode) throw new BadRequestError('Subclient name and code are required.');
+  const existing = await prisma.client.findUnique({ where: { clientCode } });
+  if (existing) throw new ConflictError('Client code already exists');
+  const sibling = await prisma.client.findFirst({
+    where: { companyId, parentClientId, name: { equals: name, mode: 'insensitive' }, isDeleted: false },
+    select: { id: true },
+  });
+  if (sibling) throw new ConflictError('A subclient with this name already exists under the client.');
+  const serviceRates = normalizeServiceRates(payload.serviceRates || []);
+  const packageRate = normalizePackageRate(payload.packageRate);
+  const created = await repo.create({
+    companyId,
+    parentClientId,
+    name,
+    clientCode,
+    industry: payload.industry?.trim() || null,
+    contactName: payload.contactName?.trim() || null,
+    contactEmail: payload.contactEmail?.trim().toLowerCase() || null,
+    contactPhone: payload.contactPhone?.trim() || null,
+    gstNumber: payload.gstNumber?.trim() || null,
+    panNumber: payload.panNumber?.trim() || null,
+    addressLine1: payload.addressLine1?.trim() || null,
+    addressLine2: payload.addressLine2?.trim() || null,
+    city: payload.city?.trim() || null,
+    state: payload.state?.trim() || null,
+    country: payload.country?.trim() || null,
+    postalCode: payload.postalCode?.trim() || null,
+    serviceRates,
+    packageRate,
+    status: 'ACTIVE',
+    createdById: currentUser?.id || null,
+  });
+  return toDto(created);
+};
+
+const updateSubclient = async ({ parentClientId, subclientId, companyId, payload }) => {
+  const current = await prisma.client.findFirst({
+    where: { id: subclientId, parentClientId, companyId, isDeleted: false },
+  });
+  if (!current) throw new NotFoundError('Subclient not found');
+  const data = {};
+  for (const key of ['name', 'clientCode', 'industry', 'contactName', 'contactEmail', 'contactPhone', 'gstNumber', 'panNumber', 'addressLine1', 'addressLine2', 'city', 'state', 'country', 'postalCode', 'status']) {
+    if (payload[key] !== undefined) data[key] = typeof payload[key] === 'string' ? payload[key].trim() || null : payload[key];
+  }
+  if (data.name === null) throw new BadRequestError('Subclient name is required.');
+  if (data.clientCode === null) throw new BadRequestError('Subclient code is required.');
+  if (data.contactEmail) data.contactEmail = data.contactEmail.toLowerCase();
+  if (payload.serviceRates !== undefined) data.serviceRates = normalizeServiceRates(payload.serviceRates);
+  if (payload.packageRate !== undefined) data.packageRate = normalizePackageRate(payload.packageRate);
+  if (data.clientCode && data.clientCode !== current.clientCode) {
+    const existing = await prisma.client.findUnique({ where: { clientCode: data.clientCode } });
+    if (existing) throw new ConflictError('Client code already exists');
+  }
+  if (data.name && data.name.toLocaleLowerCase() !== current.name.toLocaleLowerCase()) {
+    const sibling = await prisma.client.findFirst({
+      where: { companyId, parentClientId, name: { equals: data.name, mode: 'insensitive' }, isDeleted: false },
+      select: { id: true },
+    });
+    if (sibling) throw new ConflictError('A subclient with this name already exists under the client.');
+  }
+  return toDto(await repo.update(subclientId, data));
+};
+
+const removeSubclient = async ({ parentClientId, subclientId, companyId }) => {
+  const child = await prisma.client.findFirst({
+    where: { id: subclientId, parentClientId, companyId, isDeleted: false },
+    select: { id: true },
+  });
+  if (!child) throw new NotFoundError('Subclient not found');
+  await repo.softDelete(subclientId);
 };
 
 /**
@@ -406,6 +531,10 @@ module.exports = {
   create,
   getById,
   list,
+  getSubclients,
+  createSubclient,
+  updateSubclient,
+  removeSubclient,
   update,
   remove,
   activate,

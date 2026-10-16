@@ -21,21 +21,29 @@ export class ApiError extends Error {
  * validate middleware). Passing an object straight into `Error()` silently
  * stringifies it to "[object Object]" - this guards against that.
  */
-function extractErrorMessage(json: any, status: number): string {
-  const raw = json?.message ?? json?.data?.message;
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+function extractErrorMessage(json: unknown, status: number): string {
+  const payload = asRecord(json);
+  const raw = payload.message ?? asRecord(payload.data).message;
 
   if (typeof raw === 'string' && raw.trim()) {
     return raw;
   }
 
   if (raw && typeof raw === 'object') {
-    if (typeof raw.message === 'string' && raw.message.trim()) {
-      return raw.message;
+    const error = asRecord(raw);
+    if (typeof error.message === 'string' && error.message.trim()) {
+      return error.message;
     }
-    if (Array.isArray(raw.errors) && raw.errors.length > 0) {
-      const first = raw.errors[0];
+    if (Array.isArray(error.errors) && error.errors.length > 0) {
+      const first = error.errors[0];
       if (typeof first === 'string') return first;
-      if (first?.message) return String(first.message);
+      const firstRecord = asRecord(first);
+      if (typeof firstRecord.message === 'string') return firstRecord.message;
+      if (typeof firstRecord.msg === 'string') return firstRecord.msg;
     }
   }
 
@@ -117,6 +125,7 @@ export interface ListCandidatesParams {
   limit: number;
   search?: string;
   clientId?: string;
+  subclientId?: string;
   status?: CandidateStatus | '';
   includeDeleted?: boolean;
   sortBy?: 'candidateCode' | 'firstName' | 'lastName' | 'email' | 'status' | 'createdAt' | 'updatedAt';
@@ -137,6 +146,7 @@ export async function listCandidates(
   qs.set('limit', String(params.limit));
   if (params.search) qs.set('search', params.search);
   if (params.clientId) qs.set('clientId', params.clientId);
+  if (params.subclientId) qs.set('subclientId', params.subclientId);
   if (params.status) qs.set('status', params.status);
   if (params.includeDeleted) qs.set('includeDeleted', 'true');
   qs.set('sortBy', params.sortBy || 'createdAt');
@@ -156,7 +166,10 @@ export async function getCandidate(id: string, accessToken?: string | null): Pro
 
 export interface CandidatePayload {
   clientId: string;
+  subclientId?: string | null;
+  fullName: string;
   firstName: string;
+  middleName?: string | null;
   lastName: string;
   email?: string;
   phone?: string;
@@ -248,11 +261,13 @@ export async function searchCandidates(
   const json = await authFetch(`/candidates${query}`, accessToken, { method: 'GET' });
   return (json.data.data as Candidate[]).map((c) => ({
     id: c.id,
+    fullName: c.fullName,
     firstName: c.firstName,
+    middleName: c.middleName,
     lastName: c.lastName,
     email: c.email,
     status: c.status,
-    client: (c as any).client ?? null,
+    client: c.client ?? null,
   }));
 }
 

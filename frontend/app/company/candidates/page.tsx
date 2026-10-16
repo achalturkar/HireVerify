@@ -6,8 +6,9 @@ import { CheckCircle2, Clock3, Copy, FileCheck2, Mail, Pencil, Plus, Search, Tra
 import { useAuth } from '@/src/auth/AuthProvider';
 import CandidateConfirmDialog from '@/src/components/layout/company/candidate/CandidateConfirmDialog';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
+import { formatCandidateName } from '@/src/lib/candidate-name';
 import { ApiError, createCandidate, deleteCandidate, listCandidates, sendCandidatePortalLink, updateCandidate } from '@/src/lib/api/candidates';
-import { listClients } from '@/src/lib/api/clients';
+import { listClients, listSubclients } from '@/src/lib/api/clients';
 import type { Candidate, CandidateFormValues, CandidateStatus, PaginationMeta } from '@/src/types/candidate';
 import type { Client } from '@/src/types/client';
 
@@ -42,10 +43,13 @@ export default function CandidatesPage() {
   const { accessToken, user } = useAuth();
   const [items, setItems] = useState<Candidate[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [subclients, setSubclients] = useState<Client[]>([]);
+  const [subclientsError, setSubclientsError] = useState<string | null>(null);
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [clientId, setClientId] = useState('');
+  const [subclientId, setSubclientId] = useState('');
   const [status, setStatus] = useState<CandidateStatus | ''>('');
   const [summaryCounts, setSummaryCounts] = useState<Record<string, number | null>>({ '': null, PENDING: null, IN_PROGRESS: null, COMPLETED: null });
   const [summaryLoading, setSummaryLoading] = useState(true);
@@ -63,12 +67,12 @@ export default function CandidatesPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const result = await listCandidates({ page, limit: PAGE_SIZE, search, clientId: clientId || undefined, status, sortBy: 'createdAt', sortOrder: 'desc' }, accessToken);
+      const result = await listCandidates({ page, limit: PAGE_SIZE, search, clientId: clientId || undefined, subclientId: subclientId || undefined, status, sortBy: 'createdAt', sortOrder: 'desc' }, accessToken);
       setItems(result.items); setMeta(result.meta);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load candidates.');
     } finally { setLoading(false); }
-  }, [accessToken, page, search, clientId, status]);
+  }, [accessToken, page, search, clientId, subclientId, status]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, 0);
@@ -86,6 +90,7 @@ export default function CandidatesPage() {
           limit: 1,
           search,
           clientId: clientId || undefined,
+          subclientId: subclientId || undefined,
           status: cardStatus || undefined,
           sortBy: 'createdAt',
           sortOrder: 'desc',
@@ -101,14 +106,28 @@ export default function CandidatesPage() {
     };
     void loadSummary();
     return () => { active = false; };
-  }, [accessToken, clientId, search]);
+  }, [accessToken, clientId, search, subclientId]);
 
   useEffect(() => {
     listClients({ page: 1, limit: 200, sortBy: 'name', sortOrder: 'asc' }, accessToken)
       .then((result) => setClients(result.items)).catch(() => setClients([]));
   }, [accessToken]);
 
-  const submit = async (values: CandidateFormValues) => {
+  useEffect(() => {
+    let active = true;
+    if (!clientId) return () => { active = false; };
+    listSubclients(clientId, accessToken)
+      .then((result) => { if (active) setSubclients(result); })
+      .catch((cause: unknown) => {
+        if (active) {
+          setSubclients([]);
+          setSubclientsError(cause instanceof Error ? cause.message : 'Could not load subclients.');
+        }
+      });
+    return () => { active = false; };
+  }, [accessToken, clientId]);
+
+  const submit = async (values: CandidateFormValues, inviteByEmail = false) => {
     setSubmitting(true);
     setFormError(null);
     setCandidateNotice(null);
@@ -117,9 +136,11 @@ export default function CandidatesPage() {
       const payload = modal === 'create'
         ? {
           clientId: values.clientId,
+          fullName: values.fullName.trim(),
           firstName: values.firstName.trim(),
+          middleName: values.middleName.trim() || null,
           lastName: values.lastName.trim(),
-          email: values.email.trim(),
+          email: values.email.trim() || undefined,
           phone: values.phone.trim() || undefined,
           dateOfBirth: values.dateOfBirth || null,
           gender: values.gender || null,
@@ -130,7 +151,7 @@ export default function CandidatesPage() {
         setModal(null);
         setActive(null);
         await load();
-        if (user?.role.isCompanyAdmin || user?.role.isSuperAdmin) {
+        if (inviteByEmail && (user?.role.isCompanyAdmin || user?.role.isSuperAdmin)) {
           try {
             const invitation = await sendCandidatePortalLink(created.id, accessToken);
             setCandidateInviteUrl(invitation.url);
@@ -141,7 +162,7 @@ export default function CandidatesPage() {
             setCandidateNotice(`Candidate added, but the invitation failed: ${inviteError instanceof Error ? inviteError.message : 'Please retry from the candidate profile.'}`);
           }
         } else {
-          setCandidateNotice('Candidate added. A company admin can send the portal invitation.');
+          setCandidateNotice('Candidate added.');
         }
       } else if (active) {
         await updateCandidate(active.id, payload, accessToken);
@@ -198,11 +219,12 @@ export default function CandidatesPage() {
       </div>
       {summaryError && <p role="alert" className="text-[12px] text-[#FF6B6B]">{summaryError}</p>}
     </section>
-    <div className="flex flex-col gap-3 sm:flex-row"><label className="relative flex-1"><Search size={15} className="absolute left-3 top-3 text-[var(--muted)]" /><input value={search} onChange={(event) => { setPage(1); setSearch(event.target.value); }} placeholder="Search candidates" className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-9 pr-3 text-[13px]" /></label><select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as CandidateStatus | ''); }} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px]" aria-label="Filter by candidate status"><option value="">All statuses</option>{Object.keys(statusStyle).map((value) => <option key={value} value={value}>{statusLabel[value as CandidateStatus]}</option>)}</select><select value={clientId} onChange={(event) => { setPage(1); setClientId(event.target.value); }} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px]" aria-label="Filter candidates by client"><option value="">All clients</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap"><label className="relative flex-1"><Search size={15} className="absolute left-3 top-3 text-[var(--muted)]" /><input value={search} onChange={(event) => { setPage(1); setSearch(event.target.value); }} placeholder="Search candidates" className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-9 pr-3 text-[13px]" /></label><select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as CandidateStatus | ''); }} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px]" aria-label="Filter by candidate status"><option value="">All statuses</option>{Object.keys(statusStyle).map((value) => <option key={value} value={value}>{statusLabel[value as CandidateStatus]}</option>)}</select><select value={clientId} onChange={(event) => { setPage(1); setClientId(event.target.value); setSubclientId(''); setSubclients([]); setSubclientsError(null); }} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px]" aria-label="Filter candidates by client"><option value="">All clients</option>{clients.filter((client) => !client.parentClientId).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select>{clientId && <select value={subclientId} onChange={(event) => { setPage(1); setSubclientId(event.target.value); }} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px]" aria-label="Filter candidates by subclient"><option value="">All subclients</option><option value="none">Direct client candidates</option>{subclients.map((subclient) => <option key={subclient.id} value={subclient.id}>{subclient.name}</option>)}</select>}</div>
+    {subclientsError && <p role="alert" className="text-[12px] text-[#FF6B6B]">{subclientsError}</p>}
     <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]"><div className="overflow-x-auto"><table className="w-full text-left text-[13px]"><thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wider text-[var(--muted)]"><tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Client</th><th className="px-5 py-3">Cases</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Actions</th></tr></thead><tbody className="divide-y divide-[var(--border)]">
-      {loading ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]">Loading candidates...</td></tr> : error ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[#FF6B6B]">{error}</td></tr> : items.length === 0 ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]"><Users size={24} className="mx-auto mb-2" />No candidates found.</td></tr> : items.map((candidate) => <tr key={candidate.id} onClick={() => { window.location.href = `/company/candidate/${candidate.id}`; }} className="cursor-pointer transition-colors hover:bg-[var(--surface-muted)]"><td className="px-5 py-4 font-mono text-[12px] text-[var(--muted)]">{candidate.candidateCode}</td><td className="px-5 py-4"><Link href={`/company/candidate/${candidate.id}`} className="font-medium hover:text-[var(--primary)]">{candidate.firstName} {candidate.lastName}</Link><p className="text-[11px] text-[var(--muted)]">{candidate.email}</p></td><td className="px-5 py-4 text-[var(--muted)]">{clientMap.get(candidate.clientId) ?? '—'}</td><td className="px-5 py-4">{candidate.bgvCaseCount ?? 0}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${statusStyle[candidate.status]}`}>{statusLabel[candidate.status]}</span></td><td className="px-5 py-4 text-right"><div className="inline-flex items-center gap-1">
+      {loading ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]">Loading candidates...</td></tr> : error ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[#FF6B6B]">{error}</td></tr> : items.length === 0 ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]"><Users size={24} className="mx-auto mb-2" />No candidates found.</td></tr> : items.map((candidate) => <tr key={candidate.id} onClick={() => { window.location.href = `/company/candidate/${candidate.id}`; }} className="cursor-pointer transition-colors hover:bg-[var(--surface-muted)]"><td className="px-5 py-4 font-mono text-[12px] text-[var(--muted)]">{candidate.candidateCode}</td><td className="px-5 py-4"><Link href={`/company/candidate/${candidate.id}`} className="font-medium hover:text-[var(--primary)]">{formatCandidateName(candidate)}</Link><p className="text-[11px] text-[var(--muted)]">{candidate.email}</p></td><td className="px-5 py-4 text-[var(--muted)]"><p>{clientMap.get(candidate.clientId) ?? '—'}</p>{candidate.subclient?.name && <p className="mt-0.5 text-[11px]">Subclient: {candidate.subclient.name}</p>}</td><td className="px-5 py-4">{candidate.bgvCaseCount ?? 0}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${statusStyle[candidate.status]}`}>{statusLabel[candidate.status]}</span></td><td className="px-5 py-4 text-right"><div className="inline-flex items-center gap-1">
         {(candidate.bgvCaseCount ?? 0) > 0 && <Link href={`/company/bgv-cases?candidateId=${encodeURIComponent(candidate.id)}`} aria-label={`View ${candidate.bgvCaseCount} BGV cases for ${candidate.firstName} ${candidate.lastName}`} title="Open this candidate's BGV cases" onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-1 rounded-md px-2 py-2 text-xs font-semibold text-[var(--primary)] hover:bg-[var(--surface-muted)]"><FileCheck2 size={15} /><span>Cases</span></Link>}
         <button aria-label="Send candidate portal link" title="Send or resend candidate portal link" onClick={(event) => { event.stopPropagation(); setActive(candidate); setModal('edit'); }} className="rounded-md p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)]"><Mail size={15} /></button><button aria-label="Edit candidate" onClick={(event) => { event.stopPropagation(); setActive(candidate); setModal('edit'); }} className="rounded-md p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)]"><Pencil size={15} /></button><button aria-label={(candidate.bgvCaseCount ?? 0) > 0 ? `Cannot delete ${candidate.firstName} ${candidate.lastName}: candidate has a BGV case` : `Delete candidate ${candidate.firstName} ${candidate.lastName}`} title={(candidate.bgvCaseCount ?? 0) > 0 ? 'Candidates with BGV cases cannot be deleted' : 'Delete candidate'} disabled={(candidate.bgvCaseCount ?? 0) > 0} onClick={(event) => { event.stopPropagation(); setDeleteTarget(candidate); }} className="rounded-md p-2 text-[#FF6B6B] hover:bg-[#FF6B6B]/10 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={15} /></button></div></td></tr>)}</tbody></table></div>        <div className="flex flex-col items-center gap-2.5 border-t border-[var(--border)] px-5 py-3 text-[12px] text-[var(--muted)]"><span>{meta.total} candidates</span><div className="flex justify-center gap-2"><button disabled={page <= 1} onClick={() => setPage((current) => current - 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Previous</button><button disabled={page >= meta.totalPages} onClick={() => setPage((current) => current + 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Next</button></div></div></div>
-    {modal && <CandidateFormModal mode={modal} candidate={active} submitting={submitting} error={formError} onClose={() => { setModal(null); setActive(null); }} onSubmit={submit} />}{deleteTarget && <CandidateConfirmDialog title="Delete candidate?" description="This hides the candidate from active BGV workflows." confirmLabel="Delete" submitting={submitting} onConfirm={remove} onCancel={() => setDeleteTarget(null)} />}
+    {modal && <CandidateFormModal mode={modal} candidate={active} canInvite={user?.role.isCompanyAdmin || user?.role.isSuperAdmin} submitting={submitting} error={formError} onClose={() => { setModal(null); setActive(null); }} onSubmit={submit} />}{deleteTarget && <CandidateConfirmDialog title="Delete candidate?" description="This hides the candidate from active BGV workflows." confirmLabel="Delete" submitting={submitting} onConfirm={remove} onCancel={() => setDeleteTarget(null)} />}
   </div>;
 }

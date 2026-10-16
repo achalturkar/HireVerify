@@ -15,15 +15,25 @@ const toDto = (item) => item;
 
 const assertOwnership = async ({ companyId, clientId, candidateId }) => {
   const [client, candidate] = await Promise.all([
-    prisma.client.findFirst({ where: { id: clientId, companyId, isDeleted: false }, select: { id: true } }),
-    prisma.candidate.findFirst({ where: { id: candidateId, companyId, clientId, isDeleted: false }, select: { id: true } }),
+    prisma.client.findFirst({ where: { id: clientId, companyId, parentClientId: null, isDeleted: false }, select: { id: true } }),
+    prisma.candidate.findFirst({
+      where: { id: candidateId, companyId, clientId, isDeleted: false },
+      select: { id: true, subclientId: true, subclient: { select: { serviceRates: true } } },
+    }),
   ]);
   if (!client) throw new NotFoundError('Client not found');
   if (!candidate) throw new NotFoundError('Candidate not found for this client');
+  return candidate;
 };
 
 const create = async ({ payload, companyId, currentUser }) => {
-  await assertOwnership({ companyId, clientId: payload.clientId, candidateId: payload.candidateId });
+  const candidate = await assertOwnership({ companyId, clientId: payload.clientId, candidateId: payload.candidateId });
+  if (candidate.subclientId && payload.checks?.length) {
+    const allowedChecks = new Set((candidate.subclient.serviceRates || []).map((entry) => entry.checkType));
+    if (payload.checks.some((check) => !allowedChecks.has(check.type))) {
+      throw new BadRequestError('Selected checks must be enabled for the candidate’s subclient.');
+    }
+  }
   const company = await prisma.company.findUnique({ where: { id: companyId }, select: { shortCode: true } });
   const numberPrefix = `${company?.shortCode || 'BGV'}-${new Date().getFullYear()}`;
   let created;
@@ -48,7 +58,7 @@ const create = async ({ payload, companyId, currentUser }) => {
       }, 0);
       const caseNumber = `${numberPrefix}-${String(highestSequence + 1).padStart(4, '0')}`;
 
-      const item = await tx.bGVCase.create({ data: { companyId, clientId: payload.clientId, candidateId: payload.candidateId, caseNumber, status: payload.status || 'DRAFT', initiatedAt: payload.status === 'INITIATED' ? new Date() : null, clientReference: payload.clientReference || null, packageName: payload.packageName || null, remarks: payload.remarks || null, createdById: currentUser?.id || null } });
+      const item = await tx.bGVCase.create({ data: { companyId, clientId: payload.clientId, subclientId: candidate.subclientId, candidateId: payload.candidateId, caseNumber, status: payload.status || 'DRAFT', initiatedAt: payload.status === 'INITIATED' ? new Date() : null, clientReference: payload.clientReference || null, packageName: payload.packageName || null, remarks: payload.remarks || null, createdById: currentUser?.id || null } });
       const checks = payload.checks || [];
       if (checks.length) await tx.verificationCheck.createMany({ data: checks.map((check) => ({ caseId: item.id, type: check.type, provider: check.provider || 'SUREPASS', priority: check.priority || 0 })) });
       await tx.candidate.update({ where: { id: payload.candidateId }, data: { status: 'VERIFICATION_IN_PROGRESS', updatedById: currentUser?.id || null } });
@@ -116,6 +126,13 @@ const updateChecks = async ({ id, companyId, checks, currentUser }) => {
   const current = await repo.findById(id, companyId);
   if (!current) throw new NotFoundError('BGV case not found');
   if (current.status === 'COMPLETED' || current.status === 'CANCELLED') throw new ConflictError('This case is finalized and cannot be edited.');
+  if (current.subclientId) {
+    const subclient = await prisma.client.findUnique({ where: { id: current.subclientId }, select: { serviceRates: true } });
+    const allowedChecks = new Set((subclient?.serviceRates || []).map((entry) => entry.checkType));
+    if (checks.some((check) => !allowedChecks.has(check.type))) {
+      throw new BadRequestError('Selected checks must be enabled for the case’s subclient.');
+    }
+  }
 
   const requested = new Map(checks.map((check) => [check.type, check]));
   const existing = new Map((current.checks || []).map((check) => [check.type, check]));

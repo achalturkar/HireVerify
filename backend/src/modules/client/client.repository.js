@@ -92,6 +92,13 @@ const setStatus = (id, status) =>
     data: { status },
   });
 
+const listSubclients = async (parentClientId) =>
+  prisma.client.findMany({
+    where: { parentClientId, isDeleted: false },
+    orderBy: { name: 'asc' },
+    include: { _count: { select: { subclientCandidates: true, subclientCases: true } } },
+  });
+
 /**
  * List Clients
  */
@@ -108,6 +115,7 @@ const list = async ({
 }) => {
   const where = {
     companyId,
+    parentClientId: null,
 
     ...(deletedOnly ? { isDeleted: true } : includeDeleted ? {} : { isDeleted: false }),
 
@@ -194,4 +202,5 @@ module.exports = {
   restore,
   setStatus,
   list,
+  listSubclients,
 };

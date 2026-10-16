@@ -1,17 +1,57 @@
 import type { CandidateFormConfig, ClientPortalPermission } from '@/src/types/client';
+import type { VerificationType } from '@/src/types/bgv';
 import { ApiError, authFetch } from './http';
 
 const API_BASE = process.env.NEXT_PUBLIC_API ?? '/api/v1';
+const CLIENT_PORTAL_SCOPE_KEY = 'hireverify_client_portal_scope';
+
+export function getClientPortalScope() {
+  return typeof window === 'undefined' ? null : window.sessionStorage.getItem(CLIENT_PORTAL_SCOPE_KEY);
+}
+
+export function setClientPortalScope(clientId: string | null) {
+  if (typeof window === 'undefined') return;
+  if (clientId) window.sessionStorage.setItem(CLIENT_PORTAL_SCOPE_KEY, clientId);
+  else window.sessionStorage.removeItem(CLIENT_PORTAL_SCOPE_KEY);
+}
+
+function scopedPortalHeaders(): Record<string, string> {
+  const clientId = getClientPortalScope();
+  return clientId ? { 'X-Client-Portal-Client-Id': clientId } : {};
+}
+
+function scopedPortalQuery() {
+  const clientId = getClientPortalScope();
+  return clientId ? `?portalClientId=${encodeURIComponent(clientId)}` : '';
+}
 
 export interface PortalCandidate {
   id: string;
   candidateCode: string;
+  fullName: string;
   firstName: string;
+  middleName: string | null;
   lastName: string;
   email: string | null;
   phone: string | null;
   status: string;
   createdAt: string;
+  subclient: Pick<PortalSubclient, 'id' | 'name' | 'clientCode'> | null;
+}
+
+export interface PortalSubclient {
+  id: string;
+  parentClientId: string;
+  name: string;
+  clientCode: string;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  serviceRates: { checkType: VerificationType; rate: number }[];
+  packageRate: number | null;
+  status: 'ACTIVE' | 'INACTIVE';
+  candidateCount: number;
+  bgvCaseCount: number;
 }
 
 export interface PortalCandidateDetail extends PortalCandidate {
@@ -66,7 +106,7 @@ export interface PortalCase {
   initiatedAt: string | null;
   completedAt: string | null;
   createdAt: string;
-  candidate: { firstName: string; lastName: string; candidateCode: string };
+  candidate: { fullName: string; firstName: string; middleName: string | null; lastName: string; candidateCode: string };
 }
 
 export interface PortalCaseDetail extends PortalCase {
@@ -80,7 +120,7 @@ export interface PortalReport {
   completedAt: string | null;
   verificationStatuses: string[];
   reportVerificationStatus: string;
-  candidate: { firstName: string; lastName: string; candidateCode: string };
+  candidate: { fullName: string; firstName: string; middleName: string | null; lastName: string; candidateCode: string };
 }
 
 export interface PortalPage<T> {
@@ -90,7 +130,7 @@ export interface PortalPage<T> {
 }
 
 export interface PortalDashboardSummary {
-  permissions: { candidates: boolean; cases: boolean; reports: boolean; invoices: boolean };
+  permissions: { candidates: boolean; cases: boolean; reports: boolean; invoices: boolean; subclients: boolean };
   counts: {
     candidates: number | null;
     cases: number | null;
@@ -98,8 +138,9 @@ export interface PortalDashboardSummary {
     completedCases: number | null;
     reports: number | null;
     invoices: number | null;
+    subclients: number | null;
   };
-  monthlyActivity: { key: string; month: string; candidates?: number; cases?: number; invoices?: number }[];
+  monthlyActivity: { key: string; month: string; candidates?: number; cases?: number; reports?: number; invoices?: number }[];
   recentCases: {
     id: string;
     caseNumber: string;
@@ -121,6 +162,7 @@ export interface PortalListFilters {
   status?: string;
   dateFrom?: string;
   dateTo?: string;
+  subclientId?: string;
 }
 
 export interface PortalInvoice {
@@ -219,7 +261,8 @@ async function request<T>(
     headers: {
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
+      ...scopedPortalHeaders(),
+      ...Object.fromEntries(new Headers(init.headers).entries()),
     },
   });
   const body = await response.json().catch(() => null);
@@ -258,6 +301,27 @@ export const listPortalCandidates = (page: number, token: string | null, filters
 
 export async function getPortalCandidateFormConfig(token: string | null): Promise<CandidateFormConfig> {
   const result = await request<{ data: CandidateFormConfig }>('/candidate-form-config', token);
+  return result.data;
+}
+
+export async function listPortalSubclients(token: string | null): Promise<PortalSubclient[]> {
+  const result = await request<{ data: PortalSubclient[] }>('/subclients', token);
+  return result.data;
+}
+
+export async function createPortalSubclient(payload: Pick<PortalSubclient, 'name' | 'clientCode' | 'serviceRates' | 'packageRate'> & Partial<Pick<PortalSubclient, 'contactName' | 'contactEmail' | 'contactPhone'>>, token: string | null): Promise<PortalSubclient> {
+  const result = await request<{ data: PortalSubclient }>('/subclients', token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return result.data;
+}
+
+export async function updatePortalSubclient(id: string, payload: Pick<PortalSubclient, 'name' | 'clientCode' | 'serviceRates' | 'packageRate' | 'status'> & Partial<Pick<PortalSubclient, 'contactName' | 'contactEmail' | 'contactPhone'>>, token: string | null): Promise<PortalSubclient> {
+  const result = await request<{ data: PortalSubclient }>(`/subclients/${id}`, token, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
   return result.data;
 }
 
@@ -304,7 +368,7 @@ export const listPortalInvoices = (page: number, token: string | null, filters?:
   list<PortalInvoice>('/invoices', page, token, filters);
 
 export async function downloadPortalInvoice(id: string, token: string | null): Promise<Blob> {
-  const response = await fetch(`${API_BASE}/client-portal/invoices/${id}/pdf`, {
+  const response = await fetch(`${API_BASE}/client-portal/invoices/${id}/pdf${scopedPortalQuery()}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!response.ok) {
@@ -331,7 +395,7 @@ export async function savePortalCandidate(
 }
 
 export async function downloadPortalReport(id: string, token: string | null): Promise<Blob> {
-  const response = await fetch(`${API_BASE}/client-portal/reports/${id}/download`, {
+  const response = await fetch(`${API_BASE}/client-portal/reports/${id}/download${scopedPortalQuery()}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!response.ok) {
@@ -344,6 +408,6 @@ export async function downloadPortalReport(id: string, token: string | null): Pr
   return response.blob();
 }
 
-export function hasPortalPermission(permissions: string[], permission: ClientPortalPermission): boolean {
-  return permissions.includes(permission);
+export function hasPortalPermission(permissions: string[], permission: ClientPortalPermission, companyAdmin = false): boolean {
+  return companyAdmin || permissions.includes(permission);
 }

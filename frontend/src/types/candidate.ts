@@ -9,7 +9,9 @@ export interface ClientRef {
 
 export interface CandidateOption {
   id: string;
+  fullName?: string;
   firstName: string;
+  middleName?: string | null;
   lastName: string;
   email: string | null;
   status?: string;
@@ -35,9 +37,13 @@ export interface Candidate {
   id: string;
   companyId: string;
   clientId: string;
+  subclientId?: string | null;
   client?: { id: string; name: string; clientCode?: string | null; contactEmail?: string | null; contactPhone?: string | null } | null;
+  subclient?: { id: string; name: string; clientCode?: string | null; serviceRates?: { checkType: string; rate: number }[] } | null;
   candidateCode: string;
+  fullName: string;
   firstName: string;
+  middleName: string | null;
   lastName: string;
   email: string;
   phone: string | null;
@@ -78,7 +84,10 @@ export interface Candidate {
 
 export interface CandidateFormValues {
   clientId: string;
+  subclientId?: string;
+  fullName: string;
   firstName: string;
+  middleName: string;
   lastName: string;
   email: string;
   phone: string;

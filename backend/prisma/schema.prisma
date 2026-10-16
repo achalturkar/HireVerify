@@ -301,6 +301,7 @@ model Client {
   id String @id @default(uuid()) @db.Uuid
 
   companyId String @map("company_id") @db.Uuid
+  parentClientId String? @map("parent_client_id") @db.Uuid
 
   name String @db.VarChar(255)
 
@@ -329,6 +330,8 @@ model Client {
   reportShowCompanyBranding Boolean @default(true) @map("report_show_company_branding")
   reportShowClientBranding  Boolean @default(false) @map("report_show_client_branding")
   candidateFormConfig Json @default("{}") @map("candidate_form_config")
+  serviceRates Json @default("[]") @map("service_rates")
+  packageRate Decimal? @map("package_rate") @db.Decimal(12, 2)
 
   status ClientStatus @default(ACTIVE)
 
@@ -342,15 +345,20 @@ model Client {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parentClient Client? @relation("ClientSubclients", fields: [parentClientId], references: [id], onDelete: Cascade)
+  subclients Client[] @relation("ClientSubclients")
 
   users      User[]
   candidates Candidate[]
+  subclientCandidates Candidate[] @relation("CandidateSubclient")
   bgvCases   BGVCase[]
+  subclientCases BGVCase[] @relation("BGVCaseSubclient")
   reports    BGVReport[]
   invoices   Invoice[]
   requests   ClientRequest[]
 
   @@index([companyId])
+  @@index([parentClientId])
   @@index([status])
   @@index([companyId, isDeleted])
   @@map("clients")
@@ -400,11 +408,14 @@ model Candidate {
 
   companyId String @map("company_id") @db.Uuid
   clientId  String @map("client_id") @db.Uuid
+  subclientId String? @map("subclient_id") @db.Uuid
 
   candidateCode String @map("candidate_code") @db.VarChar(50)
 
-  firstName String @map("first_name") @db.VarChar(100)
-  lastName  String @map("last_name") @db.VarChar(100)
+  fullName   String  @map("full_name") @db.VarChar(255)
+  firstName  String  @map("first_name") @db.VarChar(100)
+  middleName String? @map("middle_name") @db.VarChar(100)
+  lastName   String  @map("last_name") @db.VarChar(100)
 
   email String? @db.VarChar(255)
   phone String? @db.VarChar(50)
@@ -454,6 +465,7 @@ model Candidate {
   company Company @relation(fields: [companyId], references: [id])
 
   client Client @relation(fields: [clientId], references: [id])
+  subclient Client? @relation("CandidateSubclient", fields: [subclientId], references: [id], onDelete: SetNull)
 
   bgvCases BGVCase[]
 
@@ -468,6 +480,7 @@ model Candidate {
   @@unique([companyId, candidateCode])
   @@index([companyId, status])
   @@index([companyId, clientId])
+  @@index([subclientId])
   @@index([email])
   @@map("candidates")
 }
@@ -501,6 +514,7 @@ model BGVCase {
 
   companyId   String @map("company_id") @db.Uuid
   clientId    String @map("client_id") @db.Uuid
+  subclientId String? @map("subclient_id") @db.Uuid
   candidateId String @map("candidate_id") @db.Uuid
 
   caseNumber String @unique @map("case_number") @db.VarChar(50)
@@ -531,6 +545,7 @@ model BGVCase {
   company Company @relation(fields: [companyId], references: [id])
 
   client Client @relation(fields: [clientId], references: [id])
+  subclient Client? @relation("BGVCaseSubclient", fields: [subclientId], references: [id], onDelete: SetNull)
 
   candidate Candidate @relation(fields: [candidateId], references: [id])
 
@@ -546,6 +561,7 @@ model BGVCase {
 
   @@index([companyId, status])
   @@index([companyId, clientId])
+  @@index([subclientId])
   @@index([candidateId])
   @@index([overallResult])
   @@map("bgv_cases")

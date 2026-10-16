@@ -17,11 +17,22 @@ const dateRange = (from, to) => ({
   ...(to ? { lte: new Date(`${to}T23:59:59.999Z`) } : {}),
 });
 const composeAddress = (...parts) => parts.flat().map((part) => String(part || '').trim()).filter(Boolean).join(', ');
+const subclientRateForCase = ({ subclient, checks = [] }) => {
+  if (!subclient) return null;
+  if (checks.length === 0) return 0;
+  if (subclient.packageRate !== null && subclient.packageRate !== undefined) {
+    return roundMoney(amount(subclient.packageRate));
+  }
+  return roundMoney(checks.reduce((total, check) => {
+    const matched = (subclient.serviceRates || []).find((rate) => rate.checkType === check.type);
+    return total + amount(matched?.rate);
+  }, 0));
+};
 
 const includeInvoice = {
   items: {
     orderBy: [{ position: 'asc' }, { id: 'asc' }],
-    include: { case: { select: { caseNumber: true } } },
+    include: { case: { select: { caseNumber: true, subclient: { select: { name: true } } } } },
   },
   payments: { orderBy: { paymentDate: 'desc' } },
   activity: { orderBy: { createdAt: 'desc' } },
@@ -82,20 +93,30 @@ const saveProfile = async ({ companyId, payload }) => {
 };
 
 const listCases = async ({ companyId, clientId }) => {
-  const client = await prisma.client.findFirst({ where: { id: clientId, companyId, isDeleted: false }, select: { id: true } });
+  const client = await prisma.client.findFirst({ where: { id: clientId, companyId, parentClientId: null, isDeleted: false }, select: { id: true } });
   if (!client) throw new NotFoundError('Client not found');
   const cases = await prisma.bGVCase.findMany({
     where: { companyId, clientId },
-    select: { id: true, candidateId: true, caseNumber: true, status: true, packageName: true, candidate: { select: { firstName: true, lastName: true, candidateCode: true } } },
+    select: {
+      id: true, candidateId: true, caseNumber: true, status: true, packageName: true,
+      subclient: { select: { name: true, serviceRates: true, packageRate: true } },
+      checks: { select: { type: true } },
+      candidate: { select: { firstName: true, lastName: true, candidateCode: true } },
+    },
     orderBy: { createdAt: 'desc' },
     take: 250,
   });
-  return cases.map((item) => ({ ...item, candidateName: `${item.candidate.firstName} ${item.candidate.lastName}`.trim() }));
+  return cases.map(({ subclient, checks, ...item }) => ({
+    ...item,
+    candidateName: `${item.candidate.firstName} ${item.candidate.lastName}`.trim(),
+    subclientName: subclient?.name || null,
+    suggestedRate: subclientRateForCase({ subclient, checks }),
+  }));
 };
 
 const listCompletedCases = async ({ companyId, clientId, completedFrom, completedTo }) => {
   const client = await prisma.client.findFirst({
-    where: { id: clientId, companyId, isDeleted: false },
+    where: { id: clientId, companyId, parentClientId: null, isDeleted: false },
     select: { id: true },
   });
   if (!client) throw new NotFoundError('Client not found');
@@ -123,13 +144,17 @@ const listCompletedCases = async ({ companyId, clientId, completedFrom, complete
       status: true,
       packageName: true,
       completedAt: true,
+      subclient: { select: { name: true, serviceRates: true, packageRate: true } },
+      checks: { select: { type: true } },
       candidate: { select: { firstName: true, lastName: true, candidateCode: true } },
     },
     orderBy: [{ completedAt: 'asc' }, { caseNumber: 'asc' }],
   });
-  return cases.map((item) => ({
+  return cases.map(({ subclient, checks, ...item }) => ({
     ...item,
     candidateName: `${item.candidate.firstName} ${item.candidate.lastName}`.trim(),
+    subclientName: subclient?.name || null,
+    suggestedRate: subclientRateForCase({ subclient, checks }),
     isBilled: billedCaseIds.includes(item.id),
   }));
 };
@@ -173,7 +198,7 @@ const calculateItems = (items) => {
 const getParties = async ({ companyId, clientId }) => {
   const [company, client, admin] = await Promise.all([
     prisma.company.findUnique({ where: { id: companyId } }),
-    prisma.client.findFirst({ where: { id: clientId, companyId, isDeleted: false, status: 'ACTIVE' } }),
+    prisma.client.findFirst({ where: { id: clientId, companyId, parentClientId: null, isDeleted: false, status: 'ACTIVE' } }),
     prisma.user.findFirst({
       where: { companyId, isDeleted: false, status: 'ACTIVE', role: { isCompanyAdmin: true } },
       select: { firstName: true, lastName: true },

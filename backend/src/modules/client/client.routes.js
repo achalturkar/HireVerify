@@ -120,6 +120,31 @@ router
         controller.createClient
     );
 
+router.get(
+    '/:id/subclients',
+    authorize('client.view'),
+    validate(v.idParamValidator),
+    controller.listSubclients
+);
+router.post(
+    '/:id/subclients',
+    authorize('client.update'),
+    validate(v.createSubclientValidator),
+    controller.createSubclient
+);
+router.put(
+    '/:id/subclients/:subclientId',
+    authorize('client.update'),
+    validate(v.updateSubclientValidator),
+    controller.updateSubclient
+);
+router.delete(
+    '/:id/subclients/:subclientId',
+    authorize('client.update'),
+    validate(v.subclientIdValidator),
+    controller.deleteSubclient
+);
+
 /**
  * @openapi
  * /clients/{id}:

@@ -22,7 +22,7 @@ const createValidator = { body: Joi.object({
 }) };
 
 const listValidator = { query: Joi.object({
-  page: Joi.number().integer().min(1), limit: Joi.number().integer().min(1).max(200), search: Joi.string().allow(''), clientId: Joi.string().uuid(), candidateId: Joi.string().uuid(), status: Joi.string().valid(...STATUSES), overallResult: Joi.string().valid(...RESULTS), initiatedFrom: Joi.string().isoDate(), initiatedTo: Joi.string().isoDate(), completedFrom: Joi.string().isoDate(), completedTo: Joi.string().isoDate(), sortBy: Joi.string().valid('caseNumber', 'status', 'overallResult', 'createdAt', 'updatedAt'), sortOrder: Joi.string().valid('asc', 'desc'),
+  page: Joi.number().integer().min(1), limit: Joi.number().integer().min(1).max(200), search: Joi.string().allow(''), clientId: Joi.string().uuid(), subclientId: Joi.alternatives().try(Joi.string().uuid(), Joi.string().valid('none')), candidateId: Joi.string().uuid(), status: Joi.string().valid(...STATUSES), overallResult: Joi.string().valid(...RESULTS), initiatedFrom: Joi.string().isoDate(), initiatedTo: Joi.string().isoDate(), completedFrom: Joi.string().isoDate(), completedTo: Joi.string().isoDate(), sortBy: Joi.string().valid('caseNumber', 'status', 'overallResult', 'createdAt', 'updatedAt'), sortOrder: Joi.string().valid('asc', 'desc'),
 }) };
 
 const transitionValidator = { params: Joi.object({ id: Joi.string().uuid().required() }), body: Joi.object({ status: Joi.string().valid(...STATUSES).required(), remarks: Joi.string().max(2000).allow(null, '') }).required() };

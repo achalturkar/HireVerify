@@ -7,10 +7,11 @@ import { ArrowLeft, BriefcaseBusiness, Check, Copy, FileText, GraduationCap, Has
 import { useAuth } from '@/src/auth/AuthProvider';
 import { ClientPortalApiError, getPortalCandidate, getPortalCandidateAccess, invitePortalCandidate, remindPortalCandidate, savePortalCandidate, setPortalCandidateAccess, type PortalCandidateAccess, type PortalCandidateDetail } from '@/src/lib/api/client-portal';
 import { hasPortalPermission } from '@/src/lib/api/client-portal';
+import { formatCandidateName } from '@/src/lib/candidate-name';
 import { CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
 
 const profileFields = [
-  ['firstName', 'First name'], ['lastName', 'Last name'], ['email', 'Email'], ['phone', 'Phone'],
+  ['fullName', 'Full name'], ['firstName', 'First name'], ['middleName', 'Middle name'], ['lastName', 'Last name'], ['email', 'Email'], ['phone', 'Phone'],
   ['dateOfBirth', 'Date of birth'], ['gender', 'Gender'], ['fatherName', 'Father name'], ['motherName', 'Mother name'],
   ['aadhaarNumber', 'Aadhaar number'], ['panNumber', 'PAN number'], ['uanNumber', 'UAN number'],
   ['passportNumber', 'Passport number'], ['drivingLicenseNumber', 'Driving licence'], ['voterIdNumber', 'Voter ID'],
@@ -24,7 +25,7 @@ const profileFields = [
 const inputClass = 'mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[12px] text-[var(--foreground)]';
 type CandidateTab = 'summary' | 'personal' | 'family' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal';
 const TAB_FIELDS: Record<Exclude<CandidateTab, 'summary' | 'documents' | 'portal'>, string[]> = {
-  personal: ['firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender'],
+  personal: ['fullName', 'firstName', 'middleName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender'],
   family: ['fatherName', 'motherName'],
   identity: ['aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber'],
   education: ['highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage'],
@@ -36,9 +37,14 @@ function dateLabel(value: string | null | undefined) {
   return value ? new Date(value).toLocaleDateString() : '—';
 }
 
+function dateOnlyLabel(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
+}
+
 export default function ClientPortalCandidatePage() {
   const { id } = useParams<{ id: string }>();
-  const { accessToken, permissions } = useAuth();
+  const { accessToken, permissions, user } = useAuth();
   const [candidate, setCandidate] = useState<PortalCandidateDetail | null>(null);
   const [portal, setPortal] = useState<PortalCandidateAccess | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -51,9 +57,10 @@ export default function ClientPortalCandidatePage() {
   const [activeTab, setActiveTab] = useState<CandidateTab>('summary');
   const [revealedIds, setRevealedIds] = useState(false);
   const [copied, setCopied] = useState(false);
-  const canUpdate = hasPortalPermission(permissions, 'clientportal.candidates.update');
-  const canInvite = hasPortalPermission(permissions, 'clientportal.candidates.invite') || hasPortalPermission(permissions, 'clientportal.candidates.create');
-  const canManagePortal = hasPortalPermission(permissions, 'clientportal.candidates.portal.manage');
+  const isPortalAdmin = user?.role.isCompanyAdmin ?? false;
+  const canUpdate = hasPortalPermission(permissions, 'clientportal.candidates.update', isPortalAdmin);
+  const canInvite = hasPortalPermission(permissions, 'clientportal.candidates.invite', isPortalAdmin) || hasPortalPermission(permissions, 'clientportal.candidates.create', isPortalAdmin);
+  const canManagePortal = hasPortalPermission(permissions, 'clientportal.candidates.portal.manage', isPortalAdmin);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,7 +75,7 @@ export default function ClientPortalCandidatePage() {
           ? { ...data.portalInvitation, reminderCount: data.portalInvitation.reminderCount, lastRemindedAt: null, url: null }
           : null;
       setPortal(portalStatus);
-      setValues(Object.fromEntries(profileFields.map(([key]) => [key, key === 'dateOfBirth' || key === 'joiningDate' ? String(data[key] || '').slice(0, 10) : String(data[key] ?? '')])));
+      setValues(Object.fromEntries(profileFields.map(([key]) => [key, key === 'fullName' ? formatCandidateName(data) : key === 'dateOfBirth' || key === 'joiningDate' ? String(data[key] || '').slice(0, 10) : String(data[key] ?? '')])));
     } catch (loadError) {
       setError(loadError instanceof ClientPortalApiError ? loadError.message : 'Could not load candidate profile.');
     } finally {
@@ -182,7 +189,7 @@ export default function ClientPortalCandidatePage() {
     <div className="space-y-5">
       <Link href="/client-portal/candidates" className="inline-flex items-center gap-2 text-[12px] text-[var(--muted)] hover:text-[var(--foreground)]"><ArrowLeft size={15} />Back to candidates</Link>
       <section className="flex flex-col gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4"><span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[var(--primary)]/10 text-lg font-semibold text-[var(--primary)]">{`${candidate.firstName[0] || ''}${candidate.lastName[0] || ''}`.toUpperCase()}</span><div><p className="font-mono text-[10px] text-[var(--muted)]">{candidate.candidateCode}</p><h2 className="mt-1 text-xl font-semibold">{candidate.firstName} {candidate.lastName}</h2><p className="mt-1 text-[12px] text-[var(--muted)]">{candidate.email || 'No email'} · {candidate.phone || 'No phone'}</p></div></div>
+        <div className="flex items-center gap-4"><span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[var(--primary)]/10 text-lg font-semibold text-[var(--primary)]">{`${candidate.firstName[0] || ''}${candidate.lastName[0] || ''}`.toUpperCase()}</span><div><p className="font-mono text-[10px] text-[var(--muted)]">{candidate.candidateCode}</p><h2 className="mt-1 text-xl font-semibold">{formatCandidateName(candidate)}</h2><p className="mt-1 text-[12px] text-[var(--muted)]">{candidate.email || 'No email'} · {candidate.phone || 'No phone'}</p></div></div>
         <div className="flex flex-wrap gap-2">
           <span className="self-center rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-semibold">{candidate.status.replaceAll('_', ' ')}</span>
           {canInvite && <button type="button" onClick={() => void sendInvitation()} disabled={inviting || !candidate.email} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Mail size={14} />{inviting ? 'Sending…' : portal ? 'Resend invitation link' : 'Invite to candidate portal'}</button>}
@@ -204,8 +211,8 @@ export default function ClientPortalCandidatePage() {
 
       {TAB_FIELDS[activeTab as keyof typeof TAB_FIELDS] && <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-[14px] font-semibold">{tabItems.find((item) => item.id === activeTab)?.label} details</h3><p className="mt-1 text-[11px] text-[var(--muted)]">Candidate information for this section.</p></div>{canUpdate && !profileLocked && !editing && <button type="button" onClick={() => { setEditing(true); setMessage(null); }} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-medium hover:bg-[var(--surface-muted)]"><Pencil size={14} />Edit details</button>}{editing && !profileLocked && <div className="flex gap-2"><button type="button" onClick={() => { setEditing(false); void load(); }} className="rounded-lg border border-[var(--border)] px-3 py-2 text-[11px]">Cancel</button><button type="button" onClick={() => void save()} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Save size={14} />{saving ? 'Saving…' : 'Save changes'}</button></div>}</div>
-        {editing ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{profileFields.filter(([key]) => activeFields.includes(key)).map(([key, label]) => <label key={key} className={`text-[10px] font-medium text-[var(--muted)] ${key.endsWith('Address') ? 'sm:col-span-2 lg:col-span-3' : ''}`}>{label}{key.endsWith('Address') ? <textarea rows={3} value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass} /> : key === 'gender' ? <select value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass}><option value="">Prefer not to say</option><option value="FEMALE">Female</option><option value="MALE">Male</option><option value="NON_BINARY">Non-binary</option><option value="OTHER">Other</option></select> : <input type={dateFields.has(key) ? 'date' : key === 'email' ? 'email' : key === 'yearOfPassing' ? 'number' : 'text'} value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass} />}</label>)}</div>
-          : <dl className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">{profileFields.filter(([key]) => activeFields.includes(key)).map(([key, label]) => { const raw = candidate[key as keyof PortalCandidateDetail]; const value = raw ? String(raw) : ''; const display = identityFields.has(key) && value && !revealedIds && value.length > 4 ? `${'•'.repeat(value.length - 4)}${value.slice(-4)}` : value || '—'; return <div key={key} className={key.endsWith('Address') ? 'sm:col-span-2 lg:col-span-3' : ''}><dt className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</dt><dd className="mt-1 break-words text-[12px]">{display}</dd></div>; })}</dl>}
+        {editing ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{profileFields.filter(([key]) => activeFields.includes(key) && (!['firstName', 'middleName', 'lastName'].includes(key))).map(([key, label]) => <label key={key} className={`text-[10px] font-medium text-[var(--muted)] ${key.endsWith('Address') ? 'sm:col-span-2 lg:col-span-3' : ''}`}>{label}{key.endsWith('Address') ? <textarea rows={3} value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass} /> : key === 'gender' ? <select value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass}><option value="">Prefer not to say</option><option value="FEMALE">Female</option><option value="MALE">Male</option><option value="NON_BINARY">Non-binary</option><option value="OTHER">Other</option></select> : <input type={dateFields.has(key) ? 'date' : key === 'email' ? 'email' : key === 'yearOfPassing' ? 'number' : 'text'} value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass} />}</label>)}</div>
+          : <dl className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">{profileFields.filter(([key]) => activeFields.includes(key)).map(([key, label]) => { const raw = candidate[key as keyof PortalCandidateDetail]; const value = raw ? String(raw) : ''; const display = identityFields.has(key) && value && !revealedIds && value.length > 4 ? `${'•'.repeat(value.length - 4)}${value.slice(-4)}` : dateFields.has(key) && value ? dateOnlyLabel(value) : value || '—'; return <div key={key} className={key.endsWith('Address') ? 'sm:col-span-2 lg:col-span-3' : ''}><dt className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</dt><dd className="mt-1 break-words text-[12px]">{display}</dd></div>; })}</dl>}
         {activeTab === 'identity' && !editing && <button type="button" onClick={() => setRevealedIds((value) => !value)} className="mt-4 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px]">{revealedIds ? 'Hide identity numbers' : 'Reveal identity numbers'}</button>}
       </section>}
 

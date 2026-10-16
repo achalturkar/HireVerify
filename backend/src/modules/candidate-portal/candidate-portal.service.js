@@ -7,6 +7,7 @@ const config = require('../../config');
 const { sendMail, buildCandidatePortalEmail } = require('../../utils/mailer');
 const { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } = require('../../utils/errors');
 const { IDENTITY_FIELDS, normalizeConfig, normalizeIdentityValue, validateIdentityValues } = require('../client/candidate-intake-config');
+const { normalizeCandidateName, hasCandidateName } = require('../../utils/candidate-name');
 
 const MAX_INVITATION_DAYS = 30;
 const portalTokenKey = crypto.createHash('sha256').update(`candidate-portal:${config.jwt.accessSecret}`).digest();
@@ -115,7 +116,9 @@ const toDto = (invitation) => {
     candidate: {
       id: candidate.id,
       status: candidate.status,
+      fullName: candidate.fullName,
       firstName: candidate.firstName,
+      middleName: candidate.middleName,
       lastName: candidate.lastName,
       email: candidate.email,
       phone: candidate.phone,
@@ -158,7 +161,7 @@ const toDto = (invitation) => {
 const sendInvitationEmail = async ({ candidate, token, reminder, pendingCount }) => {
   if (!candidate.email) return false;
   const portalUrl = `${config.frontendUrl.replace(/\/$/, '')}/candidate-portal/${token}`;
-  const mail = buildCandidatePortalEmail({ candidateName: `${candidate.firstName} ${candidate.lastName}`, companyName: candidate.company.name, clientName: candidate.client?.name, portalUrl, reminder, pendingCount });
+  const mail = buildCandidatePortalEmail({ candidateName: candidate.fullName || [candidate.firstName, candidate.middleName, candidate.lastName].filter(Boolean).join(' '), companyName: candidate.company.name, clientName: candidate.client?.name, portalUrl, reminder, pendingCount });
   try {
     await sendMail({ to: candidate.email, ...mail });
     return true;
@@ -243,11 +246,12 @@ const updateProfile = async (token, payload) => {
   if (invitation.candidate.bgvCases.length > 0 || ['COMPLETED', 'VERIFICATION_IN_PROGRESS'].includes(invitation.candidate.status)) {
     throw new ConflictError('Candidate details cannot be changed after verification has started or completed.');
   }
-  const allowed = ['firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress'];
+  const allowed = ['fullName', 'firstName', 'middleName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress'];
   const data = {};
   for (const field of allowed) {
     if (payload[field] !== undefined) data[field] = field === 'email' ? (payload[field]?.trim().toLowerCase() || null) : payload[field];
   }
+  if (hasCandidateName(data)) Object.assign(data, normalizeCandidateName(data, invitation.candidate));
   const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);
   for (const field of IDENTITY_FIELDS) {
     if (data[field.key] !== undefined && !candidateFormConfig[field.key].enabled && data[field.key]) {

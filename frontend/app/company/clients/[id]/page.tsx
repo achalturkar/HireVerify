@@ -1,31 +1,34 @@
 'use client';
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, Download, FileCheck2, FileText, Globe, Mail, Pencil, Phone, Receipt, Users, MapPin, Power, PowerOff, ShieldCheck, UserPlus, Trash2, Building2, SlidersHorizontal,
+  ArrowLeft, ChevronLeft, ChevronRight, Download, FileCheck2, FileText, Globe, Mail, Pencil, Phone, Receipt, Users, MapPin, Power, PowerOff, ShieldCheck, UserPlus, Trash2, Building2, SlidersHorizontal, Plus, Check, X,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getReportVerificationStatus, getVerificationStatus } from '@/src/lib/verification-status';
-import { getClient, updateClient, activateClient, inactivateClient, listClientPortalUsers, inviteClientPortalUser, updateClientPortalUser, revokeClientPortalUser, ApiError as ClientApiError } from '@/src/lib/api/clients';
-import { listCandidates, createCandidate, ApiError as CandidateApiError } from '@/src/lib/api/candidates';
+import { formatCandidateName } from '@/src/lib/candidate-name';
+import { getClient, updateClient, activateClient, inactivateClient, listClientPortalUsers, inviteClientPortalUser, updateClientPortalUser, revokeClientPortalUser, listSubclients, createSubclient, updateSubclient, deleteSubclient, ApiError as ClientApiError } from '@/src/lib/api/clients';
+import { listCandidates, createCandidate, sendCandidatePortalLink, ApiError as CandidateApiError } from '@/src/lib/api/candidates';
 import { ApiError as BGVApiError, downloadBGVReport, listBGVCases } from '@/src/lib/api/bgv';
-import type { BGVCase } from '@/src/types/bgv';
+import type { BGVCase, VerificationType } from '@/src/types/bgv';
 import { downloadInvoicePdf, InvoiceApiError, listInvoices } from '@/src/lib/api/invoices';
 import type { Invoice } from '@/src/lib/api/invoices';
 import ClientFormModal from '@/src/components/layout/company/client/ClientFormModal';
 import ClientConfirmDialog from '@/src/components/layout/company/client/ClientConfirmDialog';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
 import { CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
+import { setClientPortalScope } from '@/src/lib/api/client-portal';
 import type { CandidateFormConfig, Client, ClientFormValues, ClientPortalAccountMethod, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
 import type { Candidate, CandidateFormValues, PaginationMeta } from '@/src/types/candidate';
 
 const PAGE_SIZE = 10;
-type TabKey = 'overview' | 'billing' | 'candidates' | 'cases' | 'reports' | 'invoices' | 'report-branding' | 'candidate-form' | 'portal-access';
+type TabKey = 'overview' | 'billing' | 'subclients' | 'candidates' | 'cases' | 'reports' | 'invoices' | 'report-branding' | 'candidate-form' | 'portal-access' | 'client-portal';
 const TABS: { key: TabKey; label: string; icon: typeof Users }[] = [
   { key: 'overview', label: 'Overview', icon: Users },
   { key: 'billing', label: 'Billing details', icon: Receipt },
+  { key: 'subclients', label: 'Subclients', icon: Building2 },
   { key: 'candidates', label: 'Candidates', icon: Users },
   { key: 'cases', label: 'BGV cases', icon: FileCheck2 },
   { key: 'reports', label: 'Reports', icon: FileText },
@@ -33,13 +36,38 @@ const TABS: { key: TabKey; label: string; icon: typeof Users }[] = [
   { key: 'report-branding', label: 'Report branding', icon: Building2 },
   { key: 'candidate-form', label: 'Candidate form', icon: SlidersHorizontal },
   { key: 'portal-access', label: 'Portal access', icon: ShieldCheck },
+  { key: 'client-portal', label: 'Client portal', icon: Building2 },
 ];
+const SUBCLIENT_CHECK_OPTIONS: { type: VerificationType; label: string }[] = [
+  { type: 'PAN', label: 'PAN verification' }, { type: 'UAN', label: 'UAN / EPFO' },
+  { type: 'COURT', label: 'Court records' }, { type: 'IDENTITY', label: 'Identity documents' },
+  { type: 'ADDRESS', label: 'Address verification' }, { type: 'ADDRESS_PHYSICAL', label: 'Physical address' },
+  { type: 'EDUCATION', label: 'Education' }, { type: 'EMPLOYMENT', label: 'Employment' },
+  { type: 'GAP', label: 'Employment gaps' }, { type: 'REFERENCE', label: 'References' },
+  { type: 'CV', label: 'CV validation' }, { type: 'SOCIAL_MEDIA', label: 'Social media' },
+  { type: 'DOCUMENT', label: 'Documents' }, { type: 'DOCUMENT_FORGERY', label: 'Document forgery' },
+  { type: 'CIBIL', label: 'CIBIL' }, { type: 'TWENTY_SIX_AS', label: '26AS' },
+  { type: 'POLICE', label: 'Police verification' }, { type: 'POLICE_RECORD', label: 'Police records' },
+];
+type SubclientCheckDraft = { checkType: VerificationType };
+type SubclientDraft = {
+  name: string; clientCode: string; industry: string; contactName: string; contactEmail: string; contactPhone: string;
+  gstNumber: string; panNumber: string; addressLine1: string; addressLine2: string; city: string; state: string;
+  country: string; postalCode: string; status: 'ACTIVE' | 'INACTIVE'; serviceRates: SubclientCheckDraft[]; packageRate: string;
+};
+const emptySubclientDraft = (): SubclientDraft => ({
+  name: '', clientCode: '', industry: '', contactName: '', contactEmail: '', contactPhone: '',
+  gstNumber: '', panNumber: '', addressLine1: '', addressLine2: '', city: '', state: '',
+  country: '', postalCode: '', status: 'ACTIVE', serviceRates: [], packageRate: '',
+});
 const PORTAL_PERMISSION_OPTIONS: { key: ClientPortalPermission; label: string; description: string }[] = [
   { key: 'clientportal.candidates.view', label: 'View candidates', description: 'View candidate names, references and contact details.' },
   { key: 'clientportal.candidates.create', label: 'Create candidates', description: 'Add candidate records. Also enables candidate viewing.' },
   { key: 'clientportal.candidates.update', label: 'Update candidates', description: 'Edit candidate contact details. Also enables candidate viewing.' },
   { key: 'clientportal.candidates.invite', label: 'Invite candidates', description: 'Send candidates a secure link to complete their profile. Also enables candidate viewing.' },
   { key: 'clientportal.candidates.portal.manage', label: 'Manage candidate portal access', description: 'Lock and unlock candidate portal links. Also enables candidate viewing.' },
+  { key: 'clientportal.subclients.view', label: 'View subclients', description: 'View the client’s subclients, configured package checks, and package rates.' },
+  { key: 'clientportal.subclients.manage', label: 'Manage subclients', description: 'Add subclients and configure their package checks and rates. Also enables subclient viewing.' },
   { key: 'clientportal.cases.view', label: 'View case progress', description: 'View BGV case numbers, statuses and outcomes.' },
   { key: 'clientportal.invoices.view', label: 'View invoices', description: 'View issued invoices, payment status, amounts, and download invoice PDFs.' },
   { key: 'clientportal.reports.view', label: 'View completed reports', description: 'View completed report listings.' },
@@ -56,6 +84,7 @@ function togglePermissionSelection(current: ClientPortalPermission[], permission
       removed.add('clientportal.candidates.portal.manage');
     }
     if (permission === 'clientportal.reports.view') removed.add('clientportal.reports.download');
+    if (permission === 'clientportal.subclients.view') removed.add('clientportal.subclients.manage');
     return current.filter((item) => !removed.has(item));
   }
   const next = [...current, permission];
@@ -63,12 +92,21 @@ function togglePermissionSelection(current: ClientPortalPermission[], permission
     next.push('clientportal.candidates.view');
   }
   if (permission === 'clientportal.reports.download') next.push('clientportal.reports.view');
+  if (permission === 'clientportal.subclients.manage') next.push('clientportal.subclients.view');
   return [...new Set(next)];
 }
 const RECORD_PAGE_SIZE = 10;
 const currencyLabel = (value: number | string, currency: string) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(Number(value || 0));
 const dateLabel = (value?: string | null) => value ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const invoiceDateLabel = (value: string) => {
+  const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? '—'
+    : new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+};
 
 function initials(name: string) {
   return name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
@@ -84,6 +122,16 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>('overview');
+  const tabScrollerRef = useRef<HTMLDivElement>(null);
+  const [canScrollTabsLeft, setCanScrollTabsLeft] = useState(false);
+  const [canScrollTabsRight, setCanScrollTabsRight] = useState(false);
+
+  const updateTabScrollControls = useCallback(() => {
+    const element = tabScrollerRef.current;
+    if (!element) return;
+    setCanScrollTabsLeft(element.scrollLeft > 0);
+    setCanScrollTabsRight(element.scrollLeft + element.clientWidth < element.scrollWidth - 1);
+  }, []);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editSubmitting, setEditSubmitting] = useState(false);
@@ -98,6 +146,16 @@ export default function ClientDetailPage() {
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
   const [candidateModalOpen, setCandidateModalOpen] = useState(false);
   const [candidateSubmitting, setCandidateSubmitting] = useState(false);
+  const [candidateCreateMessage, setCandidateCreateMessage] = useState<string | null>(null);
+  const [subclients, setSubclients] = useState<Client[]>([]);
+  const [subclientsLoading, setSubclientsLoading] = useState(false);
+  const [subclientsError, setSubclientsError] = useState<string | null>(null);
+  const [subclientsMessage, setSubclientsMessage] = useState<string | null>(null);
+  const [subclientFilter, setSubclientFilter] = useState('');
+  const [subclientEditorOpen, setSubclientEditorOpen] = useState(false);
+  const [subclientEditingId, setSubclientEditingId] = useState<string | null>(null);
+  const [subclientDraft, setSubclientDraft] = useState<SubclientDraft>(emptySubclientDraft);
+  const [subclientSaving, setSubclientSaving] = useState(false);
   const [cases, setCases] = useState<BGVCase[]>([]);
   const [casesTotal, setCasesTotal] = useState(0);
   const [casesPage, setCasesPage] = useState(1);
@@ -156,6 +214,19 @@ export default function ClientDetailPage() {
     const timer = window.setTimeout(() => { void loadClient(); }, 0);
     return () => window.clearTimeout(timer);
   }, [loadClient]);
+
+  useEffect(() => {
+    const element = tabScrollerRef.current;
+    if (!element) return undefined;
+    const frame = window.requestAnimationFrame(updateTabScrollControls);
+    const observer = new ResizeObserver(updateTabScrollControls);
+    observer.observe(element);
+    if (element.firstElementChild) observer.observe(element.firstElementChild);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [updateTabScrollControls, canManageAccess, candidatesMeta.total, casesTotal, reportsTotal, invoicesTotal]);
 
   const loadPortalUsers = useCallback(async () => {
     if (!id || !canManageAccess) return;
@@ -311,13 +382,26 @@ export default function ClientDetailPage() {
     }
   };
 
+  const loadSubclients = useCallback(async () => {
+    if (!id) return;
+    setSubclientsLoading(true);
+    setSubclientsError(null);
+    try {
+      setSubclients(await listSubclients(id, accessToken));
+    } catch (err) {
+      setSubclientsError(err instanceof ClientApiError ? err.message : 'Could not load subclients.');
+    } finally {
+      setSubclientsLoading(false);
+    }
+  }, [accessToken, id]);
+
   const loadCandidates = useCallback(async () => {
     if (!id) return;
     setCandidatesLoading(true);
     setCandidatesError(null);
     try {
       const res = await listCandidates(
-        { page: candidatesPage, limit: PAGE_SIZE, clientId: id, sortBy: 'createdAt', sortOrder: 'desc' },
+        { page: candidatesPage, limit: PAGE_SIZE, clientId: id, subclientId: subclientFilter || undefined, sortBy: 'createdAt', sortOrder: 'desc' },
         accessToken
       );
       setCandidates(res.items);
@@ -327,13 +411,19 @@ export default function ClientDetailPage() {
     } finally {
       setCandidatesLoading(false);
     }
-  }, [id, candidatesPage, accessToken]);
+  }, [id, candidatesPage, accessToken, subclientFilter]);
 
   useEffect(() => {
     if (tab !== 'candidates') return undefined;
     const timer = window.setTimeout(() => { void loadCandidates(); }, 0);
     return () => window.clearTimeout(timer);
   }, [tab, loadCandidates]);
+
+  useEffect(() => {
+    if (tab !== 'subclients' && tab !== 'candidates') return undefined;
+    const timer = window.setTimeout(() => { void loadSubclients(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadSubclients, tab]);
 
   const loadCases = useCallback(async () => {
     setCasesLoading(true);
@@ -479,16 +569,19 @@ export default function ClientDetailPage() {
     }
   };
 
-  const handleCreateCandidate = async (values: CandidateFormValues) => {
+  const handleCreateCandidate = async (values: CandidateFormValues, inviteByEmail = false) => {
     if (!client) return;
     setCandidateSubmitting(true);
     try {
-      await createCandidate(
+      const created = await createCandidate(
         {
           clientId: client.id,
+          subclientId: values.subclientId || undefined,
+          fullName: values.fullName.trim(),
           firstName: values.firstName.trim(),
+          middleName: values.middleName.trim() || null,
           lastName: values.lastName.trim(),
-          email: values.email.trim(),
+          email: values.email.trim() || undefined,
           phone: values.phone.trim() || undefined,
           dateOfBirth: values.dateOfBirth || undefined,
           gender: values.gender || undefined,
@@ -505,8 +598,109 @@ export default function ClientDetailPage() {
       );
       setCandidateModalOpen(false);
       await loadCandidates();
+      if (inviteByEmail) {
+        try {
+          const invitation = await sendCandidatePortalLink(created.id, accessToken);
+          setCandidateCreateMessage(invitation.emailSent
+            ? `Candidate added and portal invitation sent to ${created.email}.`
+            : 'Candidate added, but the invitation email could not be delivered.');
+        } catch (inviteError) {
+          setCandidateCreateMessage(`Candidate added, but the invitation failed: ${inviteError instanceof Error ? inviteError.message : 'Please try again from the candidate profile.'}`);
+        }
+      } else {
+        setCandidateCreateMessage('Candidate added.');
+      }
+    } catch (err) {
+      setCandidateCreateMessage(err instanceof CandidateApiError ? err.message : 'Could not add candidate.');
     } finally {
       setCandidateSubmitting(false);
+    }
+  };
+
+  const openSubclientEditor = (subclient?: Client) => {
+    setSubclientEditingId(subclient?.id || null);
+    setSubclientDraft({
+      ...emptySubclientDraft(),
+      name: subclient?.name || '',
+      clientCode: subclient?.clientCode || `${client?.clientCode || 'CLIENT'}-SUB-${String(subclients.length + 1).padStart(3, '0')}`,
+      industry: subclient?.industry || '',
+      contactName: subclient?.contactName || '',
+      contactEmail: subclient?.contactEmail || '',
+      contactPhone: subclient?.contactPhone || '',
+      gstNumber: subclient?.gstNumber || '',
+      panNumber: subclient?.panNumber || '',
+      addressLine1: subclient?.addressLine1 || '',
+      addressLine2: subclient?.addressLine2 || '',
+      city: subclient?.city || '',
+      state: subclient?.state || '',
+      country: subclient?.country || '',
+      postalCode: subclient?.postalCode || '',
+      status: subclient?.status || 'ACTIVE',
+      serviceRates: (subclient?.serviceRates || []).map((entry) => ({ checkType: entry.checkType as VerificationType })),
+      packageRate: subclient?.packageRate === null || subclient?.packageRate === undefined ? '' : String(subclient.packageRate),
+    });
+    setSubclientsError(null);
+    setSubclientEditorOpen(true);
+  };
+
+  const saveSubclient = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!client) return;
+    if (!subclientDraft.serviceRates.length) {
+      setSubclientsError('Select at least one background check for the package.');
+      return;
+    }
+    const packageRate = Number(subclientDraft.packageRate);
+    if (subclientDraft.packageRate === '' || !Number.isFinite(packageRate) || packageRate < 0 || packageRate > 100000000) {
+      setSubclientsError('Enter a valid package rate between ₹0 and ₹100,000,000.');
+      return;
+    }
+    const payload = {
+      name: subclientDraft.name.trim(),
+      clientCode: subclientDraft.clientCode.trim(),
+      industry: subclientDraft.industry.trim(),
+      contactName: subclientDraft.contactName.trim(),
+      contactEmail: subclientDraft.contactEmail.trim(),
+      contactPhone: subclientDraft.contactPhone.trim(),
+      gstNumber: subclientDraft.gstNumber.trim(),
+      panNumber: subclientDraft.panNumber.trim(),
+      addressLine1: subclientDraft.addressLine1.trim(),
+      addressLine2: subclientDraft.addressLine2.trim(),
+      city: subclientDraft.city.trim(),
+      state: subclientDraft.state.trim(),
+      country: subclientDraft.country.trim(),
+      postalCode: subclientDraft.postalCode.trim(),
+      status: subclientDraft.status,
+      serviceRates: subclientDraft.serviceRates.map((entry) => ({ checkType: entry.checkType, rate: 0 })),
+      packageRate,
+    };
+    setSubclientSaving(true);
+    setSubclientsError(null);
+    setSubclientsMessage(null);
+    try {
+      if (subclientEditingId) await updateSubclient(client.id, subclientEditingId, payload, accessToken);
+      else await createSubclient(client.id, payload, accessToken);
+      await loadSubclients();
+      setSubclientEditorOpen(false);
+      setSubclientsMessage(subclientEditingId ? 'Subclient updated.' : 'Subclient created.');
+    } catch (err) {
+      setSubclientsError(err instanceof ClientApiError ? err.message : 'Could not save the subclient.');
+    } finally {
+      setSubclientSaving(false);
+    }
+  };
+
+  const deactivateSubclient = async (subclient: Client) => {
+    if (!client || !window.confirm(`Deactivate ${subclient.name}? Existing candidate and case records will be preserved.`)) return;
+    setSubclientsError(null);
+    setSubclientsMessage(null);
+    try {
+      await deleteSubclient(client.id, subclient.id, accessToken);
+      if (subclientFilter === subclient.id) setSubclientFilter('');
+      await loadSubclients();
+      setSubclientsMessage(`${subclient.name} deactivated.`);
+    } catch (err) {
+      setSubclientsError(err instanceof ClientApiError ? err.message : 'Could not deactivate the subclient.');
     }
   };
 
@@ -573,23 +767,59 @@ export default function ClientDetailPage() {
       </div>
       </div>
 
-      <div className="border-b border-[var(--border)] flex items-center gap-1">
-        {TABS.filter((t) => canManageAccess || (t.key !== 'portal-access' && t.key !== 'report-branding' && t.key !== 'candidate-form')).map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`inline-flex items-center gap-2 whitespace-nowrap px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors ${
-              tab === t.key ? 'border-[var(--primary)] text-[var(--foreground)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'
-            }`}
-          >
-            <t.icon size={14} />
-            {t.label}
-            {t.key === 'candidates' && candidatesMeta.total > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px]">{candidatesMeta.total}</span>}
-            {t.key === 'cases' && casesTotal > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px]">{casesTotal}</span>}
-            {t.key === 'reports' && reportsTotal > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px]">{reportsTotal}</span>}
-            {t.key === 'invoices' && invoicesTotal > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px]">{invoicesTotal}</span>}
-          </button>
-        ))}
+      <div className="flex min-w-0 items-center border-b border-[var(--border)]">
+        <button
+          type="button"
+          onClick={() => tabScrollerRef.current?.scrollBy({ left: -240, behavior: 'smooth' })}
+          disabled={!canScrollTabsLeft}
+          aria-label="Scroll tabs left"
+          className="flex h-10 w-9 shrink-0 items-center justify-center border-r border-[var(--border)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)] disabled:invisible"
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <div
+          ref={tabScrollerRef}
+          onScroll={updateTabScrollControls}
+          role="tablist"
+          aria-label="Client sections"
+          className="min-w-0 flex-1 overflow-x-auto scroll-smooth [scrollbar-width:thin]"
+        >
+          <div className="flex w-max min-w-full items-center gap-1">
+            {TABS.filter((t) => t.key === 'client-portal'
+              ? user?.role.isCompanyAdmin === true
+              : canManageAccess || (t.key !== 'portal-access' && t.key !== 'report-branding' && t.key !== 'candidate-form')).map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.key}
+                onClick={(event) => {
+                  setTab(t.key);
+                  event.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                }}
+                className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-[13px] font-medium transition-colors ${
+                  tab === t.key ? 'border-[var(--primary)] text-[var(--foreground)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'
+                }`}
+              >
+                <t.icon size={14} />
+                {t.label}
+                {t.key === 'candidates' && candidatesMeta.total > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px]">{candidatesMeta.total}</span>}
+                {t.key === 'cases' && casesTotal > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px]">{casesTotal}</span>}
+                {t.key === 'reports' && reportsTotal > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px]">{reportsTotal}</span>}
+                {t.key === 'invoices' && invoicesTotal > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px]">{invoicesTotal}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => tabScrollerRef.current?.scrollBy({ left: 240, behavior: 'smooth' })}
+          disabled={!canScrollTabsRight}
+          aria-label="Scroll tabs right"
+          className="flex h-10 w-9 shrink-0 items-center justify-center border-l border-[var(--border)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)] disabled:invisible"
+        >
+          <ChevronRight size={16} />
+        </button>
       </div>
 
       {tab === 'overview' && (
@@ -635,6 +865,45 @@ export default function ClientDetailPage() {
             </dl>
           </section>
         </div>
+      )}
+
+      {tab === 'subclients' && (
+        <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-[var(--border)] bg-gradient-to-r from-[var(--primary)]/10 via-[var(--surface)] to-[var(--surface)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]"><Building2 size={19} /></span>
+              <div><h2 className="text-[15px] font-semibold">Subclients</h2><p className="mt-0.5 text-[12px] text-[var(--muted)]">Manage business units, contacts, enabled checks and per-check rates under {client.name}.</p></div>
+            </div>
+            {canManageAccess && <button type="button" onClick={() => openSubclientEditor()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary-foreground)]"><Plus size={15} />Add subclient</button>}
+          </div>
+          {subclientsError && !subclientEditorOpen && <p role="alert" className="border-b border-rose-500/20 bg-rose-500/5 px-5 py-3 text-[12px] text-rose-700">{subclientsError}</p>}
+          {subclientsMessage && <p role="status" className="border-b border-emerald-500/20 bg-emerald-500/5 px-5 py-3 text-[12px] text-emerald-700">{subclientsMessage}</p>}
+          {subclientsLoading ? <div className="px-5 py-14 text-center text-[12px] text-[var(--muted)]">Loading subclients…</div>
+            : subclients.length === 0 ? <div className="px-5 py-16 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]"><Building2 size={21} /></span><p className="mt-3 text-[13px] font-semibold">No subclients yet</p><p className="mt-1 text-[12px] text-[var(--muted)]">Add a subclient to organize candidates and configure package checks and rates.</p></div>
+              : <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-2">
+                {subclients.map((subclient) => (
+                  <article key={subclient.id} className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+                    <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface-muted)]/50 p-4">
+                      <div className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><Building2 size={17} /></span><div className="min-w-0"><h3 className="truncate text-[13px] font-semibold">{subclient.name}</h3><p className="mt-0.5 truncate font-mono text-[10px] text-[var(--muted)]">{subclient.clientCode}{subclient.industry ? ` · ${subclient.industry}` : ''}</p></div></div>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold ${subclient.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-700' : 'bg-slate-500/10 text-slate-600'}`}>{subclient.status}</span>
+                    </div>
+                    <div className="grid gap-x-4 gap-y-2 p-4 text-[11px] sm:grid-cols-2">
+                      <p className="truncate"><span className="text-[var(--muted)]">Contact: </span>{subclient.contactName || 'Not provided'}</p>
+                      <p className="truncate"><span className="text-[var(--muted)]">Email: </span>{subclient.contactEmail || 'Not provided'}</p>
+                      <p className="truncate"><span className="text-[var(--muted)]">Phone: </span>{subclient.contactPhone || 'Not provided'}</p>
+                      <p className="truncate"><span className="text-[var(--muted)]">GSTIN: </span>{subclient.gstNumber || 'Not provided'}</p>
+                      <p className="truncate sm:col-span-2"><span className="text-[var(--muted)]">Address: </span>{[subclient.addressLine1, subclient.addressLine2, subclient.city, subclient.state, subclient.postalCode, subclient.country].filter(Boolean).join(', ') || 'Not provided'}</p>
+                    </div>
+                    <div className="border-t border-[var(--border)] px-4 py-3">
+                      <div className="mb-2 flex items-center justify-between gap-2"><h4 className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Package checks</h4><span className="text-[10px] text-[var(--muted)]">{subclient.candidateCount || 0} candidates</span></div>
+                      {(subclient.serviceRates || []).length ? <div className="flex flex-wrap gap-1.5">{(subclient.serviceRates || []).map((rate) => <span key={rate.checkType} className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[10px]"><Check size={11} className="text-emerald-600" />{SUBCLIENT_CHECK_OPTIONS.find((option) => option.type === rate.checkType)?.label || rate.checkType}</span>)}</div> : <p className="text-[11px] text-amber-700">No checks configured</p>}
+                      <p className="mt-2 text-[11px] font-semibold">Package rate per candidate: {subclient.packageRate == null ? 'Not set' : currencyLabel(subclient.packageRate, 'INR')}</p>
+                    </div>
+                    {canManageAccess && <div className="flex justify-end gap-2 border-t border-[var(--border)] p-3"><button type="button" onClick={() => openSubclientEditor(subclient)} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-semibold hover:bg-[var(--surface-muted)]"><Pencil size={12} />Edit</button>{subclient.status === 'ACTIVE' && <button type="button" onClick={() => void deactivateSubclient(subclient)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/20 px-3 py-2 text-[11px] font-semibold text-rose-700 hover:bg-rose-500/5"><PowerOff size={12} />Deactivate</button>}</div>}
+                  </article>
+                ))}
+              </div>}
+        </section>
       )}
 
       {tab === 'report-branding' && (
@@ -792,6 +1061,7 @@ export default function ClientDetailPage() {
                   <p className="text-[11px] leading-4 text-[var(--muted)] sm:col-span-2">The password is stored securely and can be used to sign in immediately. Share it with the user through a secure channel, not email.</p>
                 </div>
               )}
+
               <fieldset>
                 <legend className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Portal permissions</legend>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -847,6 +1117,31 @@ export default function ClientDetailPage() {
         </div>
       )}
 
+      {tab === 'client-portal' && user?.role.isCompanyAdmin && client && (
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]"><Building2 size={18} /></span>
+              <div>
+                <h2 className="text-[15px] font-semibold">Open {client.name}&apos;s client portal</h2>
+                <p className="mt-1 max-w-xl text-[12px] leading-5 text-[var(--muted)]">View and manage the client workspace using this client&apos;s portal context. Company-admin access is available for active clients in your company.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={client.status !== 'ACTIVE'}
+              onClick={() => {
+                setClientPortalScope(client.id);
+                router.push('/client-portal');
+              }}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-[var(--primary-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Building2 size={15} />{client.status === 'ACTIVE' ? 'Open client portal' : 'Client is inactive'}
+            </button>
+          </div>
+        </section>
+      )}
+
       {tab === 'candidates' && (
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
           <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -854,32 +1149,43 @@ export default function ClientDetailPage() {
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">People</p>
               <h2 className="mt-0.5 text-[15px] font-semibold">Candidate directory</h2>
               <p className="mt-0.5 text-[12px] text-[var(--muted)]">{candidatesMeta.total} candidates linked to {client.name}</p>
+              {candidateCreateMessage && <p role="status" className="mt-1 text-[11px] text-[var(--primary)]">{candidateCreateMessage}</p>}
             </div>
-            <button onClick={() => setCandidateModalOpen(true)} className="inline-flex items-center justify-center gap-1.5 self-start rounded-lg bg-[var(--primary)] px-3.5 py-2.5 text-[12.5px] font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 sm:self-auto">
-              <Users size={14} /> Add candidate
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <label className="text-[10px] font-medium text-[var(--muted)]">Subclient
+                <select value={subclientFilter} onChange={(event) => { setSubclientFilter(event.target.value); setCandidatesPage(1); }} className="mt-1 block min-w-44 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[11px] text-[var(--foreground)]">
+                  <option value="">All candidates</option>
+                  <option value="none">Client only (no subclient)</option>
+                  {subclients.map((subclient) => <option key={subclient.id} value={subclient.id}>{subclient.name}</option>)}
+                </select>
+              </label>
+              <button onClick={() => setCandidateModalOpen(true)} className="inline-flex items-center justify-center gap-1.5 self-start rounded-lg bg-[var(--primary)] px-3.5 py-2.5 text-[12.5px] font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 sm:self-auto">
+                <Users size={14} /> Add candidate
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-[13px]">
+            <table className="w-full min-w-[740px] text-left text-[13px]">
               <thead className="border-b border-[var(--border)] bg-[var(--surface-muted)]/60 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                <tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Cases</th><th className="px-5 py-3">Status</th></tr>
+                <tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Subclient</th><th className="px-5 py-3">Cases</th><th className="px-5 py-3">Status</th><th className="px-5 py-3"></th></tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {candidatesLoading ? (
-                  <tr><td colSpan={4} className="px-5 py-12 text-center text-[var(--muted)]">Loading candidates…</td></tr>
+                  <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]">Loading candidates…</td></tr>
                 ) : candidatesError ? (
-                  <tr><td colSpan={4} className="px-5 py-12 text-center text-[#FF6B6B]">{candidatesError}</td></tr>
+                  <tr><td colSpan={6} className="px-5 py-12 text-center text-[#FF6B6B]">{candidatesError}</td></tr>
                 ) : candidates.length === 0 ? (
-                  <tr><td colSpan={4} className="px-5 py-14 text-center"><div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]"><Users size={19} /></div><p className="mt-3 text-[13px] font-medium">No candidates yet</p><p className="mt-1 text-[12px] text-[var(--muted)]">Add a candidate to start a verification case for this client.</p></td></tr>
+                  <tr><td colSpan={6} className="px-5 py-14 text-center"><div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]"><Users size={19} /></div><p className="mt-3 text-[13px] font-medium">No candidates yet</p><p className="mt-1 text-[12px] text-[var(--muted)]">Add a candidate to start a verification case for this client.</p></td></tr>
                 ) : candidates.map((c) => (
-                  <tr key={c.id} role="link" tabIndex={0} aria-label={`Open ${c.firstName} ${c.lastName}`} onClick={() => router.push(`/company/candidate/${c.id}`)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); router.push(`/company/candidate/${c.id}`); } }} className="group cursor-pointer outline-none transition-colors hover:bg-[var(--surface-muted)]/70 focus-visible:bg-[var(--surface-muted)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]">
+                  <tr key={c.id} role="link" tabIndex={0} aria-label={`Open ${formatCandidateName(c)}`} onClick={() => router.push(`/company/candidate/${c.id}`)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); router.push(`/company/candidate/${c.id}`); } }} className="group cursor-pointer outline-none transition-colors hover:bg-[var(--surface-muted)]/70 focus-visible:bg-[var(--surface-muted)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]">
                     <td className="whitespace-nowrap px-5 py-3.5 font-mono text-[11px] text-[var(--muted)]">{c.candidateCode}</td>
                     <td className="min-w-[220px] px-5 py-3.5">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[11px] font-semibold text-[var(--primary)]">{initials(`${c.firstName} ${c.lastName}`)}</span>
-                        <span className="min-w-0"><span className="block truncate font-medium text-[var(--foreground)] group-hover:text-[var(--primary)]">{c.firstName} {c.lastName}</span><span className="block truncate text-[11px] text-[var(--muted)]">{c.email || 'No email provided'}</span></span>
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[11px] font-semibold text-[var(--primary)]">{initials(formatCandidateName(c))}</span>
+                        <span className="min-w-0"><span className="block truncate font-medium text-[var(--foreground)] group-hover:text-[var(--primary)]">{formatCandidateName(c)}</span><span className="block truncate text-[11px] text-[var(--muted)]">{c.email || 'No email provided'}</span></span>
                       </div>
                     </td>
+                    <td className="px-5 py-3.5 text-[11px] text-[var(--muted)]">{c.subclient?.name || 'Client'}</td>
                     <td className="px-5 py-3.5"><span className="inline-flex min-w-8 justify-center rounded-md bg-[var(--surface-muted)] px-2 py-1 font-mono text-[11px] tabular-nums">{c.bgvCaseCount ?? 0}</span></td>
                     <td className="whitespace-nowrap px-5 py-3.5">
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${c.status === 'COMPLETED' ? 'bg-[#159A7A]/10 text-[#147A68]' : c.status === 'WITHDRAWN' ? 'bg-[#C94C4C]/10 text-[#B53D3D]' : c.status === 'ON_HOLD' || c.status.includes('PENDING') || c.status.includes('PROGRESS') || c.status === 'INVITED' ? 'bg-[#D88A22]/10 text-[#9B6414]' : 'bg-[var(--surface-muted)] text-[var(--muted)]'}`}>{c.status.replaceAll('_', ' ')}</span>
@@ -922,17 +1228,18 @@ export default function ClientDetailPage() {
             </div>
             {loadError && <p role="alert" className="border-b border-[#FF6B6B]/20 bg-[#FF6B6B]/10 px-5 py-3 text-[12px] text-[#FF6B6B]">{loadError}</p>}
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] text-left text-[13px]">
+              <table className="w-full min-w-[800px] text-left text-[13px]">
                 <thead className="border-b border-[var(--border)] bg-[var(--surface-muted)]/60 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                  <tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">{isReports ? 'Completed' : 'Created'}</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Verification status</th><th className="px-5 py-3 text-right">Action</th></tr>
+                  <tr><th className="px-5 py-3">Case</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Subclient</th><th className="px-5 py-3">{isReports ? 'Completed' : 'Created'}</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Verification status</th><th className="px-5 py-3 text-right">Action</th></tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
-                  {loadingRows ? <tr><td colSpan={6} className="px-5 py-14 text-center text-[var(--muted)]">Loading {isReports ? 'reports' : 'cases'}…</td></tr>
-                    : rows.length === 0 ? <tr><td colSpan={6} className="px-5 py-16 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">{isReports ? <FileText size={21} /> : <FileCheck2 size={21} />}</span><p className="mt-3 text-[13px] font-semibold">{isReports ? 'No completed reports yet' : 'No BGV cases yet'}</p><p className="mt-1 text-[12px] text-[var(--muted)]">{isReports ? 'Reports appear here when a case is completed.' : 'Cases created for this client will appear here.'}</p></td></tr>
+                  {loadingRows ? <tr><td colSpan={7} className="px-5 py-14 text-center text-[var(--muted)]">Loading {isReports ? 'reports' : 'cases'}…</td></tr>
+                    : rows.length === 0 ? <tr><td colSpan={7} className="px-5 py-16 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">{isReports ? <FileText size={21} /> : <FileCheck2 size={21} />}</span><p className="mt-3 text-[13px] font-semibold">{isReports ? 'No completed reports yet' : 'No BGV cases yet'}</p><p className="mt-1 text-[12px] text-[var(--muted)]">{isReports ? 'Reports appear here when a case is completed.' : 'Cases created for this client will appear here.'}</p></td></tr>
                       : rows.map((item) => (
                         <tr key={item.id} className="transition-colors hover:bg-[var(--surface-muted)]/60">
                           <td className="px-5 py-3.5"><button type="button" onClick={() => router.push(`/company/bgv-cases/${item.id}`)} className="font-mono text-[12px] font-semibold text-[var(--primary)] hover:underline">{item.caseNumber}</button>{item.packageName && <p className="mt-0.5 text-[11px] text-[var(--muted)]">{item.packageName}</p>}</td>
-                          <td className="px-5 py-3.5"><p className="font-medium">{item.candidate ? `${item.candidate.firstName} ${item.candidate.lastName}` : 'Candidate'}</p><p className="text-[11px] text-[var(--muted)]">{item.candidate?.candidateCode || '—'}</p></td>
+                          <td className="px-5 py-3.5"><p className="font-medium">{item.candidate ? formatCandidateName(item.candidate) : 'Candidate'}</p><p className="text-[11px] text-[var(--muted)]">{item.candidate?.candidateCode || '—'}</p></td>
+                          <td className="px-5 py-3.5 text-[11px] text-[var(--muted)]">{item.subclient?.name || 'Client'}</td>
                           <td className="px-5 py-3.5 text-[12px] text-[var(--muted)]">{dateLabel(isReports ? item.completedAt : item.createdAt)}</td>
                           <td className="px-5 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${item.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-700' : item.status === 'CANCELLED' || item.status === 'ON_HOLD' ? 'bg-amber-500/10 text-amber-700' : 'bg-sky-500/10 text-sky-700'}`}>{item.status.replaceAll('_', ' ')}</span></td>
                           <td className="px-5 py-3.5">{(() => { const verification = isReports ? getReportVerificationStatus(item.reportVerificationStatus) : getVerificationStatus(item.verificationStatuses); return <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${verification.className}`}>{verification.label}</span>; })()}</td>
@@ -962,7 +1269,7 @@ export default function ClientDetailPage() {
                   : invoices.length === 0 ? <tr><td colSpan={6} className="px-5 py-16 text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E7A83E]/15 text-[#B87512]"><Receipt size={21} /></span><p className="mt-3 text-[13px] font-semibold">No invoices yet</p><p className="mt-1 text-[12px] text-[var(--muted)]">Invoices issued to this client will appear here.</p></td></tr>
                     : invoices.map((invoice) => <tr key={invoice.id} className="transition-colors hover:bg-[var(--surface-muted)]/60">
                       <td className="px-5 py-3.5"><p className="font-mono text-[12px] font-semibold text-[var(--foreground)]">{invoice.invoiceNumber}</p>{invoice.purchaseOrderNumber && <p className="mt-0.5 text-[11px] text-[var(--muted)]">PO {invoice.purchaseOrderNumber}</p>}</td>
-                      <td className="px-5 py-3.5 text-[12px]"><p>{dateLabel(invoice.invoiceDate)}</p><p className="mt-0.5 text-[11px] text-[var(--muted)]">Due {dateLabel(invoice.dueDate)}</p></td>
+                      <td className="px-5 py-3.5 text-[12px]"><p className="font-medium tabular-nums">{invoiceDateLabel(invoice.invoiceDate)}</p><p className="mt-1 text-[11px] text-[var(--muted)]">Due <span className="tabular-nums">{invoiceDateLabel(invoice.dueDate)}</span></p></td>
                       <td className="px-5 py-3.5 text-right font-medium">{currencyLabel(invoice.total, invoice.currency)}</td><td className="px-5 py-3.5 text-right text-[var(--muted)]">{currencyLabel(invoice.balanceDue, invoice.currency)}</td>
                       <td className="px-5 py-3.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${invoice.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-700' : invoice.status === 'OVERDUE' || invoice.status === 'VOID' ? 'bg-rose-500/10 text-rose-700' : invoice.status === 'DRAFT' ? 'bg-slate-500/10 text-slate-600' : 'bg-sky-500/10 text-sky-700'}`}>{invoice.status.replaceAll('_', ' ')}</span></td>
                       <td className="px-5 py-3.5 text-right"><button type="button" onClick={() => void downloadInvoice(invoice)} disabled={recordAction === `invoice-${invoice.id}`} title="Download invoice PDF" aria-label={`Download ${invoice.invoiceNumber}`} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-semibold hover:bg-[var(--surface-muted)] disabled:opacity-50"><Download size={13} />PDF</button></td>
@@ -991,11 +1298,70 @@ export default function ClientDetailPage() {
           mode="create"
           candidate={null}
           defaultClientId={client.id}
+          canInvite={user?.role.isCompanyAdmin || user?.role.isSuperAdmin}
           submitting={candidateSubmitting}
           error={null}
           onClose={() => setCandidateModalOpen(false)}
           onSubmit={handleCreateCandidate}
         />
+      )}
+
+      {subclientEditorOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-3 sm:p-6" onMouseDown={(event) => event.target === event.currentTarget && !subclientSaving && setSubclientEditorOpen(false)}>
+          <form onSubmit={(event) => void saveSubclient(event)} className="my-3 w-full max-w-4xl overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl sm:my-8">
+            <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-5 py-4 sm:px-6">
+              <div><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">{client.name}</p><h2 className="mt-1 text-[17px] font-semibold">{subclientEditingId ? 'Edit subclient' : 'Add subclient'}</h2><p className="mt-1 text-[11px] text-[var(--muted)]">Subclients are kept under this client and use its billing account.</p></div>
+              <button type="button" onClick={() => setSubclientEditorOpen(false)} disabled={subclientSaving} className="rounded-lg p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)]" aria-label="Close subclient editor"><X size={17} /></button>
+            </div>
+            <div className="max-h-[72vh] space-y-5 overflow-y-auto p-5 sm:p-6">
+              <section>
+                <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Subclient information</h3>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <label className="text-[11px] font-medium text-[var(--muted)]">Subclient name<input required minLength={2} maxLength={255} value={subclientDraft.name} onChange={(event) => setSubclientDraft((current) => ({ ...current, name: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">Subclient code<input required minLength={2} maxLength={50} value={subclientDraft.clientCode} onChange={(event) => setSubclientDraft((current) => ({ ...current, clientCode: event.target.value.toUpperCase() }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 font-mono text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">Industry<input maxLength={150} value={subclientDraft.industry} onChange={(event) => setSubclientDraft((current) => ({ ...current, industry: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">Contact person<input maxLength={150} value={subclientDraft.contactName} onChange={(event) => setSubclientDraft((current) => ({ ...current, contactName: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">Contact email<input type="email" maxLength={255} value={subclientDraft.contactEmail} onChange={(event) => setSubclientDraft((current) => ({ ...current, contactEmail: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">Phone<input maxLength={50} value={subclientDraft.contactPhone} onChange={(event) => setSubclientDraft((current) => ({ ...current, contactPhone: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">GSTIN<input maxLength={30} value={subclientDraft.gstNumber} onChange={(event) => setSubclientDraft((current) => ({ ...current, gstNumber: event.target.value.toUpperCase() }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">PAN<input maxLength={20} value={subclientDraft.panNumber} onChange={(event) => setSubclientDraft((current) => ({ ...current, panNumber: event.target.value.toUpperCase() }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">Status<select value={subclientDraft.status} onChange={(event) => setSubclientDraft((current) => ({ ...current, status: event.target.value as 'ACTIVE' | 'INACTIVE' }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)]"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)] sm:col-span-2">Address line 1<input maxLength={500} value={subclientDraft.addressLine1} onChange={(event) => setSubclientDraft((current) => ({ ...current, addressLine1: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">Address line 2<input maxLength={500} value={subclientDraft.addressLine2} onChange={(event) => setSubclientDraft((current) => ({ ...current, addressLine2: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">City<input maxLength={100} value={subclientDraft.city} onChange={(event) => setSubclientDraft((current) => ({ ...current, city: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">State<input maxLength={100} value={subclientDraft.state} onChange={(event) => setSubclientDraft((current) => ({ ...current, state: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">Postal code<input maxLength={20} value={subclientDraft.postalCode} onChange={(event) => setSubclientDraft((current) => ({ ...current, postalCode: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">Country<input maxLength={100} value={subclientDraft.country} onChange={(event) => setSubclientDraft((current) => ({ ...current, country: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                </div>
+              </section>
+              <section className="border-t border-[var(--border)] pt-5">
+                <div className="mb-3"><h3 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Package checks and rate</h3><p className="mt-1 text-[11px] text-[var(--muted)]">Candidates assigned here can only be screened using enabled checks. One package rate applies per candidate, in INR.</p></div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {SUBCLIENT_CHECK_OPTIONS.map((option) => {
+                    const configured = subclientDraft.serviceRates.find((entry) => entry.checkType === option.type);
+                    return <div key={option.type} className={`flex items-center gap-3 rounded-lg border p-3 ${configured ? 'border-[var(--primary)]/40 bg-[var(--primary)]/[0.04]' : 'border-[var(--border)]'}`}>
+                      <input type="checkbox" checked={Boolean(configured)} aria-label={`Enable ${option.label}`} onChange={(event) => setSubclientDraft((current) => ({
+                        ...current,
+                        serviceRates: event.target.checked
+                          ? [...current.serviceRates, { checkType: option.type }]
+                          : current.serviceRates.filter((entry) => entry.checkType !== option.type),
+                      }))} className="accent-[var(--primary)]" />
+                      <span className="min-w-0 flex-1 text-[11px] font-medium">{option.label}</span>
+                    </div>;
+                  })}
+                </div>
+                <label className="mt-4 block max-w-sm text-[11px] font-medium text-[var(--muted)]">Package rate per candidate (INR)
+                  <input type="number" required min="0" max="100000000" step="0.01" value={subclientDraft.packageRate} onChange={(event) => setSubclientDraft((current) => ({ ...current, packageRate: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)]" />
+                </label>
+              </section>
+              {subclientsError && <p role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2.5 text-[12px] text-rose-700">{subclientsError}</p>}
+            </div>
+            <div className="flex flex-col-reverse gap-2 border-t border-[var(--border)] px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+              <button type="button" disabled={subclientSaving} onClick={() => setSubclientEditorOpen(false)} className="rounded-lg border border-[var(--border)] px-4 py-2.5 text-[12px] font-semibold">Cancel</button>
+              <button type="submit" disabled={subclientSaving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 text-[12px] font-semibold text-[var(--primary-foreground)] disabled:opacity-60">{subclientSaving ? 'Saving…' : subclientEditingId ? 'Save changes' : 'Create subclient'}</button>
+            </div>
+          </form>
+        </div>
       )}
 
       {editOpen && (
