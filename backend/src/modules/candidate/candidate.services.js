@@ -212,7 +212,10 @@ const update = async ({ id, companyId, payload, currentUser }) => {
   ['clientId', 'subclientId', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress', 'status']
     .forEach((field) => {
       if (payload[field] !== undefined) {
-        data[field] = IDENTITY_FIELDS.some((identityField) => identityField.key === field)
+        if (field === 'clientId' && !payload[field]) return;
+        data[field] = field === 'subclientId'
+          ? payload[field] || null
+          : IDENTITY_FIELDS.some((identityField) => identityField.key === field)
           ? normalizeIdentityValue(field, payload[field]) || null
           : field === 'email'
           ? (payload[field]?.trim().toLowerCase() || null)

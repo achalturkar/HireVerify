@@ -69,7 +69,7 @@ const listValidator = {
   }),
 };
 const candidateFields = {
-  subclientId: Joi.string().uuid().allow(null),
+  subclientId: Joi.string().uuid().allow(null, ''),
   fullName: Joi.string().trim().max(255),
   firstName: Joi.string().trim().min(1).max(100),
   middleName: Joi.string().trim().max(100).allow(null, ''),

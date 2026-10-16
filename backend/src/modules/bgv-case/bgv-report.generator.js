@@ -624,7 +624,7 @@ async function buildReport(item) {
   const portalName = 'Hireverify Brainhunt Ventures';
   const companyCode = company?.shortCode || 'BGV';
   const candidate = item.candidate || {};
-  const candidateFullName = candidate.fullName || [candidate.firstName, candidate.lastName].filter(Boolean).join(' ').trim();
+  const candidateFullName = candidate.fullName || [candidate.firstName, candidate.middleName, candidate.lastName].filter(Boolean).join(' ').trim();
   const doc = new PDFDocument({ size: 'A4', margin: 48, autoFirstPage: false });
   doc.reportColors = reportColors(company?.primaryColor);
   const logoAssets = await Promise.all([

@@ -6,6 +6,7 @@ import { Activity, CheckCircle2, ChevronRight, Download, FileCheck2, FileSpreads
 import { useAuth } from '@/src/auth/AuthProvider';
 import { listClients, listSubclients } from '@/src/lib/api/clients';
 import { getVerificationStatus } from '@/src/lib/verification-status';
+import { formatCandidateName } from '@/src/lib/candidate-name';
 import { createBGVCase, downloadBGVReport, exportBGVCases, getBGVCase, listBGVCases, transitionBGVCase, updateBGVCaseChecks, updateBGVCaseMeta, ApiError } from '@/src/lib/api/bgv';
 import BGVCaseWizardModal from '@/src/components/layout/company/bgv/BGVCaseWizardModal';
 import type { BGVCase, BGVCaseStatus } from '@/src/types/bgv';
@@ -183,7 +184,7 @@ export default function BGVCaseListPage() {
     setError(null);
     try {
       const blob = await downloadBGVReport(item.id, accessToken);
-      const candidateName = item.candidate ? `${item.candidate.firstName}_${item.candidate.lastName}`.replace(/\s+/g, '_') : 'Candidate';
+      const candidateName = item.candidate ? formatCandidateName(item.candidate).replace(/\s+/g, '_') : 'Candidate';
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `${item.caseNumber}_${candidateName}_BGV_FinalReport.pdf`;
@@ -379,7 +380,7 @@ export default function BGVCaseListPage() {
                   <tr key={item.id} onClick={() => router.push(`/company/bgv-cases/${item.id}`)} className="cursor-pointer transition-colors hover:bg-[var(--surface-muted)]/50">
                     <td className="px-5 py-4 font-mono text-[12px]"><button type="button" onClick={(event) => { event.stopPropagation(); router.push(`/company/bgv-cases/${item.id}`); }} className="text-[var(--primary)] hover:underline">{item.caseNumber}</button></td>
                     <td className="px-5 py-4">
-                      {item.candidate ? `${item.candidate.firstName} ${item.candidate.lastName}` : item.candidateId}
+                      {item.candidate ? formatCandidateName(item.candidate) : item.candidateId}
                     </td>
                     <td className="px-5 py-4 text-[var(--muted)]"><p>{item.client?.name ?? item.clientId}</p>{item.subclient?.name && <p className="mt-0.5 text-[11px]">Subclient: {item.subclient.name}</p>}</td>
                     <td className="px-5 py-4">{item._count?.checks ?? item.checks?.length ?? 0}</td>

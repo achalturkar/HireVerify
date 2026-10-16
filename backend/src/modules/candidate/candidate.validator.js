@@ -7,7 +7,7 @@ const STATUSES = ['PENDING', 'INVITED', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS
 const createValidator = {
   body: Joi.object({
     clientId: Joi.string().uuid().required(),
-    subclientId: Joi.string().uuid().allow(null),
+    subclientId: Joi.string().uuid().allow(null, ''),
     fullName: Joi.string().trim().max(255),
     firstName: Joi.string().trim().max(100),
     middleName: Joi.string().trim().max(100).allow(null, ''),
@@ -46,7 +46,7 @@ const updateValidator = {
   params: Joi.object({ id: Joi.string().uuid().required() }),
   body: Joi.object({
     clientId: Joi.string().uuid(),
-    subclientId: Joi.string().uuid().allow(null),
+    subclientId: Joi.string().uuid().allow(null, ''),
     fullName: Joi.string().trim().max(255),
     firstName: Joi.string().trim().max(100),
     middleName: Joi.string().trim().max(100).allow(null, ''),
