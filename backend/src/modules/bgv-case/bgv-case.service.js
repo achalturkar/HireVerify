@@ -13,6 +13,11 @@ const TRANSITIONS = Object.fromEntries(CASE_STATUSES.map((status) => [
 
 const toDto = (item) => item;
 
+const getAvailableCheckTypes = async (types) => prisma.verificationCheckType.findMany({
+  where: { type: { in: types }, isActive: true },
+  select: { type: true, defaultProvider: true },
+});
+
 const assertOwnership = async ({ companyId, clientId, candidateId }) => {
   const [client, candidate] = await Promise.all([
     prisma.client.findFirst({ where: { id: clientId, companyId, parentClientId: null, isDeleted: false }, select: { id: true } }),
@@ -28,9 +33,15 @@ const assertOwnership = async ({ companyId, clientId, candidateId }) => {
 
 const create = async ({ payload, companyId, currentUser }) => {
   const candidate = await assertOwnership({ companyId, clientId: payload.clientId, candidateId: payload.candidateId });
-  if (candidate.subclientId && payload.checks?.length) {
+  const selectedChecks = payload.checks || [];
+  const availableCheckTypes = await getAvailableCheckTypes(selectedChecks.map((check) => check.type));
+  if (availableCheckTypes.length !== selectedChecks.length) {
+    throw new BadRequestError('One or more selected verification checks are unavailable.');
+  }
+  const checkTypeMap = new Map(availableCheckTypes.map((checkType) => [checkType.type, checkType]));
+  if (candidate.subclientId && selectedChecks.length) {
     const allowedChecks = new Set((candidate.subclient.serviceRates || []).map((entry) => entry.checkType));
-    if (payload.checks.some((check) => !allowedChecks.has(check.type))) {
+    if (selectedChecks.some((check) => !allowedChecks.has(check.type))) {
       throw new BadRequestError('Selected checks must be enabled for the candidate’s subclient.');
     }
   }
@@ -59,8 +70,7 @@ const create = async ({ payload, companyId, currentUser }) => {
       const caseNumber = `${numberPrefix}-${String(highestSequence + 1).padStart(4, '0')}`;
 
       const item = await tx.bGVCase.create({ data: { companyId, clientId: payload.clientId, subclientId: candidate.subclientId, candidateId: payload.candidateId, caseNumber, status: payload.status || 'DRAFT', initiatedAt: payload.status === 'INITIATED' ? new Date() : null, clientReference: payload.clientReference || null, packageName: payload.packageName || null, remarks: payload.remarks || null, createdById: currentUser?.id || null } });
-      const checks = payload.checks || [];
-      if (checks.length) await tx.verificationCheck.createMany({ data: checks.map((check) => ({ caseId: item.id, type: check.type, provider: check.provider || 'SUREPASS', priority: check.priority || 0 })) });
+      if (selectedChecks.length) await tx.verificationCheck.createMany({ data: selectedChecks.map((check) => ({ caseId: item.id, type: check.type, provider: check.provider || checkTypeMap.get(check.type).defaultProvider, priority: check.priority || 0 })) });
       await tx.candidate.update({ where: { id: payload.candidateId }, data: { status: 'VERIFICATION_IN_PROGRESS', updatedById: currentUser?.id || null } });
       await tx.verificationEvent.create({ data: { caseId: item.id, eventType: 'CREATED', message: 'BGV case created' } });
       return item;
@@ -136,13 +146,24 @@ const updateChecks = async ({ id, companyId, checks, currentUser }) => {
 
   const requested = new Map(checks.map((check) => [check.type, check]));
   const existing = new Map((current.checks || []).map((check) => [check.type, check]));
+  const registeredTypes = await prisma.verificationCheckType.findMany({
+    where: { type: { in: checks.map((check) => check.type) } },
+    select: { type: true, isActive: true, defaultProvider: true },
+  });
+  const typeDefinitions = new Map(registeredTypes.map((checkType) => [checkType.type, checkType]));
+  if (checks.some((check) => {
+    const definition = typeDefinitions.get(check.type);
+    return !definition || (!definition.isActive && !existing.has(check.type));
+  })) {
+    throw new BadRequestError('One or more selected verification checks are unavailable.');
+  }
 
   await prisma.$transaction(async (tx) => {
     const removeIds = (current.checks || []).filter((check) => !requested.has(check.type)).map((check) => check.id);
     if (removeIds.length) await tx.verificationCheck.deleteMany({ where: { id: { in: removeIds }, caseId: id } });
     const addChecks = [...requested.entries()]
       .filter(([type]) => !existing.has(type))
-      .map(([, check]) => ({ caseId: id, type: check.type, provider: check.provider || 'MANUAL', priority: check.priority || 0 }));
+      .map(([, check]) => ({ caseId: id, type: check.type,       provider: check.provider || typeDefinitions.get(check.type).defaultProvider, priority: check.priority || 0 }));
     if (addChecks.length) await tx.verificationCheck.createMany({ data: addChecks });
     await tx.bGVCase.update({ where: { id }, data: { updatedById: currentUser?.id || null } });
   });

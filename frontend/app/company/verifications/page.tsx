@@ -3,31 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Clock3, FileCheck2, Loader2, RefreshCw, Search, ShieldCheck, XCircle } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { createVerification, downloadVerificationPdf, executePan, executeVerification, listBGVCases, listVerifications, retryVerification, ApiError } from '@/src/lib/api/bgv';
+import { createVerification, downloadVerificationPdf, executePan, executeVerification, listBGVCases, listVerificationCheckTypes, listVerifications, retryVerification, ApiError } from '@/src/lib/api/bgv';
 import type { BGVCase, VerificationCheck, VerificationStatus, VerificationType } from '@/src/types/bgv';
+import type { VerificationCheckType } from '@/src/types/bgv';
 import GeoSelect from '@/src/components/common/GeoSelect';
-
-const tabs: { type: VerificationType | ''; label: string }[] = [
-  { type: '', label: 'All checks' },
-  { type: 'PAN', label: 'PAN check' },
-  { type: 'UAN', label: 'UAN check' },
-  { type: 'COURT', label: 'Court check' },
-  { type: 'IDENTITY', label: 'Identity' },
-  { type: 'ADDRESS', label: 'Address' },
-  { type: 'ADDRESS_PHYSICAL', label: 'Address (Physical)' },
-  { type: 'EDUCATION', label: 'Education' },
-  { type: 'EMPLOYMENT', label: 'Employment' },
-  { type: 'GAP', label: 'Gap Check' },
-  { type: 'REFERENCE', label: 'Reference Check' },
-  { type: 'CV', label: 'CV Validation' },
-  { type: 'SOCIAL_MEDIA', label: 'Social Media' },
-  { type: 'DOCUMENT', label: 'Documents' },
-  { type: 'DOCUMENT_FORGERY', label: 'Forgery' },
-  { type: 'CIBIL', label: 'CIBIL' },
-  { type: 'TWENTY_SIX_AS', label: '26AS' },
-  { type: 'POLICE', label: 'Police' },
-  { type: 'POLICE_RECORD', label: 'Police Record' },
-];
 
 const formFields: Partial<Record<VerificationType, { key: string; label: string; placeholder: string }[]>> = {
   UAN: [{ key: 'uan', label: 'UAN number', placeholder: '12 digit UAN number' }],
@@ -70,6 +49,7 @@ function StatusIcon({ status }: { status: VerificationStatus }) {
 export default function VerificationsPage() {
   const { accessToken } = useAuth();
   const [cases, setCases] = useState<BGVCase[]>([]);
+  const [checkTypes, setCheckTypes] = useState<VerificationCheckType[]>([]);
   const [caseId, setCaseId] = useState('');
   const [checks, setChecks] = useState<VerificationCheck[]>([]);
   const [activeType, setActiveType] = useState<VerificationType | ''>('');
@@ -86,8 +66,11 @@ export default function VerificationsPage() {
   const [providerCheck, setProviderCheck] = useState<VerificationCheck | null>(null);
 
   useEffect(() => {
-    listBGVCases({ page: 1, limit: 200 }, accessToken)
-      .then((result) => setCases(result.items))
+    Promise.all([
+      listBGVCases({ page: 1, limit: 200 }, accessToken),
+      listVerificationCheckTypes(accessToken),
+    ])
+      .then(([caseResult, availableTypes]) => { setCases(caseResult.items); setCheckTypes(availableTypes); })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load BGV cases.'));
   }, [accessToken]);
 
@@ -101,6 +84,7 @@ export default function VerificationsPage() {
   }, [accessToken, caseId]);
 
   const counts = useMemo(() => checks.reduce<Record<string, number>>((result, check) => { result[check.type] = (result[check.type] || 0) + 1; return result; }, {}), [checks]);
+  const tabs = [{ type: '' as const, label: 'All checks' }, ...checkTypes.map((checkType) => ({ type: checkType.type, label: checkType.label }))];
   const caseMap = useMemo(() => new Map(cases.map((item) => [item.id, item])), [cases]);
   const visibleChecks = (activeType ? checks.filter((check) => check.type === activeType) : checks).filter((check) => {
     const candidate = caseMap.get(check.caseId)?.candidate;
@@ -158,6 +142,6 @@ export default function VerificationsPage() {
     {error && <div className="rounded-lg border border-[#FF6B6B]/25 bg-[#FF6B6B]/10 px-4 py-3 text-[13px] text-[#FF6B6B]">{error}</div>}
     {activeType === 'PAN' && <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><div className="mb-4 flex items-center gap-2"><ShieldCheck size={18} className="text-[var(--primary)]" /><div><h2 className="text-[15px] font-semibold">PAN verification</h2><p className="text-[12px] text-[var(--muted)]">Input, send to Surepass, normalize the response, and generate a report.</p></div></div><div className="grid gap-3 sm:grid-cols-[1fr_140px_auto_auto] sm:items-end"><label className="text-[12px] text-[var(--muted)]">PAN number<input value={pan} onChange={(event) => setPan(event.target.value.toUpperCase())} maxLength={10} placeholder="ABCDE1234F" className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-[13px] uppercase text-[var(--foreground)]" /></label><label className="text-[12px] text-[var(--muted)]">API version<select value={apiVersion} onChange={(event) => setApiVersion(event.target.value)} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-[13px] text-[var(--foreground)]"><option value="v1">v1</option></select></label><button type="button" onClick={handlePanVerify} disabled={panLoading || !caseId} className="inline-flex min-w-[130px] items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-50">{panLoading && <Loader2 size={14} className="animate-spin" />}Verify</button>{panCheck && <button type="button" onClick={handlePanPdf} className="rounded-lg border border-[var(--border)] px-4 py-2.5 text-[13px] font-semibold">Generate PDF</button>}</div>{panCheck && <div className="mt-5 grid gap-4 lg:grid-cols-2"><div><p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">Normalized result: <span className={panCheck.result === 'VERIFIED' ? 'text-[var(--primary)]' : 'text-[#F2AE55]'}>{panCheck.result.replaceAll('_', ' ')}</span></p><div className="grid gap-3 sm:grid-cols-2">{Object.entries((panCheck.resultData || {}) as Record<string, unknown>).map(([key, value]) => <div key={key} className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">{key.replaceAll('_', ' ')}</p><p className="mt-1 text-[13px] font-medium">{value === null || value === undefined ? 'Not available' : String(value)}</p></div>)}</div></div><pre className="max-h-64 overflow-auto rounded-lg bg-[#0B0F26] p-4 text-[11px] leading-5 text-[#C9D1F5]">{JSON.stringify(panCheck.rawResponse || { message: 'No raw provider response stored.' }, null, 2)}</pre></div>}</section>}
     {activeType && activeType !== 'PAN' && <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><div className="mb-4 flex items-center gap-2"><FileCheck2 size={18} className="text-[var(--primary)]" /><div><h2 className="text-[15px] font-semibold">{tabs.find((tab) => tab.type === activeType)?.label}</h2><p className="text-[12px] text-[var(--muted)]">{providerTypes.has(activeType) ? 'Send the identifier to Surepass and display only the returned provider data.' : 'Enter the individual verification details to create a protected check for this case.'}</p></div></div><div className="grid gap-4 sm:grid-cols-2">{(formFields[activeType] || []).map((field) => <label key={field.key} className="text-[12px] text-[var(--muted)]">{field.label}{field.key === 'state' ? <GeoSelect kind="state" value={formData[field.key] || ''} onChange={(value) => setFormData((current) => ({ ...current, [field.key]: value }))} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-[13px] text-[var(--foreground)]" /> : <input value={formData[field.key] || ''} onChange={(event) => setFormData((current) => ({ ...current, [field.key]: event.target.value }))} placeholder={field.placeholder} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-[13px] text-[var(--foreground)]" />}</label>)}{providerTypes.has(activeType) && <label className="text-[12px] text-[var(--muted)]">API version<select value={apiVersion} onChange={(event) => setApiVersion(event.target.value)} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-[13px] text-[var(--foreground)]"><option value="v1">v1</option><option value="v2">v2</option></select></label>}</div><div className="mt-4 flex justify-end"><button type="button" onClick={handleQueueCheck} disabled={queueLoading || !caseId} className="inline-flex min-w-[170px] items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-50">{queueLoading && <Loader2 size={14} className="animate-spin" />}{providerTypes.has(activeType) ? 'Verify with Surepass' : 'Create verification check'}</button></div>{providerCheck && providerCheck.type === activeType && <ProviderResult check={providerCheck} onPdf={async () => { const blob = await downloadVerificationPdf(providerCheck.id, accessToken); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${providerCheck.type}-verification-${providerCheck.id}.pdf`; anchor.click(); URL.revokeObjectURL(url); }} />}</section>}
-    <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]"><div className="overflow-x-auto"><table className="w-full text-left text-[13px]"><thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wider text-[var(--muted)]"><tr><th className="px-5 py-3">Check</th><th className="px-5 py-3">Case</th><th className="px-5 py-3">Provider</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Result</th><th className="px-5 py-3">Started</th><th className="px-5 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-[var(--border)]">{loading ? <tr><td colSpan={7} className="px-5 py-12 text-center text-[var(--muted)]"><Loader2 size={18} className="mx-auto mb-2 animate-spin" />Loading checks...</td></tr> : visibleChecks.length === 0 ? <tr><td colSpan={7} className="px-5 py-12 text-center text-[var(--muted)]"><FileCheck2 size={24} className="mx-auto mb-2" />No checks in this tab.</td></tr> : visibleChecks.map((check) => <tr key={check.id}><td className="px-5 py-4"><span className="font-semibold">{check.type}</span><p className="text-[11px] text-[var(--muted)]">ID: {check.id.slice(0, 8)}</p></td><td className="px-5 py-4 font-mono text-[12px]">{caseMap.get(check.caseId)?.caseNumber ?? check.caseId.slice(0, 8)}</td><td className="px-5 py-4">{check.provider}</td><td className={`px-5 py-4 ${statusStyle[check.status]}`}><span className="inline-flex items-center gap-1.5"><StatusIcon status={check.status} />{check.status.replaceAll('_', ' ')}</span></td><td className="px-5 py-4">{check.result.replaceAll('_', ' ')}</td><td className="px-5 py-4 text-[var(--muted)]">{check.startedAt ? new Date(check.startedAt).toLocaleString() : 'Not started'}</td><td className="px-5 py-4 text-right">{(check.status === 'FAILED' || check.status === 'COMPLETED') && <button type="button" onClick={() => handleRetry(check)} disabled={retrying === check.id} className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] text-[var(--primary)] hover:bg-[var(--primary)]/10 disabled:opacity-50"><RefreshCw size={13} className={retrying === check.id ? 'animate-spin' : ''} />Retry</button>}</td></tr>)}</tbody></table></div></div>
+    <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]"><div className="overflow-x-auto"><table className="w-full text-left text-[13px]"><thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wider text-[var(--muted)]"><tr><th className="px-5 py-3">Check</th><th className="px-5 py-3">Case</th><th className="px-5 py-3">Provider</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Result</th><th className="px-5 py-3">Started</th><th className="px-5 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-[var(--border)]">{loading ? <tr><td colSpan={7} className="px-5 py-12 text-center text-[var(--muted)]"><Loader2 size={18} className="mx-auto mb-2 animate-spin" />Loading checks...</td></tr> : visibleChecks.length === 0 ? <tr><td colSpan={7} className="px-5 py-12 text-center text-[var(--muted)]"><FileCheck2 size={24} className="mx-auto mb-2" />No checks in this tab.</td></tr> : visibleChecks.map((check) => <tr key={check.id}><td className="px-5 py-4"><span className="font-semibold">{check.checkType?.label || check.type.replaceAll('_', ' ')}</span><p className="text-[11px] text-[var(--muted)]">ID: {check.id.slice(0, 8)}</p></td><td className="px-5 py-4 font-mono text-[12px]">{caseMap.get(check.caseId)?.caseNumber ?? check.caseId.slice(0, 8)}</td><td className="px-5 py-4">{check.provider}</td><td className={`px-5 py-4 ${statusStyle[check.status]}`}><span className="inline-flex items-center gap-1.5"><StatusIcon status={check.status} />{check.status.replaceAll('_', ' ')}</span></td><td className="px-5 py-4">{check.result.replaceAll('_', ' ')}</td><td className="px-5 py-4 text-[var(--muted)]">{check.startedAt ? new Date(check.startedAt).toLocaleString() : 'Not started'}</td><td className="px-5 py-4 text-right">{(check.status === 'FAILED' || check.status === 'COMPLETED') && <button type="button" onClick={() => handleRetry(check)} disabled={retrying === check.id} className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] text-[var(--primary)] hover:bg-[var(--primary)]/10 disabled:opacity-50"><RefreshCw size={13} className={retrying === check.id ? 'animate-spin' : ''} />Retry</button>}</td></tr>)}</tbody></table></div></div>
   </div>;
 }

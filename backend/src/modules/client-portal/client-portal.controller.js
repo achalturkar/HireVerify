@@ -13,6 +13,14 @@ const candidatePortalService = require('../candidate-portal/candidate-portal.ser
 const { IDENTITY_FIELDS, normalizeConfig } = require('../client/candidate-intake-config');
 const { buildInvoicePdf } = require('../invoice/invoice.pdf');
 const invoiceService = require('../invoice/invoice.service');
+const clientAccessService = require('../client/client-access.service');
+
+const SUBCLIENT_PORTAL_PERMISSIONS = [
+  'clientportal.candidates.view',
+  'clientportal.cases.view',
+  'clientportal.reports.view',
+  'clientportal.reports.download',
+];
 
 const subclientDto = (item) => ({
   id: item.id,
@@ -55,6 +63,57 @@ const updateSubclient = asyncHandler(async (req, res) => {
     payload: req.body,
   });
   return success(res, { message: 'Subclient updated successfully.', data: subclientDto(item) });
+});
+
+const assertManagedSubclient = async (req) => {
+  const subclient = await prisma.client.findFirst({
+    where: {
+      id: req.params.subclientId,
+      parentClientId: req.user.clientId,
+      companyId: req.user.companyId,
+      isDeleted: false,
+    },
+    select: { id: true },
+  });
+  if (!subclient) throw new NotFoundError('Subclient not found.');
+  return subclient;
+};
+
+const listSubclientUsers = asyncHandler(async (req, res) => {
+  await assertManagedSubclient(req);
+  const data = await clientAccessService.list({ clientId: req.params.subclientId, companyId: req.user.companyId });
+  return success(res, { message: 'Subclient portal users', data });
+});
+
+const inviteSubclientUser = asyncHandler(async (req, res) => {
+  await assertManagedSubclient(req);
+  const data = await clientAccessService.invite({
+    clientId: req.params.subclientId,
+    companyId: req.user.companyId,
+    payload: { ...req.body, permissions: SUBCLIENT_PORTAL_PERMISSIONS },
+  });
+  return created(res, { message: 'Subclient portal user created.', data });
+});
+
+const updateSubclientUser = asyncHandler(async (req, res) => {
+  await assertManagedSubclient(req);
+  const data = await clientAccessService.update({
+    clientId: req.params.subclientId,
+    companyId: req.user.companyId,
+    userId: req.params.userId,
+    payload: { status: req.body.status },
+  });
+  return success(res, { message: 'Subclient portal user updated.', data });
+});
+
+const removeSubclientUser = asyncHandler(async (req, res) => {
+  await assertManagedSubclient(req);
+  await clientAccessService.remove({
+    clientId: req.params.subclientId,
+    companyId: req.user.companyId,
+    userId: req.params.userId,
+  });
+  return success(res, { message: 'Subclient portal user removed.' });
 });
 
 const getCandidateFormConfig = asyncHandler(async (req, res) => {
@@ -463,6 +522,7 @@ const getCase = asyncHandler(async (req, res) => {
     checks: (item.checks || []).map((check) => ({
       id: check.id,
       type: check.type,
+      label: check.checkType?.label || check.type.replaceAll('_', ' '),
       status: check.status,
       result: check.result,
       startedAt: check.startedAt,
@@ -561,4 +621,4 @@ const downloadInvoice = asyncHandler(async (req, res) => {
   res.send(pdf);
 });
 
-module.exports = { getCandidateFormConfig, listSubclients, createSubclient, updateSubclient, getDashboard, listCandidates, createCandidate, updateCandidate, getCandidate, inviteCandidate, getCandidatePortalAccess, remindCandidate, updateCandidatePortalAccess, listCases, getCase, listReports, downloadReport, listInvoices, downloadInvoice };
+module.exports = { getCandidateFormConfig, listSubclients, createSubclient, updateSubclient, listSubclientUsers, inviteSubclientUser, updateSubclientUser, removeSubclientUser, getDashboard, listCandidates, createCandidate, updateCandidate, getCandidate, inviteCandidate, getCandidatePortalAccess, remindCandidate, updateCandidatePortalAccess, listCases, getCase, listReports, downloadReport, listInvoices, downloadInvoice };

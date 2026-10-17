@@ -7,6 +7,7 @@ const { writeAudit } = require('../../utils/audit');
 
 const service = require('./client.service');
 const accessService = require('./client-access.service');
+const analyticsService = require('./client-analytics.service');
 
 /**
  * Create Client
@@ -48,6 +49,32 @@ const getClient = asyncHandler(async (req, res) => {
     message: 'Client',
     data,
   });
+});
+
+const getClientAnalytics = asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  const data = await analyticsService.getClientAnalytics({
+    clientId: req.params.id,
+    companyId: req.user.companyId,
+    from: req.query.from,
+    to: req.query.to,
+    groupBy: req.query.groupBy || 'month',
+  });
+  return success(res, { message: 'Client analytics', data });
+});
+
+const exportClientAnalytics = asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  const csv = await analyticsService.exportClientAnalytics({
+    clientId: req.params.id,
+    companyId: req.user.companyId,
+    from: req.query.from,
+    to: req.query.to,
+  });
+  const safeRange = `${req.query.from}-to-${req.query.to}`.replace(/[^0-9a-zA-Z_-]/g, '_');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="client-analytics-${safeRange}.csv"`);
+  res.send(`\uFEFF${csv}`);
 });
 
 /**
@@ -255,6 +282,8 @@ const removePortalUser = asyncHandler(async (req, res) => {
 module.exports = {
   createClient,
   getClient,
+  getClientAnalytics,
+  exportClientAnalytics,
   listClients,
   listSubclients,
   createSubclient,

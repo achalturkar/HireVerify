@@ -1020,7 +1020,7 @@ export default function HomePage() {
 
           <div className="pt-6 border-t border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-4 text-[12px] text-[var(--muted)]">
             <span style={{ fontFamily: 'var(--font-mono)' }}>
-              © {new Date().getFullYear()} HireVerify. All rights reserved.
+              © {new Date().getFullYear()} Brainhunt Ventures Pvt. Ltd. All rights reserved.
             </span>
             <Link
               href="/login"
@@ -1028,6 +1028,12 @@ export default function HomePage() {
             >
               <Mail size={13} />
               Sign in
+            </Link>
+            <Link
+              href="/subclient-portal"
+              className="text-[var(--muted)] font-medium hover:text-[var(--primary)] transition-colors"
+            >
+              Subclient login
             </Link>
           </div>
         </div>

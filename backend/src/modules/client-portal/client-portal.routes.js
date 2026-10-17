@@ -10,7 +10,6 @@ const { ForbiddenError, BadRequestError } = require('../../utils/errors');
 const { prisma } = require('../../common/prisma');
 const candidatePortalService = require('../candidate-portal/candidate-portal.service');
 const invoiceValidator = require('../invoice/invoice.validator');
-const SUBCLIENT_CHECK_TYPES = ['PAN', 'UAN', 'COURT', 'IDENTITY', 'ADDRESS', 'ADDRESS_PHYSICAL', 'EDUCATION', 'EMPLOYMENT', 'GAP', 'REFERENCE', 'CV', 'SOCIAL_MEDIA', 'DOCUMENT', 'DOCUMENT_FORGERY', 'CIBIL', 'TWENTY_SIX_AS', 'POLICE', 'POLICE_RECORD'];
 const COMPANY_ADMIN_PORTAL_PERMISSIONS = [
   'clientportal.cases.view',
   'clientportal.invoices.view',
@@ -46,6 +45,11 @@ router.use(authenticate, async (req, _res, next) => {
     if (!req.user.role?.isClientUser || !req.user.clientId) {
       throw new ForbiddenError('Client portal account required.');
     }
+    const client = await prisma.client.findFirst({
+      where: { id: req.user.clientId, companyId: req.user.companyId, isDeleted: false, status: 'ACTIVE' },
+      select: { parentClientId: true },
+    });
+    if (!client || client.parentClientId) throw new ForbiddenError('Client portal account required.');
     return next();
   } catch (error) {
     return next(error);
@@ -129,7 +133,7 @@ const subclientPayload = Joi.object({
   contactPhone: Joi.string().max(50).allow(null, ''),
   packageRate: Joi.number().min(0).max(100000000).required(),
   serviceRates: Joi.array().items(Joi.object({
-    checkType: Joi.string().valid(...SUBCLIENT_CHECK_TYPES).required(),
+    checkType: Joi.string().pattern(/^[A-Z][A-Z0-9_]{1,59}$/).required(),
     rate: Joi.number().min(0).max(100000000).required(),
   })).required(),
 });
@@ -138,12 +142,37 @@ const updateSubclientValidator = {
   params: Joi.object({ subclientId: Joi.string().uuid().required() }),
   body: subclientPayload.keys({ status: Joi.string().valid('ACTIVE', 'INACTIVE') }).min(1).required(),
 };
+const subclientUserValidator = {
+  params: Joi.object({ subclientId: Joi.string().uuid().required() }),
+  body: Joi.object({
+    firstName: Joi.string().trim().min(1).max(100).required(),
+    lastName: Joi.string().trim().min(1).max(100).required(),
+    email: Joi.string().trim().email().max(255).required(),
+    accountMethod: Joi.string().valid('INVITATION', 'PASSWORD').default('INVITATION'),
+    password: Joi.when('accountMethod', {
+      is: 'PASSWORD',
+      then: Joi.string().min(12).max(128).required(),
+      otherwise: Joi.forbidden(),
+    }),
+  }).required(),
+};
+const updateSubclientUserValidator = {
+  params: Joi.object({ subclientId: Joi.string().uuid().required(), userId: Joi.string().uuid().required() }),
+  body: Joi.object({ status: Joi.string().valid('ACTIVE', 'INACTIVE').required() }).required(),
+};
+const subclientUserPathValidator = {
+  params: Joi.object({ subclientId: Joi.string().uuid().required(), userId: Joi.string().uuid().required() }),
+};
 
 router.get('/candidate-form-config', authorize('clientportal.candidates.view'), controller.getCandidateFormConfig);
 router.get('/dashboard', controller.getDashboard);
 router.get('/subclients', authorize(['clientportal.subclients.view', 'clientportal.subclients.manage'], { any: true }), controller.listSubclients);
 router.post('/subclients', authorize('clientportal.subclients.manage'), validate(createSubclientValidator), controller.createSubclient);
 router.put('/subclients/:subclientId', authorize('clientportal.subclients.manage'), validate(updateSubclientValidator), controller.updateSubclient);
+router.get('/subclients/:subclientId/users', authorize('clientportal.subclients.manage'), validate({ params: updateSubclientValidator.params }), controller.listSubclientUsers);
+router.post('/subclients/:subclientId/users', authorize('clientportal.subclients.manage'), validate(subclientUserValidator), controller.inviteSubclientUser);
+router.patch('/subclients/:subclientId/users/:userId', authorize('clientportal.subclients.manage'), validate(updateSubclientUserValidator), controller.updateSubclientUser);
+router.delete('/subclients/:subclientId/users/:userId', authorize('clientportal.subclients.manage'), validate(subclientUserPathValidator), controller.removeSubclientUser);
 router.get('/candidates', authorize('clientportal.candidates.view'), validate(listValidator), controller.listCandidates);
 router.post('/candidates', authorize('clientportal.candidates.create'), validate(createCandidateValidator), controller.createCandidate);
 router.put('/candidates/:id', authorize('clientportal.candidates.update'), validate(updateCandidateValidator), controller.updateCandidate);

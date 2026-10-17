@@ -56,6 +56,13 @@ const authenticate = async (req, _res, next) => {
       if (user.role.isClientUser && (!user.client || user.client.isDeleted || user.client.status !== 'ACTIVE' || user.client.companyId !== user.companyId)) {
         throw new ForbiddenError('Client account is not active');
       }
+      if (user.role.isClientUser && user.client.parentClientId) {
+        const parent = await prisma.client.findFirst({
+          where: { id: user.client.parentClientId, companyId: user.companyId, parentClientId: null, isDeleted: false, status: 'ACTIVE' },
+          select: { id: true },
+        });
+        if (!parent) throw new ForbiddenError('Parent client account is not active');
+      }
 
       userAuth = {
         id: user.id,
@@ -64,7 +71,7 @@ const authenticate = async (req, _res, next) => {
         lastName: user.lastName,
         companyId: user.companyId,
         clientId: user.clientId,
-        client: user.client ? { id: user.client.id, name: user.client.name, logoUrl: user.client.logoUrl } : null,
+        client: user.client ? { id: user.client.id, name: user.client.name, logoUrl: user.client.logoUrl, parentClientId: user.client.parentClientId || null } : null,
         clientPermissions: user.clientPermissions || [],
         mustChangePassword: user.mustChangePassword,
         role: {

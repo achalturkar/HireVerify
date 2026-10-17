@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs/promises');
 const express = require('express');
 const multer = require('multer');
+const { param, query } = require('express-validator');
 const { v4: uuidv4 } = require('uuid');
 
 const controller = require('./client.controller');
@@ -143,6 +144,27 @@ router.delete(
     authorize('client.update'),
     validate(v.subclientIdValidator),
     controller.deleteSubclient
+);
+
+const analyticsQueryValidator = [
+    param('id').isUUID(),
+    query('from').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('A valid start month (YYYY-MM) is required.'),
+    query('to').matches(/^\d{4}-(0[1-9]|1[0-2])$/).withMessage('A valid end month (YYYY-MM) is required.'),
+];
+
+router.get(
+    '/:id/analytics',
+    authorize('client.view'),
+    validate(analyticsQueryValidator.concat(
+        query('groupBy').optional().isIn(['month', 'year']),
+    )),
+    controller.getClientAnalytics
+);
+router.get(
+    '/:id/analytics/export',
+    authorize('client.view'),
+    validate(analyticsQueryValidator),
+    controller.exportClientAnalytics
 );
 
 /**

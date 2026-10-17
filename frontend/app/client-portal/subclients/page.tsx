@@ -2,32 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Building2, ChevronDown, ChevronUp, Loader2, Pencil, Plus, Save, Search, SlidersHorizontal, Users, X } from 'lucide-react';
+import { Building2, ChevronDown, ChevronUp, KeyRound, Loader2, Pencil, Plus, Save, Search, SlidersHorizontal, UserPlus, Users, X } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { formatCandidateName } from '@/src/lib/candidate-name';
-import { hasPortalPermission, listPortalCandidates, listPortalSubclients, createPortalSubclient, updatePortalSubclient, type PortalCandidate, type PortalSubclient } from '@/src/lib/api/client-portal';
-import type { VerificationType } from '@/src/types/bgv';
-
-const CHECK_OPTIONS: { type: VerificationType; label: string }[] = [
-  { type: 'PAN', label: 'PAN verification' },
-  { type: 'UAN', label: 'UAN / EPFO' },
-  { type: 'COURT', label: 'Court records' },
-  { type: 'IDENTITY', label: 'Identity documents' },
-  { type: 'ADDRESS', label: 'Address verification' },
-  { type: 'ADDRESS_PHYSICAL', label: 'Physical address' },
-  { type: 'EDUCATION', label: 'Education' },
-  { type: 'EMPLOYMENT', label: 'Employment' },
-  { type: 'GAP', label: 'Employment gaps' },
-  { type: 'REFERENCE', label: 'References' },
-  { type: 'CV', label: 'CV validation' },
-  { type: 'SOCIAL_MEDIA', label: 'Social media' },
-  { type: 'DOCUMENT', label: 'Documents' },
-  { type: 'DOCUMENT_FORGERY', label: 'Document forgery' },
-  { type: 'CIBIL', label: 'CIBIL' },
-  { type: 'TWENTY_SIX_AS', label: '26AS' },
-  { type: 'POLICE', label: 'Police verification' },
-  { type: 'POLICE_RECORD', label: 'Police records' },
-];
+import { hasPortalPermission, inviteSubclientPortalUser, listPortalCandidates, listPortalSubclients, listSubclientPortalUsers, createPortalSubclient, updatePortalSubclient, updateSubclientPortalUser, type PortalCandidate, type PortalSubclient, type SubclientPortalUser } from '@/src/lib/api/client-portal';
+import { listVerificationCheckTypes } from '@/src/lib/api/bgv';
+import type { VerificationCheckType, VerificationType } from '@/src/types/bgv';
 
 type Draft = {
   name: string;
@@ -58,6 +38,7 @@ export default function PortalSubclientsPage() {
   const canManage = hasPortalPermission(permissions, 'clientportal.subclients.manage', isPortalAdmin);
   const canViewCandidates = hasPortalPermission(permissions, 'clientportal.candidates.view', isPortalAdmin);
   const [items, setItems] = useState<PortalSubclient[]>([]);
+  const [checkTypes, setCheckTypes] = useState<VerificationCheckType[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | PortalSubclient['status']>('ALL');
   const [activityFilter, setActivityFilter] = useState<'ALL' | 'CANDIDATES' | 'CASES' | 'NO_CASES'>('ALL');
@@ -75,6 +56,14 @@ export default function PortalSubclientsPage() {
   const [candidateTotalPages, setCandidateTotalPages] = useState(1);
   const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [candidateError, setCandidateError] = useState<string | null>(null);
+  const [portalAccountFor, setPortalAccountFor] = useState<PortalSubclient | null>(null);
+  const [portalUsers, setPortalUsers] = useState<SubclientPortalUser[]>([]);
+  const [portalUsersLoading, setPortalUsersLoading] = useState(false);
+  const [portalUsersError, setPortalUsersError] = useState<string | null>(null);
+  const [portalUserSaving, setPortalUserSaving] = useState(false);
+  const [portalUserMessage, setPortalUserMessage] = useState<string | null>(null);
+  const [portalAccountMethod, setPortalAccountMethod] = useState<'INVITATION' | 'PASSWORD'>('INVITATION');
+  const [portalUserDraft, setPortalUserDraft] = useState({ firstName: '', lastName: '', email: '', password: '' });
   const filteredItems = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
     return items.filter((item) => {
@@ -98,7 +87,9 @@ export default function PortalSubclientsPage() {
     setLoading(true);
     setError(null);
     try {
-      setItems(await listPortalSubclients(accessToken));
+      const [loadedSubclients, availableTypes] = await Promise.all([listPortalSubclients(accessToken), listVerificationCheckTypes(accessToken)]);
+      setItems(loadedSubclients);
+      setCheckTypes(availableTypes);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load subclients.');
     } finally {
@@ -211,6 +202,56 @@ export default function PortalSubclientsPage() {
     setError(null);
   };
 
+  const openPortalAccounts = async (item: PortalSubclient) => {
+    setPortalAccountFor(item);
+    setPortalUsers([]);
+    setPortalUsersError(null);
+    setPortalUserMessage(null);
+    setPortalUsersLoading(true);
+    try {
+      setPortalUsers(await listSubclientPortalUsers(item.id, accessToken));
+    } catch (cause) {
+      setPortalUsersError(cause instanceof Error ? cause.message : 'Could not load subclient portal accounts.');
+    } finally {
+      setPortalUsersLoading(false);
+    }
+  };
+
+  const createPortalAccount = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!portalAccountFor) return;
+    setPortalUserSaving(true);
+    setPortalUsersError(null);
+    setPortalUserMessage(null);
+    try {
+      await inviteSubclientPortalUser(portalAccountFor.id, {
+        firstName: portalUserDraft.firstName.trim(),
+        lastName: portalUserDraft.lastName.trim(),
+        email: portalUserDraft.email.trim(),
+        accountMethod: portalAccountMethod,
+        ...(portalAccountMethod === 'PASSWORD' ? { password: portalUserDraft.password } : {}),
+      }, accessToken);
+      setPortalUserDraft({ firstName: '', lastName: '', email: '', password: '' });
+      setPortalUserMessage(portalAccountMethod === 'INVITATION' ? 'Account created. A password setup invitation has been sent.' : 'Subclient portal account created.');
+      setPortalUsers(await listSubclientPortalUsers(portalAccountFor.id, accessToken));
+    } catch (cause) {
+      setPortalUsersError(cause instanceof Error ? cause.message : 'Could not create portal account.');
+    } finally {
+      setPortalUserSaving(false);
+    }
+  };
+
+  const togglePortalAccount = async (account: SubclientPortalUser) => {
+    if (!portalAccountFor) return;
+    setPortalUsersError(null);
+    try {
+      await updateSubclientPortalUser(portalAccountFor.id, account.id, account.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE', accessToken);
+      setPortalUsers(await listSubclientPortalUsers(portalAccountFor.id, accessToken));
+    } catch (cause) {
+      setPortalUsersError(cause instanceof Error ? cause.message : 'Could not update the portal account.');
+    }
+  };
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -267,7 +308,7 @@ export default function PortalSubclientsPage() {
             <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Package checks</legend>
             <p className="mb-3 text-xs text-[var(--muted)]">Select the checks included in this subclient package, then set one total rate per candidate.</p>
             <div className="grid gap-2 sm:grid-cols-2">
-              {CHECK_OPTIONS.map(({ type, label }) => {
+              {checkTypes.map(({ type, label }) => {
                 const enabled = Object.hasOwn(draft.selectedChecks, type);
                 return <div key={type} className="flex items-center gap-3 rounded-lg border border-[var(--border)] p-3">
                   <label className="flex min-w-0 flex-1 items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={(event) => setDraft((current) => {
@@ -304,12 +345,13 @@ export default function PortalSubclientsPage() {
                         <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-semibold">{item.name}</h2><span className="font-mono text-[11px] text-[var(--muted)]">{item.clientCode}</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-700' : 'bg-[var(--surface-muted)] text-[var(--muted)]'}`}>{item.status}</span></div>
                         <p className="mt-1 text-xs text-[var(--muted)]">{[item.contactName, item.contactEmail, item.contactPhone].filter(Boolean).join(' · ') || 'No contact details provided'}</p>
                         <p className="mt-1 text-[11px] text-[var(--muted)]">{item.candidateCount} candidates · {item.bgvCaseCount} BGV cases</p>
-                        <div className="mt-3 flex flex-wrap gap-1.5">{item.serviceRates.map(({ checkType }) => <span key={checkType} className="rounded-md border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-1 text-[10px]">{CHECK_OPTIONS.find((option) => option.type === checkType)?.label || checkType}</span>)}</div>
+                        <div className="mt-3 flex flex-wrap gap-1.5">{item.serviceRates.map(({ checkType }) => <span key={checkType} className="rounded-md border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-1 text-[10px]">{checkTypes.find((option) => option.type === checkType)?.label || checkType.replaceAll('_', ' ')}</span>)}</div>
                         <p className="mt-2 text-xs font-semibold">{item.packageRate === null ? 'Package rate not set' : `Package rate: ₹${Number(item.packageRate).toLocaleString('en-IN')} per candidate`}</p>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
                         <button type="button" onClick={() => { setSelectedSubclientId(isExpanded ? null : item.id); setCandidatePage(1); setSubclientCandidates([]); setCandidateTotal(0); }} aria-expanded={isExpanded} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-muted)]">{isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}Details & candidates</button>
                         {canManage && <button type="button" onClick={() => openEdit(item)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-muted)]"><Pencil size={13} />Edit</button>}
+                        {canManage && <button type="button" onClick={() => void openPortalAccounts(item)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold hover:bg-[var(--surface-muted)]"><KeyRound size={13} />Portal login</button>}
                       </div>
                     </div>
                     {isExpanded && <div className="mt-5 border-t border-[var(--border)] pt-5">
@@ -331,6 +373,37 @@ export default function PortalSubclientsPage() {
                 })}
               </div>}
       </section>
+      {portalAccountFor && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !portalUserSaving) setPortalAccountFor(null); }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="subclient-accounts-title" className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl">
+          <div className="flex items-start justify-between gap-3">
+            <div><p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--primary)]">Subclient access</p><h2 id="subclient-accounts-title" className="mt-1 text-lg font-semibold">{portalAccountFor.name}</h2><p className="mt-1 text-xs text-[var(--muted)]">Subclient users can see only this subclient’s candidates, cases, and completed reports.</p></div>
+            <button type="button" onClick={() => setPortalAccountFor(null)} aria-label="Close portal accounts" className="rounded-md p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)]"><X size={16} /></button>
+          </div>
+          {portalUsersError && <p role="alert" className="mt-4 rounded-lg bg-rose-500/10 p-3 text-xs text-rose-700">{portalUsersError}</p>}
+          {portalUserMessage && <p role="status" className="mt-4 rounded-lg bg-emerald-500/10 p-3 text-xs text-emerald-700">{portalUserMessage}</p>}
+          <div className="mt-4 space-y-2">
+            {portalUsersLoading ? <p className="py-4 text-center text-xs text-[var(--muted)]">Loading portal accounts…</p>
+              : portalUsers.length ? portalUsers.map((account) => <div key={account.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] p-3">
+                <div className="min-w-0"><p className="truncate text-sm font-medium">{account.firstName} {account.lastName}</p><p className="truncate text-xs text-[var(--muted)]">{account.email} · {account.status}</p></div>
+                <button type="button" onClick={() => void togglePortalAccount(account)} className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-semibold">{account.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</button>
+              </div>)
+                : <p className="rounded-lg bg-[var(--surface-muted)] p-3 text-xs text-[var(--muted)]">No portal users configured yet.</p>}
+          </div>
+          <form onSubmit={(event) => void createPortalAccount(event)} className="mt-5 space-y-3 border-t border-[var(--border)] pt-5">
+            <div className="flex items-center gap-2"><UserPlus size={15} className="text-[var(--primary)]" /><h3 className="text-sm font-semibold">Create subclient login</h3></div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-medium text-[var(--muted)]">First name<input required maxLength={100} value={portalUserDraft.firstName} onChange={(event) => setPortalUserDraft((current) => ({ ...current, firstName: event.target.value }))} className={fieldClass} /></label>
+              <label className="text-xs font-medium text-[var(--muted)]">Last name<input required maxLength={100} value={portalUserDraft.lastName} onChange={(event) => setPortalUserDraft((current) => ({ ...current, lastName: event.target.value }))} className={fieldClass} /></label>
+              <label className="text-xs font-medium text-[var(--muted)] sm:col-span-2">Login email<input required type="email" maxLength={255} value={portalUserDraft.email} onChange={(event) => setPortalUserDraft((current) => ({ ...current, email: event.target.value }))} className={fieldClass} /></label>
+              <label className="text-xs font-medium text-[var(--muted)] sm:col-span-2">Account setup
+                <select value={portalAccountMethod} onChange={(event) => setPortalAccountMethod(event.target.value as typeof portalAccountMethod)} className={fieldClass}><option value="INVITATION">Send email invitation to set password</option><option value="PASSWORD">Set an initial password</option></select>
+              </label>
+              {portalAccountMethod === 'PASSWORD' && <label className="text-xs font-medium text-[var(--muted)] sm:col-span-2">Initial password<input required type="password" minLength={12} maxLength={128} autoComplete="new-password" value={portalUserDraft.password} onChange={(event) => setPortalUserDraft((current) => ({ ...current, password: event.target.value }))} className={fieldClass} /></label>}
+            </div>
+            <div className="flex justify-end"><button type="submit" disabled={portalUserSaving} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-xs font-semibold text-[var(--primary-foreground)] disabled:opacity-50">{portalUserSaving ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}{portalUserSaving ? 'Saving…' : 'Create login'}</button></div>
+          </form>
+        </section>
+      </div>}
     </div>
   );
 }

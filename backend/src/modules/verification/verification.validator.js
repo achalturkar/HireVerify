@@ -2,14 +2,14 @@
 
 const Joi = require('joi');
 
-const TYPES = ['PAN', 'UAN', 'COURT', 'IDENTITY', 'ADDRESS', 'ADDRESS_PHYSICAL', 'EDUCATION', 'EMPLOYMENT', 'GAP', 'REFERENCE', 'CV', 'SOCIAL_MEDIA', 'DOCUMENT', 'DOCUMENT_FORGERY', 'CIBIL', 'TWENTY_SIX_AS', 'POLICE', 'POLICE_RECORD'];
 const PROVIDERS = ['SUREPASS', 'MANUAL', 'INTERNAL'];
+const CHECK_TYPE = Joi.string().pattern(/^[A-Z][A-Z0-9_]{1,59}$/);
 const STATUSES = ['PENDING', 'QUEUED', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'RETRYING', 'CANCELLED'];
 const RESULTS = ['PENDING', 'VERIFIED', 'NOT_VERIFIED', 'MATCH', 'MISMATCH', 'NO_RECORD_FOUND', 'RECORD_FOUND', 'REQUIRES_REVIEW', 'UNABLE_TO_VERIFY'];
 
 const idParamValidator = { params: Joi.object({ id: Joi.string().uuid().required() }) };
-const listValidator = { query: Joi.object({ caseId: Joi.string().uuid(), status: Joi.string().valid(...STATUSES), type: Joi.string().valid(...TYPES) }) };
-const createValidator = { body: Joi.object({ caseId: Joi.string().uuid().required(), type: Joi.string().valid(...TYPES).required(), provider: Joi.string().valid(...PROVIDERS).default('SUREPASS'), priority: Joi.number().integer().min(0).max(100), inputData: Joi.object().unknown(true) }) };
+const listValidator = { query: Joi.object({ caseId: Joi.string().uuid(), status: Joi.string().valid(...STATUSES), type: CHECK_TYPE }) };
+const createValidator = { body: Joi.object({ caseId: Joi.string().uuid().required(), type: CHECK_TYPE.required(), provider: Joi.string().valid(...PROVIDERS), priority: Joi.number().integer().min(0).max(100), inputData: Joi.object().unknown(true) }) };
 const updateValidator = { params: Joi.object({ id: Joi.string().uuid().required() }), body: Joi.object({ status: Joi.string().valid(...STATUSES).required(), result: Joi.string().valid(...RESULTS), resultData: Joi.object().unknown(true), failureReason: Joi.string().max(2000).allow(null, ''), remarks: Joi.string().max(2000).allow(null, '') }).min(1) };
 const executePanValidator = { params: Joi.object({ id: Joi.string().uuid().required() }), body: Joi.object({ pan: Joi.string().pattern(/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/).required() }) };
 const executeCheckValidator = { params: Joi.object({ id: Joi.string().uuid().required() }), body: Joi.object({ apiVersion: Joi.string().valid('v1', 'v2').default('v1'), inputData: Joi.object().unknown(true).required() }).required() };

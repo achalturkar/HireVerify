@@ -196,20 +196,21 @@ const list = async ({ companyId, query }) => {
   };
 };
 
-const CHECK_TYPES = new Set([
-  'PAN', 'UAN', 'COURT', 'IDENTITY', 'ADDRESS', 'ADDRESS_PHYSICAL', 'EDUCATION',
-  'EMPLOYMENT', 'GAP', 'REFERENCE', 'CV', 'SOCIAL_MEDIA', 'DOCUMENT',
-  'DOCUMENT_FORGERY', 'CIBIL', 'TWENTY_SIX_AS', 'POLICE', 'POLICE_RECORD',
-]);
-
-const normalizeServiceRates = (value) => {
+const normalizeServiceRates = async (value, previouslyConfigured = new Set()) => {
   if (!Array.isArray(value)) throw new BadRequestError('Checks and rates must be provided as a list.');
   if (value.length === 0) throw new BadRequestError('Select at least one background check for the subclient package.');
+  const requestedTypes = value.map((entry) => String(entry?.checkType || '').trim());
+  const registeredTypes = await prisma.verificationCheckType.findMany({
+    where: { type: { in: requestedTypes } },
+    select: { type: true, isActive: true },
+  });
+  const typeMap = new Map(registeredTypes.map((item) => [item.type, item]));
   const seen = new Set();
   return value.map((entry) => {
     const checkType = String(entry?.checkType || '').trim();
     const rate = Number(entry?.rate);
-    if (!CHECK_TYPES.has(checkType)) throw new BadRequestError('Choose a valid background check for every subclient rate.');
+    const definition = typeMap.get(checkType);
+    if (!definition || (!definition.isActive && !previouslyConfigured.has(checkType))) throw new BadRequestError('Choose an available background check for every subclient rate.');
     if (seen.has(checkType)) throw new BadRequestError('A check can only be configured once per subclient.');
     if (!Number.isFinite(rate) || rate < 0 || rate > 100000000) throw new BadRequestError('Each check rate must be between 0 and 100,000,000.');
     seen.add(checkType);
@@ -254,7 +255,7 @@ const createSubclient = async ({ parentClientId, companyId, payload, currentUser
     select: { id: true },
   });
   if (sibling) throw new ConflictError('A subclient with this name already exists under the client.');
-  const serviceRates = normalizeServiceRates(payload.serviceRates || []);
+  const serviceRates = await normalizeServiceRates(payload.serviceRates || []);
   const packageRate = normalizePackageRate(payload.packageRate);
   const created = await repo.create({
     companyId,
@@ -293,7 +294,7 @@ const updateSubclient = async ({ parentClientId, subclientId, companyId, payload
   if (data.name === null) throw new BadRequestError('Subclient name is required.');
   if (data.clientCode === null) throw new BadRequestError('Subclient code is required.');
   if (data.contactEmail) data.contactEmail = data.contactEmail.toLowerCase();
-  if (payload.serviceRates !== undefined) data.serviceRates = normalizeServiceRates(payload.serviceRates);
+  if (payload.serviceRates !== undefined) data.serviceRates = await normalizeServiceRates(payload.serviceRates, new Set((current.serviceRates || []).map((entry) => entry.checkType)));
   if (payload.packageRate !== undefined) data.packageRate = normalizePackageRate(payload.packageRate);
   if (data.clientCode && data.clientCode !== current.clientCode) {
     const existing = await prisma.client.findUnique({ where: { clientCode: data.clientCode } });

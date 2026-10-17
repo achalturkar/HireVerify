@@ -7,42 +7,18 @@ import { useAuth } from '@/src/auth/AuthProvider';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import { updateCandidate } from '@/src/lib/api/candidates';
 import {
-  ApiError, deleteBGVCase, downloadBGVReport, getBGVCase, listVerifications, lockVerification,
+  ApiError, deleteBGVCase, downloadBGVReport, getBGVCase, listVerificationCheckTypes, listVerifications, lockVerification,
   listCompanyVerificationModes, listCompanyVerifiers, transitionBGVCase, updateBGVCaseChecks, updateBGVCaseMeta, updateVerificationResult,
 } from '@/src/lib/api/bgv';
 import type { CompanyVerificationMode, CompanyVerifier } from '@/src/lib/api/bgv';
-import type { BGVCase, BGVCaseStatus, VerificationCheck, VerificationStatus, VerificationType } from '@/src/types/bgv';
+import type { BGVCase, BGVCaseStatus, VerificationCheck, VerificationCheckType, VerificationStatus, VerificationType } from '@/src/types/bgv';
 import FileUploadField from '@/src/components/layout/company/bgv/FileUploadField';
 import CandidateConfirmDialog from '@/src/components/layout/company/candidate/CandidateConfirmDialog';
 
 type TabKey = 'overview' | VerificationType;
-const tabs: { key: TabKey; label: string }[] = [
-  { key: 'overview', label: 'Candidate' }, { key: 'PAN', label: 'PAN' }, { key: 'IDENTITY', label: 'Identity' },
-  { key: 'ADDRESS', label: 'Address' }, { key: 'ADDRESS_PHYSICAL', label: 'Address (Physical)' }, { key: 'UAN', label: 'UAN' },
-  { key: 'EDUCATION', label: 'Education' }, { key: 'EMPLOYMENT', label: 'Employment' }, { key: 'GAP', label: 'Gap Check' }, { key: 'REFERENCE', label: 'Reference Check' }, { key: 'CV', label: 'CV Validation' }, { key: 'SOCIAL_MEDIA', label: 'Social Media' }, { key: 'COURT', label: 'Criminal Record' },
-  { key: 'CIBIL', label: 'CIBIL' }, { key: 'TWENTY_SIX_AS', label: '26AS' }, { key: 'POLICE', label: 'Police Verification' }, { key: 'POLICE_RECORD', label: 'Police Record' },
-];
 const inputClass = 'w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] disabled:opacity-60';
 const statuses: VerificationStatus[] = ['PENDING', 'QUEUED', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'RETRYING', 'CANCELLED'];
 const outcomes = ['CLEAR', 'MINOR_DISCREPANCY', 'MAJOR_DISCREPANCY', 'UNABLE_TO_VERIFY', 'REQUIRES_REVIEW'];
-const editableCheckTypes: { type: VerificationType; label: string; provider: 'SUREPASS' | 'MANUAL' }[] = [
-  { type: 'PAN', label: 'PAN', provider: 'SUREPASS' },
-  { type: 'IDENTITY', label: 'Identity', provider: 'MANUAL' },
-  { type: 'ADDRESS', label: 'Address', provider: 'MANUAL' },
-  { type: 'ADDRESS_PHYSICAL', label: 'Address (Physical)', provider: 'MANUAL' },
-  { type: 'UAN', label: 'UAN', provider: 'SUREPASS' },
-  { type: 'EDUCATION', label: 'Education', provider: 'MANUAL' },
-  { type: 'EMPLOYMENT', label: 'Employment', provider: 'MANUAL' },
-  { type: 'GAP', label: 'Gap Check', provider: 'MANUAL' },
-  { type: 'REFERENCE', label: 'Reference Check', provider: 'MANUAL' },
-  { type: 'CV', label: 'CV Validation', provider: 'MANUAL' },
-  { type: 'SOCIAL_MEDIA', label: 'Social Media', provider: 'MANUAL' },
-  { type: 'COURT', label: 'Criminal record', provider: 'SUREPASS' },
-  { type: 'CIBIL', label: 'CIBIL', provider: 'MANUAL' },
-  { type: 'TWENTY_SIX_AS', label: '26AS', provider: 'MANUAL' },
-  { type: 'POLICE', label: 'Police verification', provider: 'MANUAL' },
-  { type: 'POLICE_RECORD', label: 'Police record', provider: 'MANUAL' },
-];
 type WorkflowAction = 'candidate' | 'consent' | 'checks' | 'review' | 'complete' | 'resume' | 'none';
 const workflowStages = ['Candidate details', 'Consent', 'Verification', 'Review', 'Complete'];
 
@@ -134,6 +110,7 @@ export default function BGVCaseWorkspacePage() {
   const { accessToken } = useAuth();
   const [caseData, setCaseData] = useState<BGVCase | null>(null);
   const [checks, setChecks] = useState<VerificationCheck[]>([]);
+  const [checkTypes, setCheckTypes] = useState<VerificationCheckType[]>([]);
   const [verifiers, setVerifiers] = useState<CompanyVerifier[]>([]);
   const [verificationModes, setVerificationModes] = useState<CompanyVerificationMode[]>([]);
   const [tab, setTab] = useState<TabKey>('overview');
@@ -152,8 +129,8 @@ export default function BGVCaseWorkspacePage() {
     if (!id) return;
     setLoading(true); setError(null);
     try {
-      const [loadedCase, loadedChecks, loadedVerifiers, loadedModes] = await Promise.all([getBGVCase(id, accessToken), listVerifications(id, accessToken), listCompanyVerifiers(accessToken), listCompanyVerificationModes(accessToken, true)]);
-      setCaseData(loadedCase); setChecks(loadedChecks); setVerifiers(loadedVerifiers); setVerificationModes(loadedModes); setStatusDraft(loadedCase.status);
+      const [loadedCase, loadedChecks, loadedVerifiers, loadedModes, loadedCheckTypes] = await Promise.all([getBGVCase(id, accessToken), listVerifications(id, accessToken), listCompanyVerifiers(accessToken), listCompanyVerificationModes(accessToken, true), listVerificationCheckTypes(accessToken)]);
+      setCaseData(loadedCase); setChecks(loadedChecks); setVerifiers(loadedVerifiers); setVerificationModes(loadedModes); setCheckTypes(loadedCheckTypes); setStatusDraft(loadedCase.status);
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Failed to load case.'); }
     finally { setLoading(false); }
   }, [id, accessToken]);
@@ -164,7 +141,14 @@ export default function BGVCaseWorkspacePage() {
 
   if (loading) return <div className="mx-auto max-w-5xl py-16 text-center text-[13px] text-[var(--muted)]">Loading case...</div>;
   if (error || !caseData) return <div className="mx-auto max-w-5xl py-16 text-center"><p className="mb-3 text-[13px] text-[#FF6B6B]">{error || 'Case not found.'}</p><button onClick={() => router.push('/company/bgv-cases')} className="text-[13px] text-[var(--primary)] underline">Back to cases</button></div>;
-  const visibleTabs = tabs.filter((item) => item.key === 'overview' || checks.some((check) => check.type === item.key));
+  const checkTypeMap = new Map(checkTypes.map((checkType) => [checkType.type, checkType]));
+  const visibleTabs: { key: TabKey; label: string }[] = [
+    { key: 'overview', label: 'Candidate' },
+    ...checks.reduce<VerificationType[]>((types, check) => types.includes(check.type) ? types : [...types, check.type], []).map((type) => ({
+      key: type,
+      label: checkTypeMap.get(type)?.label || checks.find((check) => check.type === type)?.checkType?.label || type.replaceAll('_', ' '),
+    })),
+  ];
   const activeTab = visibleTabs.some((item) => item.key === tab) ? tab : 'overview';
   const selectedCheck = activeTab === 'overview' ? undefined : checks.find((check) => check.type === activeTab);
   const workflow = getCaseWorkflow(caseData, checks);
@@ -211,9 +195,18 @@ export default function BGVCaseWorkspacePage() {
   const saveCheck = (updated: VerificationCheck) => setChecks((current) => current.map((check) => check.id === updated.id ? updated : check));
   const openChecksEditor = () => { if (caseData.status === 'COMPLETED') return; setOriginalChecks(checks); setEditingChecks(true); };
   const cancelChecksEditor = () => { setChecks(originalChecks); setEditingChecks(false); };
+  const editableCheckTypes = [
+    ...checkTypes,
+    ...checks.filter((check) => !checkTypeMap.has(check.type)).map((check) => ({
+      type: check.type,
+      label: check.checkType?.label || check.type.replaceAll('_', ' '),
+      defaultProvider: check.provider,
+      isActive: false,
+    })),
+  ];
   const toggleRequiredCheck = (type: VerificationType) => setChecks((current) => current.some((check) => check.type === type)
     ? current.filter((check) => check.type !== type)
-    : [...current, { id: `new-${type}`, caseId: caseData.id, type, provider: editableCheckTypes.find((item) => item.type === type)?.provider || 'MANUAL', status: 'PENDING', result: 'PENDING', priority: 0, retryCount: 0 } as VerificationCheck]);
+    : [...current, { id: `new-${type}`, caseId: caseData.id, type, provider: checkTypeMap.get(type)?.defaultProvider || 'MANUAL', status: 'PENDING', result: 'PENDING', priority: 0, retryCount: 0 }]);
   const saveRequiredChecks = async () => {
     if (!checks.length) return setError('Select at least one verification check.');
     setSavingChecks(true); setError(null);
@@ -232,7 +225,7 @@ export default function BGVCaseWorkspacePage() {
     <CaseProgressPanel workflow={workflow} onAction={() => void handleWorkflowAction()} />
     {caseData.status === 'COMPLETED' && <div className="rounded-lg border border-[#F2AE55]/40 bg-[#F2AE55]/10 px-4 py-3 text-[12.5px] text-[#8A5A12]">This case is currently locked. Change its status above to reopen it; the case form becomes editable once the status update succeeds.</div>}
     <nav className="flex gap-1 overflow-x-auto border-b border-[var(--border)]">{visibleTabs.map((item) => <button key={item.key} onClick={() => setTab(item.key)} className={`whitespace-nowrap border-b-2 px-4 py-2.5 text-[13px] font-medium ${activeTab === item.key ? 'border-[var(--primary)] text-[var(--foreground)]' : 'border-transparent text-[var(--muted)]'}`}>{item.label}</button>)}</nav>
-    {activeTab === 'overview' ? <CaseOverview caseData={caseData} token={accessToken} onSaved={setCaseData} readOnly={caseData.status === 'COMPLETED'} /> : selectedCheck ? <VerificationEditor key={selectedCheck.id} check={selectedCheck} candidateId={caseData.candidateId} token={accessToken} onSaved={saveCheck} verifiers={verifiers} verificationModes={verificationModes} readOnly={caseData.status === 'COMPLETED'} /> : <p className="text-[13px] text-[var(--muted)]">This verification is not included in this case.</p>}
+    {activeTab === 'overview' ? <CaseOverview caseData={caseData} token={accessToken} onSaved={setCaseData} readOnly={caseData.status === 'COMPLETED'} /> : selectedCheck ? <VerificationEditor key={selectedCheck.id} check={selectedCheck} label={checkTypeMap.get(selectedCheck.type)?.label || selectedCheck.checkType?.label || selectedCheck.type.replaceAll('_', ' ')} candidateId={caseData.candidateId} token={accessToken} onSaved={saveCheck} verifiers={verifiers} verificationModes={verificationModes} readOnly={caseData.status === 'COMPLETED'} /> : <p className="text-[13px] text-[var(--muted)]">This verification is not included in this case.</p>}
     {confirmDelete && <CandidateConfirmDialog title="Delete this BGV case?" description={`This permanently removes ${caseData.caseNumber} and its checks. Only cancelled cases can be deleted.`} confirmLabel="Delete case" submitting={deleting} onConfirm={() => void deleteCase()} onCancel={() => setConfirmDelete(false)} />}
   </div>;
 }
@@ -304,9 +297,9 @@ const defaultRemarks: Record<VerificationType, string> = {
   POLICE_RECORD: 'Police record verification completed successfully.',
 };
 
-const initialData = (check: VerificationCheck) => { const value = check.resultData && typeof check.resultData === 'object' ? check.resultData as Record<string, unknown> : {}; return { ...value, verifierName: String(value.verifierName || value.verifiedBy || ''), remarks: String(value.remarks || check.remarks || defaultRemarks[check.type]), outcome: String(value.outcome || value.status || (check.result === 'VERIFIED' ? 'CLEAR' : '')) }; };
+const initialData = (check: VerificationCheck) => { const value = check.resultData && typeof check.resultData === 'object' ? check.resultData as Record<string, unknown> : {}; return { ...value, verifierName: String(value.verifierName || value.verifiedBy || ''), remarks: String(value.remarks || check.remarks || defaultRemarks[check.type] || `${check.type.replaceAll('_', ' ')} verification completed.`), outcome: String(value.outcome || value.status || (check.result === 'VERIFIED' ? 'CLEAR' : '')) }; };
 
-function VerificationEditor({ check, candidateId, token, onSaved, verifiers, verificationModes, readOnly = false }: { check: VerificationCheck; candidateId: string; token: string | null; onSaved: (value: VerificationCheck) => void; verifiers: CompanyVerifier[]; verificationModes: CompanyVerificationMode[]; readOnly?: boolean }) {
+function VerificationEditor({ check, label, candidateId, token, onSaved, verifiers, verificationModes, readOnly = false }: { check: VerificationCheck; label: string; candidateId: string; token: string | null; onSaved: (value: VerificationCheck) => void; verifiers: CompanyVerifier[]; verificationModes: CompanyVerificationMode[]; readOnly?: boolean }) {
   const initialFormData = initialData(check);
   const [data, setData] = useState<Record<string, unknown>>(initialFormData); const [savedData, setSavedData] = useState<Record<string, unknown>>(initialFormData); const [status, setStatus] = useState(check.status); const [savedStatus, setSavedStatus] = useState(check.status); const [saving, setSaving] = useState(false); const [locking, setLocking] = useState(false); const [error, setError] = useState<string | null>(null);
   const set = (key: string, value: string) => setData((current) => ({ ...current, [key]: value }));
@@ -318,7 +311,7 @@ function VerificationEditor({ check, candidateId, token, onSaved, verifiers, ver
   const currentMode = text('modeOfVerification');
   const modeOptions = verificationModes.filter((mode) => mode.isActive || mode.name === currentMode);
   const common = <><Field label="Verified by" value={text('verifierName')} onChange={(value) => set('verifierName', value)} disabled={locked} verifiers={verifiers} /><label><span className="mb-1.5 block text-[12.5px] font-medium">Mode of verification</span><select value={currentMode} disabled={locked} onChange={(event) => set('modeOfVerification', event.target.value)} className={inputClass}><option value="">Select mode</option>{modeOptions.map((mode) => <option key={mode.id} value={mode.name}>{mode.name}{!mode.isActive ? ' (archived)' : ''}</option>)}</select></label><label><span className="mb-1.5 block text-[12.5px] font-medium">Processing status</span><select value={status} disabled={locked} onChange={(event) => setStatus(event.target.value as VerificationStatus)} className={inputClass}>{statuses.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select></label><label><span className="mb-1.5 block text-[12.5px] font-medium">Verification status</span><select value={text('outcome')} disabled={locked} onChange={(event) => set('outcome', event.target.value)} className={inputClass}><option value="">Select status</option>{outcomes.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select></label></>;
-  return <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><div className="mb-4 flex items-center justify-between"><h2 className="text-[15px] font-semibold">{check.type.replaceAll('_', ' ')} verification</h2><span className="text-[12px] text-[var(--muted)]">{readOnly ? 'View only' : locked ? 'Locked' : 'Editable'}</span></div>{hasUnsavedChanges && !readOnly && <p className="mb-3 rounded-md border border-[#FF6B6B]/30 bg-[#FF6B6B]/10 px-3 py-2 text-[12.5px] font-medium text-[#FF6B6B]">Unsaved changes</p>}{error && <p className="mb-3 text-[13px] text-[#FF6B6B]">{error}</p>}<div className="grid gap-4 sm:grid-cols-2">{common}{check.type === 'IDENTITY' && <Field label="Aadhaar card number" value={text('aadhaarNumber')} onChange={(value) => set('aadhaarNumber', value)} disabled={locked} />}{(check.type === 'ADDRESS' || check.type === 'ADDRESS_PHYSICAL') && <><TextArea label={check.type === 'ADDRESS_PHYSICAL' ? 'Physical address visited' : 'Current address'} value={text('currentAddress')} onChange={(value) => set('currentAddress', value)} disabled={locked} /><TextArea label={check.type === 'ADDRESS_PHYSICAL' ? 'Visit findings' : 'Permanent address (PAN card)'} value={text('permanentAddress')} onChange={(value) => set('permanentAddress', value)} disabled={locked} /></>}{check.type === 'UAN' && <Field label="UAN number" value={text('uanNumber') || text('uan')} onChange={(value) => set('uanNumber', value)} disabled={locked} />}{check.type === 'COURT' && <><Field label="Civil proceedings" value={text('civilProceedings')} onChange={(value) => set('civilProceedings', value)} disabled={locked} /><Field label="Criminal proceedings" value={text('criminalProceedings')} onChange={(value) => set('criminalProceedings', value)} disabled={locked} /></>}{check.type === 'EMPLOYMENT' && <RepeatableEntries data={data} setData={setData} disabled={locked} kind="Employment" />}{check.type === 'EDUCATION' && <RepeatableEntries data={data} setData={setData} disabled={locked} kind="Education" />}{['GAP', 'REFERENCE', 'CV', 'SOCIAL_MEDIA', 'CIBIL', 'TWENTY_SIX_AS', 'POLICE', 'POLICE_RECORD'].includes(check.type) && <DynamicCheckFields type={check.type} data={data} set={set} disabled={locked} />}<div className="sm:col-span-2"><TextArea label="Remarks" value={text('remarks')} onChange={(value) => set('remarks', value)} disabled={locked} /></div></div><FileUploadField check={check} candidateId={candidateId} token={token} onSaved={onSaved} readOnly={readOnly} /><div className="mt-4 flex gap-2"><button onClick={toggleLock} disabled={locking || readOnly} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3.5 py-2.5 text-[12.5px] font-semibold disabled:opacity-50">{locked ? <Unlock size={14} /> : <Lock size={14} />}{locked ? 'Unlock section' : 'Lock section'}</button><button onClick={save} disabled={saving || locked} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[13px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Save size={14} />{saving ? 'Saving...' : 'Save verification'}</button></div></section>;
+  return <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><div className="mb-4 flex items-center justify-between"><h2 className="text-[15px] font-semibold">{label} verification</h2><span className="text-[12px] text-[var(--muted)]">{readOnly ? 'View only' : locked ? 'Locked' : 'Editable'}</span></div>{hasUnsavedChanges && !readOnly && <p className="mb-3 rounded-md border border-[#FF6B6B]/30 bg-[#FF6B6B]/10 px-3 py-2 text-[12.5px] font-medium text-[#FF6B6B]">Unsaved changes</p>}{error && <p className="mb-3 text-[13px] text-[#FF6B6B]">{error}</p>}<div className="grid gap-4 sm:grid-cols-2">{common}{check.type === 'IDENTITY' && <Field label="Aadhaar card number" value={text('aadhaarNumber')} onChange={(value) => set('aadhaarNumber', value)} disabled={locked} />}{(check.type === 'ADDRESS' || check.type === 'ADDRESS_PHYSICAL') && <><TextArea label={check.type === 'ADDRESS_PHYSICAL' ? 'Physical address visited' : 'Current address'} value={text('currentAddress')} onChange={(value) => set('currentAddress', value)} disabled={locked} /><TextArea label={check.type === 'ADDRESS_PHYSICAL' ? 'Visit findings' : 'Permanent address (PAN card)'} value={text('permanentAddress')} onChange={(value) => set('permanentAddress', value)} disabled={locked} /></>}{check.type === 'UAN' && <Field label="UAN number" value={text('uanNumber') || text('uan')} onChange={(value) => set('uanNumber', value)} disabled={locked} />}{check.type === 'COURT' && <><Field label="Civil proceedings" value={text('civilProceedings')} onChange={(value) => set('civilProceedings', value)} disabled={locked} /><Field label="Criminal proceedings" value={text('criminalProceedings')} onChange={(value) => set('criminalProceedings', value)} disabled={locked} /></>}{check.type === 'EMPLOYMENT' && <RepeatableEntries data={data} setData={setData} disabled={locked} kind="Employment" />}{check.type === 'EDUCATION' && <RepeatableEntries data={data} setData={setData} disabled={locked} kind="Education" />}{['GAP', 'REFERENCE', 'CV', 'SOCIAL_MEDIA', 'CIBIL', 'TWENTY_SIX_AS', 'POLICE', 'POLICE_RECORD'].includes(check.type) && <DynamicCheckFields type={check.type} data={data} set={set} disabled={locked} />}<div className="sm:col-span-2"><TextArea label="Remarks" value={text('remarks')} onChange={(value) => set('remarks', value)} disabled={locked} /></div></div><FileUploadField check={check} candidateId={candidateId} token={token} onSaved={onSaved} readOnly={readOnly} /><div className="mt-4 flex gap-2"><button onClick={toggleLock} disabled={locking || readOnly} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3.5 py-2.5 text-[12.5px] font-semibold disabled:opacity-50">{locked ? <Unlock size={14} /> : <Lock size={14} />}{locked ? 'Unlock section' : 'Lock section'}</button><button onClick={save} disabled={saving || locked} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[13px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Save size={14} />{saving ? 'Saving...' : 'Save verification'}</button></div></section>;
 }
 
 const dynamicFields: Partial<Record<VerificationType, { key: string; label: string }[]>> = {

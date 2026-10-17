@@ -11,7 +11,7 @@ const findById = (id, companyId) => prisma.bGVCase.findFirst({
     candidate: { select: { id: true, candidateCode: true, fullName: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, gender: true, dateOfBirth: true, currentAddress: true, permanentAddress: true } },
     client: { select: { id: true, name: true, logoUrl: true, reportShowCompanyBranding: true, reportShowClientBranding: true, clientCode: true, contactEmail: true, company: { select: { name: true, contactEmail: true, shortCode: true, primaryColor: true, logoUrl: true, signatureUrl: true, stampUrl: true, address: true } } } },
     subclient: { select: { id: true, name: true, clientCode: true } },
-    checks: { include: { documents: true } },
+    checks: { include: { documents: true, checkType: { select: { label: true } } } },
     consents: {
       where: { consentType: 'BGV_CONSENT' },
       select: { consentType: true, consentGiven: true, revokedAt: true, consentedAt: true, createdAt: true },

@@ -166,6 +166,90 @@ export async function getClient(
   return res.data.data;
 }
 
+export interface ClientAnalytics {
+  range: { from: string; to: string; groupBy: 'month' | 'year' };
+  summary: {
+    candidates: number;
+    cases: number;
+    completedCases: number;
+    openCases: number;
+    reports: number;
+    invoices: number;
+    invoicedAmount: number;
+    taxAmount: number;
+    collectedAmount: number;
+    outstandingAmount: number;
+    completionRate: number;
+  };
+  trend: {
+    key: string;
+    label: string;
+    candidates: number;
+    cases: number;
+    completedCases: number;
+    reports: number;
+    invoices: number;
+    invoicedAmount: number;
+    collectedAmount: number;
+  }[];
+  distributions: {
+    candidatesByStatus: { name: string; value: number }[];
+    casesByStatus: { name: string; value: number }[];
+    casesByResult: { name: string; value: number }[];
+    invoicesByStatus: { name: string; value: number }[];
+    checksByType: { type: string; total: number; completed: number; failed: number; pending: number }[];
+  };
+  recentCases: {
+    id: string;
+    caseNumber: string;
+    status: string;
+    overallResult: string;
+    createdAt: string;
+    completedAt: string | null;
+    candidateName: string;
+    candidate: { candidateCode: string };
+  }[];
+  recentInvoices: {
+    id: string;
+    invoiceNumber: string;
+    status: string;
+    invoiceDate: string;
+    dueDate: string;
+    currency: string;
+    total: number;
+    paid: number;
+    balance: number;
+  }[];
+}
+
+export async function getClientAnalytics(
+  id: string,
+  params: { from: string; to: string; groupBy: 'month' | 'year' },
+  accessToken: string | null,
+): Promise<ClientAnalytics> {
+  const query = buildQuery({ from: params.from, to: params.to, groupBy: params.groupBy });
+  const res = await request<Envelope<ClientAnalytics>>(`/clients/${id}/analytics${query}`, accessToken);
+  return res.data.data;
+}
+
+export async function downloadClientAnalyticsReport(
+  id: string,
+  params: { from: string; to: string },
+  accessToken: string | null,
+): Promise<Blob> {
+  if (!accessToken) throw new ApiError('You must be signed in to do this.', 401);
+  const query = buildQuery(params);
+  const response = await fetch(`${API_BASE}/clients/${id}/analytics/export${query}`, {
+    credentials: 'include',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(extractErrorMessage(body, response.status), response.status);
+  }
+  return response.blob();
+}
+
 export type SubclientPayload = {
   name: string;
   clientCode: string;

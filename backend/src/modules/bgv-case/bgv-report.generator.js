@@ -336,7 +336,6 @@ const orderedChecks = (checks) => checks
       - (rightOrder === -1 ? REPORT_CHECK_ORDER.length : rightOrder) || left.index - right.index;
   })
   .map(({ check }) => check)
-  .filter((check) => REPORT_CHECK_ORDER.includes(check.type))
   .filter((check) => !(check.type === 'EMPLOYMENT'
     && check.status === 'PENDING'
     && check.result === 'PENDING'
@@ -408,26 +407,30 @@ const summaryDetail = (check) => {
   return typeof remarks === 'string' && remarks.trim() ? remarks : 'Verification completed';
 };
 
-const summaryCheckLabel = (type) => ({
-  IDENTITY: 'Identity Verification (Aadhar Card)',
-  ADDRESS: 'Address Verification (Digital)',
-  ADDRESS_PHYSICAL: 'Address Verification (Physical)',
-  UAN: 'UAN Verification',
-  EDUCATION: 'Education Verification',
-  GAP: 'Gap Verification',
-  REFERENCE: 'Reference Verification',
-  CV: 'CV Validation',
-  SOCIAL_MEDIA: 'Social Media Verification',
-  COURT: 'Court Record Verification',
-  CIBIL: 'CIBIL Verification',
-  TWENTY_SIX_AS: '26AS Verification',
-  POLICE: 'Police Verification',
-  POLICE_RECORD: 'Police Record Verification',
-  PAN: 'PAN Verification',
-  EMPLOYMENT: 'Employment Verification',
-  DOCUMENT: 'Document Verification',
-  DOCUMENT_FORGERY: 'Document Authenticity Verification',
-}[type] || `${type.replaceAll('_', ' ')} Verification`);
+const summaryCheckLabel = (check) => {
+  const type = check.type;
+  const builtInLabel = ({
+    IDENTITY: 'Identity Verification (Aadhar Card)',
+    ADDRESS: 'Address Verification (Digital)',
+    ADDRESS_PHYSICAL: 'Address Verification (Physical)',
+    UAN: 'UAN Verification',
+    EDUCATION: 'Education Verification',
+    GAP: 'Gap Verification',
+    REFERENCE: 'Reference Verification',
+    CV: 'CV Validation',
+    SOCIAL_MEDIA: 'Social Media Verification',
+    COURT: 'Court Record Verification',
+    CIBIL: 'CIBIL Verification',
+    TWENTY_SIX_AS: '26AS Verification',
+    POLICE: 'Police Verification',
+    POLICE_RECORD: 'Police Record Verification',
+    PAN: 'PAN Verification',
+    EMPLOYMENT: 'Employment Verification',
+    DOCUMENT: 'Document Verification',
+    DOCUMENT_FORGERY: 'Document Authenticity Verification',
+  })[type];
+  return builtInLabel || check.checkType?.label || `${type.replaceAll('_', ' ')} Verification`;
+};
 
 const resultRows = (check) => {
   const data = resultData(check);
@@ -659,7 +662,7 @@ async function buildReport(item) {
   drawPairedRow(doc, { label: 'GENDER', value: candidate.gender || '-' }, { label: 'DATE OF BIRTH', value: reportDate(candidate.dateOfBirth) || '-' });
   drawPairedRow(doc, { label: 'DATE INITIATED', value: reportDate(item.initiatedAt) || '-' }, { label: 'DATE OF COMPLETION', value: reportDate(item.completedAt) || '-' });
   drawPairedRow(doc, { label: `${companyCode} REF NO`, value: item.caseNumber }, { label: 'CLIENT REF NO', value: item.clientReference || '-' });
-  drawPairedRow(doc, { label: 'CLIENT', value: clientName }, { label: 'SUBCLIENT', value: item.subclient?.name || '-' });
+  // drawPairedRow(doc, { label: 'CLIENT', value: clientName }, { label: 'SUBCLIENT', value: item.subclient?.name || '-' });
   drawPairedRow(
     doc,
     { label: 'ENTITY / PACKAGE', value: item.packageName || '-' },
@@ -691,24 +694,22 @@ async function buildReport(item) {
   drawBand(doc, 'EXECUTIVE SUMMARY');
   const summaryWidths = [195, 205, 99]; // sums to 499; balanced for long names and concise details
   drawHeaderRow(doc, ['TYPE OF CHECK', 'BRIEF DETAILS', 'STATUS'], summaryWidths);
-  let summaryPages = 1;
   checks.forEach((check) => {
     const detail = summaryDetail(check);
     const status = checkStatus(check);
-    const label = summaryCheckLabel(check.type);
+    const label = summaryCheckLabel(check);
     doc.font('Helvetica-Bold').fontSize(8.5);
     const labelHeight = doc.heightOfString(String(label), { width: summaryWidths[0] - 12 });
     doc.font('Helvetica').fontSize(8.5);
     const detailHeight = doc.heightOfString(String(detail), { width: summaryWidths[1] - 16 });
     const height = Math.max(25, labelHeight + 8, detailHeight + 8);
 
-    if (doc.y + height > CONTENT_BOTTOM && summaryPages < 2) {
+    if (doc.y + height > CONTENT_BOTTOM) {
       drawFooter(doc, reportBrandName);
       doc.addPage();
       drawPageChrome(doc, logo);
       drawBand(doc, 'EXECUTIVE SUMMARY');
       drawHeaderRow(doc, ['TYPE OF CHECK', 'BRIEF DETAILS', 'STATUS'], summaryWidths);
-      summaryPages += 1;
     }
 
     const y = doc.y;
@@ -736,7 +737,7 @@ async function buildReport(item) {
   for (const check of checks) {
     doc.addPage();
     drawPageChrome(doc, logo);
-    drawBand(doc, `${summaryCheckLabel(check.type).toUpperCase()}`);
+    drawBand(doc, `${summaryCheckLabel(check).toUpperCase()}`);
 
     const renderedStructured = check.type === 'EMPLOYMENT' || check.type === 'EDUCATION'
       ? drawStructuredEntries(doc, check, reportBrandName, logo)

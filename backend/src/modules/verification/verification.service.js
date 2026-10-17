@@ -31,6 +31,7 @@ const toDto = (check) => ({
   remarks: check.remarks, startedAt: check.startedAt, completedAt: check.completedAt,
   retryCount: check.retryCount, createdAt: check.createdAt, updatedAt: check.updatedAt,
   isLocked: check.isLocked, lockedAt: check.lockedAt, documents: check.documents || [],
+  checkType: check.checkType || undefined,
   case: check.case,
 });
 
@@ -52,7 +53,9 @@ const create = async ({ payload, companyId }) => {
   const caseItem = await repo.findCase(payload.caseId, companyId);
   if (!caseItem) throw new NotFoundError('BGV case not found');
   if (['COMPLETED', 'CANCELLED'].includes(caseItem.status)) throw new ConflictError('This case is finalized and cannot be changed.');
-  const check = await repo.create({ caseId: payload.caseId, type: payload.type, provider: payload.provider || 'SUREPASS', priority: payload.priority || 0, inputData: payload.inputData || null });
+  const checkType = await repo.findCheckType(payload.type);
+  if (!checkType?.isActive) throw new BadRequestError('This verification check is unavailable.');
+  const check = await repo.create({ caseId: payload.caseId, type: payload.type, provider: payload.provider || checkType.defaultProvider, priority: payload.priority || 0, inputData: payload.inputData || null });
   await repo.event({ caseId: check.caseId, verificationId: check.id, eventType: 'CREATED', message: 'Verification check created' });
   return toDto(check);
 };

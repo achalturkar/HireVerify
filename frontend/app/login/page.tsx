@@ -89,7 +89,7 @@ function LoginContent() {
       const session = await login(email, password);
 
       let target = '/dashboard';
-      if (session.user.role.isClientUser) target = '/client-portal';
+      if (session.user.role.isClientUser) target = session.user.client?.parentClientId ? '/subclient-portal' : '/client-portal';
       else if (session.user.role.isSuperAdmin) target = '/super-admin/dashboard';
       else if (session.user.role.isCompanyAdmin) target = '/company/dashboard';
       else target = '/company/dashboard';
@@ -413,6 +413,12 @@ function LoginContent() {
               Need help?{' '}
               <Link href="/contact" className="text-[var(--primary)] hover:underline">
                 Contact us
+              </Link>
+            </p>
+            <p className="mt-2 text-center text-[11px]" style={{ color: 'var(--muted)' }}>
+              Subclient user?{' '}
+              <Link href="/subclient-portal" className="font-medium text-[var(--primary)] hover:underline">
+                Sign in to your subclient portal
               </Link>
             </p>
 

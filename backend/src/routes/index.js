@@ -16,6 +16,7 @@ const platformClientRoutes = require('../modules/platform-client/platform-client
 const platformDashboardRoutes = require('../modules/platform-dashboard/platform-dashboard.routes');
 const platformBrandingRoutes = require('../modules/platform-branding/platform-branding.routes');
 const platformLocationsRoutes = require('../modules/platform-locations/platform-locations.routes');
+const verificationCheckTypeRoutes = require('../modules/verification-check-type/verification-check-type.routes');
 
 const candidateRoutes = require('../modules/candidate/candidate.routes');
 const bgvCaseRoutes = require('../modules/bgv-case/bgv-case.routes');
@@ -26,6 +27,7 @@ const verifierRoutes = require('../modules/verifier/verifier.routes');
 const verificationModeRoutes = require('../modules/verification-mode/verification-mode.routes');
 const marketingRoutes = require('../modules/marketing/marketing.routes');
 const clientPortalRoutes = require('../modules/client-portal/client-portal.routes');
+const subclientPortalRoutes = require('../modules/subclient-portal/subclient-portal.routes');
 const clientRequestRoutes = require('../modules/client-request/client-request.routes');
 
 const router = express.Router();
@@ -43,8 +45,10 @@ router.use('/platform/clients', platformClientRoutes);
 router.use('/platform/dashboard', platformDashboardRoutes);
 router.use('/platform/branding', platformBrandingRoutes);
 router.use('/platform/locations', platformLocationsRoutes);
+router.use('/platform/verification-checks', verificationCheckTypeRoutes);
 router.use('/clients', clientRoutes);
 router.use('/client-portal', clientPortalRoutes);
+router.use('/subclient-portal', subclientPortalRoutes);
 router.use('/client-requests', clientRequestRoutes);
 
 

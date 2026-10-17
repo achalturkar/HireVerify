@@ -47,6 +47,7 @@ const toUserDto = (user) => ({
     id: user.client.id,
     name: user.client.name,
     logoUrl: user.client.logoUrl,
+    parentClientId: user.client.parentClientId || null,
     clientCode: user.client.clientCode,
     website: user.client.website,
     industry: user.client.industry,
@@ -112,6 +113,13 @@ const login = async ({ email, password, req }) => {
     }
     if (user.role.isClientUser && (!user.client || user.client.isDeleted || user.client.status !== 'ACTIVE' || user.client.companyId !== user.companyId)) {
       throw new ForbiddenError('Client account is not active');
+    }
+    if (user.role.isClientUser && user.client.parentClientId) {
+      const parent = await prisma.client.findFirst({
+        where: { id: user.client.parentClientId, companyId: user.companyId, parentClientId: null, isDeleted: false, status: 'ACTIVE' },
+        select: { id: true },
+      });
+      if (!parent) throw new ForbiddenError('Parent client account is not active');
     }
   }
 

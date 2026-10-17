@@ -54,6 +54,18 @@ export interface PortalSubclient {
   bgvCaseCount: number;
 }
 
+export interface SubclientPortalUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  permissions: ClientPortalPermission[];
+  mustChangePassword: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
 export interface PortalCandidateDetail extends PortalCandidate {
   updatedAt: string;
   dateOfBirth: string | null;
@@ -111,7 +123,7 @@ export interface PortalCase {
 
 export interface PortalCaseDetail extends PortalCase {
   updatedAt: string;
-  checks: { id: string; type: string; status: string; result: string | null; startedAt: string | null; completedAt: string | null; remarks: string | null }[];
+  checks: { id: string; type: string; label: string; status: string; result: string | null; startedAt: string | null; completedAt: string | null; remarks: string | null }[];
 }
 
 export interface PortalReport {
@@ -321,6 +333,36 @@ export async function updatePortalSubclient(id: string, payload: Pick<PortalSubc
   const result = await request<{ data: PortalSubclient }>(`/subclients/${id}`, token, {
     method: 'PUT',
     body: JSON.stringify(payload),
+  });
+  return result.data;
+}
+
+export async function listSubclientPortalUsers(subclientId: string, token: string | null): Promise<SubclientPortalUser[]> {
+  const result = await request<{ data: SubclientPortalUser[] }>(`/subclients/${subclientId}/users`, token);
+  return result.data;
+}
+
+export async function inviteSubclientPortalUser(
+  subclientId: string,
+  payload: { firstName: string; lastName: string; email: string; accountMethod: 'INVITATION' | 'PASSWORD'; password?: string },
+  token: string | null,
+): Promise<SubclientPortalUser> {
+  const result = await request<{ data: SubclientPortalUser }>(`/subclients/${subclientId}/users`, token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return result.data;
+}
+
+export async function updateSubclientPortalUser(
+  subclientId: string,
+  userId: string,
+  status: 'ACTIVE' | 'INACTIVE',
+  token: string | null,
+): Promise<SubclientPortalUser> {
+  const result = await request<{ data: SubclientPortalUser }>(`/subclients/${subclientId}/users/${userId}`, token, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
   });
   return result.data;
 }

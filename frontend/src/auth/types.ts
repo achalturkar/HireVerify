@@ -44,6 +44,7 @@ export interface User {
         id: string;
         name: string;
         logoUrl: string | null;
+        parentClientId?: string | null;
         clientCode?: string;
         website?: string | null;
         industry?: string | null;

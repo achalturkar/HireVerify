@@ -2,8 +2,8 @@
 
 const Joi = require('joi');
 
-const CHECK_TYPES = ['PAN', 'UAN', 'COURT', 'IDENTITY', 'ADDRESS', 'ADDRESS_PHYSICAL', 'EDUCATION', 'EMPLOYMENT', 'GAP', 'REFERENCE', 'CV', 'SOCIAL_MEDIA', 'DOCUMENT', 'DOCUMENT_FORGERY', 'CIBIL', 'TWENTY_SIX_AS', 'POLICE', 'POLICE_RECORD'];
 const PROVIDERS = ['SUREPASS', 'MANUAL', 'INTERNAL'];
+const CHECK_TYPE = Joi.string().pattern(/^[A-Z][A-Z0-9_]{1,59}$/);
 const STATUSES = ['DRAFT', 'INITIATED', 'CONSENT_PENDING', 'IN_PROGRESS', 'UNDER_REVIEW', 'COMPLETED', 'ON_HOLD', 'CANCELLED'];
 const RESULTS = ['PENDING', 'CLEAR', 'MINOR_DISCREPANCY', 'MAJOR_DISCREPANCY', 'UNABLE_TO_VERIFY', 'REQUIRES_REVIEW'];
 
@@ -18,7 +18,7 @@ const createValidator = { body: Joi.object({
   packageName: Joi.string().max(150).allow(null, ''),
   priority: Joi.number().integer().min(0).max(100),
   remarks: Joi.string().allow(null, ''),
-  checks: Joi.array().items(Joi.object({ type: Joi.string().valid(...CHECK_TYPES).required(), provider: Joi.string().valid(...PROVIDERS).default('SUREPASS'), priority: Joi.number().integer().min(0).max(100) })).max(20),
+  checks: Joi.array().items(Joi.object({ type: CHECK_TYPE.required(), provider: Joi.string().valid(...PROVIDERS), priority: Joi.number().integer().min(0).max(100) })).unique('type'),
 }) };
 
 const listValidator = { query: Joi.object({
@@ -36,10 +36,10 @@ const updateMetaValidator = { params: Joi.object({ id: Joi.string().uuid().requi
 
 const updateChecksValidator = { params: Joi.object({ id: Joi.string().uuid().required() }), body: Joi.object({
   checks: Joi.array().items(Joi.object({
-    type: Joi.string().valid(...CHECK_TYPES).required(),
+    type: CHECK_TYPE.required(),
     provider: Joi.string().valid(...PROVIDERS).default('MANUAL'),
     priority: Joi.number().integer().min(0).max(100).default(0),
-  })).max(20).required(),
+  })).unique('type').required(),
 }).required() };
 
 module.exports = { idParamValidator, emailReportsValidator, createValidator, listValidator, transitionValidator, updateMetaValidator, updateChecksValidator };

@@ -6,10 +6,11 @@ import { createClient, listClients } from '@/src/lib/api/clients';
 import { createCandidate, getCandidate, listCandidates, sendCandidatePortalLink } from '@/src/lib/api/candidates';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import { useAuth } from '@/src/auth/AuthProvider';
+import { listVerificationCheckTypes } from '@/src/lib/api/bgv';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
 import type { Client } from '@/src/types/client';
 import type { Candidate, CandidateFormValues } from '@/src/types/candidate';
-import type { BGVCase, CreateBGVCasePayload, VerificationProvider, VerificationType } from '@/src/types/bgv';
+import type { BGVCase, CreateBGVCasePayload, VerificationCheckType, VerificationType } from '@/src/types/bgv';
 
 interface Props {
   token: string | null;
@@ -28,33 +29,13 @@ const steps = [
   { title: 'Review', detail: 'Confirm case' },
 ];
 
-const checkTypes: { type: VerificationType; label: string; provider: VerificationProvider; description: string }[] = [
-  { type: 'PAN', label: 'PAN', provider: 'SUREPASS', description: 'Verify tax identity details.' },
-  { type: 'UAN', label: 'UAN', provider: 'SUREPASS', description: 'Verify employment provident fund history.' },
-  { type: 'COURT', label: 'Court records', provider: 'SUREPASS', description: 'Search court records for the candidate.' },
-  { type: 'IDENTITY', label: 'Identity documents', provider: 'MANUAL', description: 'Review government identity documents.' },
-  { type: 'ADDRESS', label: 'Address', provider: 'MANUAL', description: 'Verify the candidate’s supplied address.' },
-  { type: 'ADDRESS_PHYSICAL', label: 'Physical address', provider: 'MANUAL', description: 'Complete a physical address visit.' },
-  { type: 'EDUCATION', label: 'Education', provider: 'MANUAL', description: 'Verify education and qualifications.' },
-  { type: 'EMPLOYMENT', label: 'Employment', provider: 'MANUAL', description: 'Verify employment history.' },
-  { type: 'GAP', label: 'Employment gaps', provider: 'MANUAL', description: 'Review gaps in employment history.' },
-  { type: 'REFERENCE', label: 'References', provider: 'MANUAL', description: 'Contact professional references.' },
-  { type: 'CV', label: 'CV validation', provider: 'MANUAL', description: 'Compare CV details with supplied records.' },
-  { type: 'SOCIAL_MEDIA', label: 'Social media', provider: 'MANUAL', description: 'Review public social profiles.' },
-  { type: 'DOCUMENT', label: 'Documents', provider: 'MANUAL', description: 'Review supporting documents.' },
-  { type: 'DOCUMENT_FORGERY', label: 'Document forgery', provider: 'MANUAL', description: 'Review documents for signs of tampering.' },
-  { type: 'CIBIL', label: 'CIBIL', provider: 'MANUAL', description: 'Review credit information.' },
-  { type: 'TWENTY_SIX_AS', label: '26AS', provider: 'MANUAL', description: 'Review tax statement information.' },
-  { type: 'POLICE', label: 'Police verification', provider: 'MANUAL', description: 'Complete police verification.' },
-  { type: 'POLICE_RECORD', label: 'Police records', provider: 'MANUAL', description: 'Review police record details.' },
-];
-
 const inputClass = 'mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]';
 
 export default function BGVCaseWizardModal({ token, submitting, error, initialDraft, preselectedCandidateId = '', onClose, onSubmit }: Props) {
   const { user } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [checkTypes, setCheckTypes] = useState<VerificationCheckType[]>([]);
   const [clientId, setClientId] = useState(initialDraft?.clientId || '');
   const [candidateId, setCandidateId] = useState(initialDraft?.candidateId || preselectedCandidateId);
   const [clientReference, setClientReference] = useState(initialDraft?.clientReference || '');
@@ -74,10 +55,11 @@ export default function BGVCaseWizardModal({ token, submitting, error, initialDr
     Promise.all([
       listClients({ page: 1, limit: 200, status: 'ACTIVE', sortBy: 'name', sortOrder: 'asc' }, token),
       listCandidates({ page: 1, limit: 200, sortBy: 'createdAt', sortOrder: 'desc' }, token),
+      listVerificationCheckTypes(token),
       (initialDraft?.candidateId || preselectedCandidateId)
         ? getCandidate(initialDraft?.candidateId || preselectedCandidateId, token)
         : Promise.resolve(null),
-    ]).then(async ([clientResult, candidateResult, savedCandidate]) => {
+    ]).then(async ([clientResult, candidateResult, availableCheckTypes, savedCandidate]) => {
       let availableClients = clientResult.items;
       const individual = availableClients.find((client) => client.name === 'Individual / Direct Candidate');
       if (!individual && user?.companyId) {
@@ -92,6 +74,7 @@ export default function BGVCaseWizardModal({ token, submitting, error, initialDr
         setCandidates(savedCandidate && !candidateResult.items.some((candidate) => candidate.id === savedCandidate.id)
           ? [savedCandidate, ...candidateResult.items]
           : candidateResult.items);
+        setCheckTypes(availableCheckTypes);
         if (savedCandidate && preselectedCandidateId) {
           setClientId(savedCandidate.clientId);
           setCandidateId(savedCandidate.id);
@@ -127,8 +110,9 @@ export default function BGVCaseWizardModal({ token, submitting, error, initialDr
     packageName: packageName.trim() || undefined,
     remarks: remarks.trim() || undefined,
     checks: selectedChecksForCandidate.map((type) => {
-      const config = checkTypes.find((item) => item.type === type)!;
-      return { type, provider: config.provider };
+      const config = checkTypes.find((item) => item.type === type);
+      const previous = initialDraft?.checks?.find((item) => item.type === type);
+      return { type, provider: config?.defaultProvider || previous?.provider || 'MANUAL' };
     }),
   });
 
@@ -219,7 +203,7 @@ export default function BGVCaseWizardModal({ token, submitting, error, initialDr
         const selected = selectedChecksForCandidate.includes(item.type);
         return <label key={item.type} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${selected ? 'border-[var(--primary)]/45 bg-[var(--primary)]/[0.06]' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'}`}>
           <input type="checkbox" checked={selected} onChange={() => toggleCheck(item.type)} className="mt-0.5 accent-[var(--primary)]" />
-          <span className="min-w-0"><span className="block text-[12px] font-semibold text-[var(--foreground)]">{item.label}</span><span className="mt-0.5 block text-[10.5px] leading-4 text-[var(--muted)]">{item.description}</span><span className="mt-1 block text-[9px] font-semibold uppercase tracking-wide text-[var(--muted)]">{item.provider === 'SUREPASS' ? 'Provider check' : 'Manual review'}</span></span>
+          <span className="min-w-0"><span className="block text-[12px] font-semibold text-[var(--foreground)]">{item.label}</span><span className="mt-0.5 block text-[10.5px] leading-4 text-[var(--muted)]">{item.description || 'Verification check for this case.'}</span><span className="mt-1 block text-[9px] font-semibold uppercase tracking-wide text-[var(--muted)]">{item.defaultProvider === 'SUREPASS' ? 'Provider check' : 'Manual review'}</span></span>
         </label>;
       })}</div>
       <p className="text-[11px] text-[var(--muted)]">{selectedChecksForCandidate.length} check{selectedChecksForCandidate.length === 1 ? '' : 's'} selected</p>

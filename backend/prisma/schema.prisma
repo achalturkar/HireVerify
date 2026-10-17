@@ -576,7 +576,8 @@ model VerificationCheck {
 
   caseId String @map("case_id") @db.Uuid
 
-  type VerificationType
+  type      String               @db.VarChar(60)
+  checkType VerificationCheckType @relation(fields: [type], references: [type], onDelete: Restrict)
 
   provider VerificationProvider
 
@@ -623,6 +624,20 @@ model VerificationCheck {
   @@index([provider])
   @@index([providerReferenceId])
   @@map("verification_checks")
+}
+
+model VerificationCheckType {
+  type            String               @id @db.VarChar(60)
+  label           String               @unique @db.VarChar(100)
+  description     String?              @db.VarChar(500)
+  defaultProvider VerificationProvider @default(MANUAL) @map("default_provider")
+  isActive        Boolean              @default(true) @map("is_active")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  checks          VerificationCheck[]
+
+  @@index([isActive, createdAt])
+  @@map("verification_check_types")
 }
 
 model Verifier {
@@ -890,27 +905,6 @@ enum BGVOverallResult {
   MAJOR_DISCREPANCY
   UNABLE_TO_VERIFY
   REQUIRES_REVIEW
-}
-
-enum VerificationType {
-  PAN
-  UAN
-  COURT
-  IDENTITY
-  ADDRESS
-  ADDRESS_PHYSICAL
-  EDUCATION
-  EMPLOYMENT
-  GAP
-  REFERENCE
-  CV
-  SOCIAL_MEDIA
-  DOCUMENT
-  DOCUMENT_FORGERY
-  CIBIL
-  TWENTY_SIX_AS
-  POLICE
-  POLICE_RECORD
 }
 
 enum VerificationProvider {

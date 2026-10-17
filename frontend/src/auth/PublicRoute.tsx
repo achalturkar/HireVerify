@@ -20,7 +20,7 @@ export default function PublicRoute({ children }: Props) {
     if (!user) return;
 
     if (user.role.isClientUser) {
-      router.replace("/client-portal");
+      router.replace(user.client?.parentClientId ? "/subclient-portal" : "/client-portal");
       return;
     }
 

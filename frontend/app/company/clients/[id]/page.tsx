@@ -4,19 +4,20 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, Download, FileCheck2, FileText, Globe, Mail, Pencil, Phone, Receipt, Users, MapPin, Power, PowerOff, ShieldCheck, UserPlus, Trash2, Building2, SlidersHorizontal, Plus, Check, X,
+  ArrowLeft, BarChart3, ChevronLeft, ChevronRight, Download, FileCheck2, FileText, Globe, Mail, Pencil, Phone, Receipt, Users, MapPin, Power, PowerOff, ShieldCheck, UserPlus, Trash2, Building2, SlidersHorizontal, Plus, Check, X,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getReportVerificationStatus, getVerificationStatus } from '@/src/lib/verification-status';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import { getClient, updateClient, activateClient, inactivateClient, listClientPortalUsers, inviteClientPortalUser, updateClientPortalUser, revokeClientPortalUser, listSubclients, createSubclient, updateSubclient, deleteSubclient, ApiError as ClientApiError } from '@/src/lib/api/clients';
 import { listCandidates, createCandidate, sendCandidatePortalLink, ApiError as CandidateApiError } from '@/src/lib/api/candidates';
-import { ApiError as BGVApiError, downloadBGVReport, listBGVCases } from '@/src/lib/api/bgv';
-import type { BGVCase, VerificationType } from '@/src/types/bgv';
+import { ApiError as BGVApiError, downloadBGVReport, listBGVCases, listVerificationCheckTypes } from '@/src/lib/api/bgv';
+import type { BGVCase, VerificationCheckType, VerificationType } from '@/src/types/bgv';
 import { downloadInvoicePdf, InvoiceApiError, listInvoices } from '@/src/lib/api/invoices';
 import type { Invoice } from '@/src/lib/api/invoices';
 import ClientFormModal from '@/src/components/layout/company/client/ClientFormModal';
 import ClientConfirmDialog from '@/src/components/layout/company/client/ClientConfirmDialog';
+import ClientAnalyticsPanel from '@/src/components/layout/company/client/ClientAnalyticsPanel';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
 import { CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
 import { setClientPortalScope } from '@/src/lib/api/client-portal';
@@ -24,9 +25,10 @@ import type { CandidateFormConfig, Client, ClientFormValues, ClientPortalAccount
 import type { Candidate, CandidateFormValues, PaginationMeta } from '@/src/types/candidate';
 
 const PAGE_SIZE = 10;
-type TabKey = 'overview' | 'billing' | 'subclients' | 'candidates' | 'cases' | 'reports' | 'invoices' | 'report-branding' | 'candidate-form' | 'portal-access' | 'client-portal';
+type TabKey = 'overview' | 'analytics' | 'billing' | 'subclients' | 'candidates' | 'cases' | 'reports' | 'invoices' | 'report-branding' | 'candidate-form' | 'portal-access' | 'client-portal';
 const TABS: { key: TabKey; label: string; icon: typeof Users }[] = [
   { key: 'overview', label: 'Overview', icon: Users },
+  { key: 'analytics', label: 'Analytics', icon: BarChart3 },
   { key: 'billing', label: 'Billing details', icon: Receipt },
   { key: 'subclients', label: 'Subclients', icon: Building2 },
   { key: 'candidates', label: 'Candidates', icon: Users },
@@ -37,17 +39,6 @@ const TABS: { key: TabKey; label: string; icon: typeof Users }[] = [
   { key: 'candidate-form', label: 'Candidate form', icon: SlidersHorizontal },
   { key: 'portal-access', label: 'Portal access', icon: ShieldCheck },
   { key: 'client-portal', label: 'Client portal', icon: Building2 },
-];
-const SUBCLIENT_CHECK_OPTIONS: { type: VerificationType; label: string }[] = [
-  { type: 'PAN', label: 'PAN verification' }, { type: 'UAN', label: 'UAN / EPFO' },
-  { type: 'COURT', label: 'Court records' }, { type: 'IDENTITY', label: 'Identity documents' },
-  { type: 'ADDRESS', label: 'Address verification' }, { type: 'ADDRESS_PHYSICAL', label: 'Physical address' },
-  { type: 'EDUCATION', label: 'Education' }, { type: 'EMPLOYMENT', label: 'Employment' },
-  { type: 'GAP', label: 'Employment gaps' }, { type: 'REFERENCE', label: 'References' },
-  { type: 'CV', label: 'CV validation' }, { type: 'SOCIAL_MEDIA', label: 'Social media' },
-  { type: 'DOCUMENT', label: 'Documents' }, { type: 'DOCUMENT_FORGERY', label: 'Document forgery' },
-  { type: 'CIBIL', label: 'CIBIL' }, { type: 'TWENTY_SIX_AS', label: '26AS' },
-  { type: 'POLICE', label: 'Police verification' }, { type: 'POLICE_RECORD', label: 'Police records' },
 ];
 type SubclientCheckDraft = { checkType: VerificationType };
 type SubclientDraft = {
@@ -148,6 +139,7 @@ export default function ClientDetailPage() {
   const [candidateSubmitting, setCandidateSubmitting] = useState(false);
   const [candidateCreateMessage, setCandidateCreateMessage] = useState<string | null>(null);
   const [subclients, setSubclients] = useState<Client[]>([]);
+  const [checkTypes, setCheckTypes] = useState<VerificationCheckType[]>([]);
   const [subclientsLoading, setSubclientsLoading] = useState(false);
   const [subclientsError, setSubclientsError] = useState<string | null>(null);
   const [subclientsMessage, setSubclientsMessage] = useState<string | null>(null);
@@ -200,8 +192,9 @@ export default function ClientDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const loaded = await getClient(id, accessToken);
+      const [loaded, availableTypes] = await Promise.all([getClient(id, accessToken), listVerificationCheckTypes(accessToken)]);
       setClient(loaded);
+      setCheckTypes(availableTypes);
       setCandidateFormConfig(loaded.candidateFormConfig ?? DEFAULT_CANDIDATE_FORM_CONFIG);
     } catch (err) {
       setError(err instanceof ClientApiError ? err.message : 'Failed to load client.');
@@ -835,6 +828,8 @@ export default function ClientDetailPage() {
         </section>
       )}
 
+      {tab === 'analytics' && <ClientAnalyticsPanel client={client} />}
+
       {tab === 'billing' && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
@@ -896,7 +891,7 @@ export default function ClientDetailPage() {
                     </div>
                     <div className="border-t border-[var(--border)] px-4 py-3">
                       <div className="mb-2 flex items-center justify-between gap-2"><h4 className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Package checks</h4><span className="text-[10px] text-[var(--muted)]">{subclient.candidateCount || 0} candidates</span></div>
-                      {(subclient.serviceRates || []).length ? <div className="flex flex-wrap gap-1.5">{(subclient.serviceRates || []).map((rate) => <span key={rate.checkType} className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[10px]"><Check size={11} className="text-emerald-600" />{SUBCLIENT_CHECK_OPTIONS.find((option) => option.type === rate.checkType)?.label || rate.checkType}</span>)}</div> : <p className="text-[11px] text-amber-700">No checks configured</p>}
+                      {(subclient.serviceRates || []).length ? <div className="flex flex-wrap gap-1.5">{(subclient.serviceRates || []).map((rate) => <span key={rate.checkType} className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[10px]"><Check size={11} className="text-emerald-600" />{checkTypes.find((option) => option.type === rate.checkType)?.label || rate.checkType.replaceAll('_', ' ')}</span>)}</div> : <p className="text-[11px] text-amber-700">No checks configured</p>}
                       <p className="mt-2 text-[11px] font-semibold">Package rate per candidate: {subclient.packageRate == null ? 'Not set' : currencyLabel(subclient.packageRate, 'INR')}</p>
                     </div>
                     {canManageAccess && <div className="flex justify-end gap-2 border-t border-[var(--border)] p-3"><button type="button" onClick={() => openSubclientEditor(subclient)} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-semibold hover:bg-[var(--surface-muted)]"><Pencil size={12} />Edit</button>{subclient.status === 'ACTIVE' && <button type="button" onClick={() => void deactivateSubclient(subclient)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/20 px-3 py-2 text-[11px] font-semibold text-rose-700 hover:bg-rose-500/5"><PowerOff size={12} />Deactivate</button>}</div>}
@@ -1337,7 +1332,7 @@ export default function ClientDetailPage() {
               <section className="border-t border-[var(--border)] pt-5">
                 <div className="mb-3"><h3 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Package checks and rate</h3><p className="mt-1 text-[11px] text-[var(--muted)]">Candidates assigned here can only be screened using enabled checks. One package rate applies per candidate, in INR.</p></div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {SUBCLIENT_CHECK_OPTIONS.map((option) => {
+                  {checkTypes.map((option) => {
                     const configured = subclientDraft.serviceRates.find((entry) => entry.checkType === option.type);
                     return <div key={option.type} className={`flex items-center gap-3 rounded-lg border p-3 ${configured ? 'border-[var(--primary)]/40 bg-[var(--primary)]/[0.04]' : 'border-[var(--border)]'}`}>
                       <input type="checkbox" checked={Boolean(configured)} aria-label={`Enable ${option.label}`} onChange={(event) => setSubclientDraft((current) => ({

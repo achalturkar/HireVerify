@@ -1,14 +1,25 @@
 export type BGVCaseStatus = 'DRAFT' | 'INITIATED' | 'CONSENT_PENDING' | 'IN_PROGRESS' | 'UNDER_REVIEW' | 'COMPLETED' | 'ON_HOLD' | 'CANCELLED';
 export type BGVOverallResult = 'PENDING' | 'CLEAR' | 'MINOR_DISCREPANCY' | 'MAJOR_DISCREPANCY' | 'UNABLE_TO_VERIFY' | 'REQUIRES_REVIEW';
-export type VerificationType = 'PAN' | 'UAN' | 'COURT' | 'IDENTITY' | 'ADDRESS' | 'ADDRESS_PHYSICAL' | 'EDUCATION' | 'EMPLOYMENT' | 'GAP' | 'REFERENCE' | 'CV' | 'SOCIAL_MEDIA' | 'DOCUMENT' | 'DOCUMENT_FORGERY' | 'CIBIL' | 'TWENTY_SIX_AS' | 'POLICE' | 'POLICE_RECORD';
+export type VerificationType = string;
 export type VerificationProvider = 'SUREPASS' | 'MANUAL' | 'INTERNAL';
 export type VerificationStatus = 'PENDING' | 'QUEUED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'RETRYING' | 'CANCELLED';
 export type VerificationResult = 'PENDING' | 'VERIFIED' | 'NOT_VERIFIED' | 'MATCH' | 'MISMATCH' | 'NO_RECORD_FOUND' | 'RECORD_FOUND' | 'REQUIRES_REVIEW' | 'UNABLE_TO_VERIFY';
+
+export interface VerificationCheckType {
+  type: VerificationType;
+  label: string;
+  description?: string | null;
+  defaultProvider: VerificationProvider;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface VerificationCheck {
   id: string;
   caseId: string;
   type: VerificationType;
+  checkType?: Pick<VerificationCheckType, 'label'>;
   provider: VerificationProvider;
   status: VerificationStatus;
   result: VerificationResult;
