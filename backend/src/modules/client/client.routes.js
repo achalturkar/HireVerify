@@ -8,6 +8,7 @@ const { param, query } = require('express-validator');
 const { v4: uuidv4 } = require('uuid');
 
 const controller = require('./client.controller');
+const { getClientTemplateDirectory } = require('./candidate-form-storage');
 
 const { authenticate } = require('../../middleware/auth.middleware');
 const { authorize } = require('../../middleware/authorize.middleware');
@@ -61,6 +62,41 @@ const uploadClientLogo = (req, res, next) => {
     }
     if (err) return next(err);
     return next();
+  });
+};
+
+const candidateFormStorage = multer.diskStorage({
+  destination: (req, _file, cb) => {
+    const directory = getClientTemplateDirectory(req.params.id);
+    fs.mkdir(directory, { recursive: true })
+      .then(() => cb(null, directory))
+      .catch((error) => cb(error));
+  },
+  filename: (_req, file, cb) => cb(null, `${uuidv4()}${path.extname(file.originalname).toLowerCase()}`),
+});
+const candidateFormUpload = multer({
+  storage: candidateFormStorage,
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const extension = path.extname(file.originalname).toLowerCase();
+    const allowedTypes = {
+      '.pdf': ['application/pdf'],
+      '.doc': ['application/msword', 'application/vnd.ms-word'],
+      '.docx': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    };
+    if (!allowedTypes[extension]?.includes(file.mimetype)) {
+      return cb(new BadRequestError('Upload a PDF, DOC, or DOCX form template.'));
+    }
+    cb(null, true);
+  },
+});
+const uploadCandidateForm = (req, res, next) => {
+  candidateFormUpload.single('file')(req, res, (error) => {
+    if (error instanceof multer.MulterError) {
+      return next(new BadRequestError(error.code === 'LIMIT_FILE_SIZE' ? 'Form template must be 10 MB or smaller.' : error.message));
+    }
+    if (error) return next(error);
+    next();
   });
 };
 
@@ -255,6 +291,27 @@ router.delete(
     authorize('client.update'),
     validate(v.portalUserIdValidator),
     controller.removePortalUser
+);
+
+router.post(
+    '/:id/candidate-form-templates',
+    authorize('client.update'),
+    validate(v.idParamValidator),
+    controller.verifyCandidateFormTemplateClient,
+    uploadCandidateForm,
+    controller.addCandidateFormTemplate
+);
+router.get(
+    '/:id/candidate-form-templates/:formId/download',
+    authorize('client.update'),
+    validate([param('id').isUUID(), param('formId').isUUID()]),
+    controller.downloadCandidateFormTemplate
+);
+router.delete(
+    '/:id/candidate-form-templates/:formId',
+    authorize('client.update'),
+    validate([param('id').isUUID(), param('formId').isUUID()]),
+    controller.removeCandidateFormTemplate
 );
 
 router.post(

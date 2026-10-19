@@ -39,6 +39,12 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(requestLogger);
 app.use('/api/', generalLimiter);
 
+// Candidate form templates have historically been stored under uploads; they
+// must only be served by the authenticated or token-validated download routes.
+app.use('/uploads/clients/:clientId/candidate-forms', (_req, res) => {
+  res.set('Cache-Control', 'no-store').sendStatus(404);
+});
+
 // static uploads
 app.use('/uploads', express.static(path.resolve(process.cwd(), config.upload.dir)));
 

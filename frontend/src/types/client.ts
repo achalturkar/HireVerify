@@ -10,19 +10,91 @@ export const CANDIDATE_IDENTITY_FIELDS = [
 ] as const;
 
 export type CandidateIdentityFieldKey = typeof CANDIDATE_IDENTITY_FIELDS[number]['key'];
+export type CandidateFormSectionKey = 'family' | 'education' | 'employment' | 'policeVerification' | 'address';
+export type CandidateCustomFormCategory = 'BGV' | 'IDENTITY' | 'EDUCATION' | 'EMPLOYMENT' | 'POLICE_VERIFICATION' | 'OTHER_CHECKS' | 'OTHER';
+export const CANDIDATE_ADDRESS_DOCUMENT_TYPES = [
+  { type: 'ADDRESS_PROOF', label: 'Address proof' },
+  { type: 'AADHAAR', label: 'Aadhaar card (address proof)' },
+  { type: 'PASSPORT', label: 'Passport' },
+  { type: 'DRIVING_LICENSE', label: 'Driving licence' },
+  { type: 'VOTER_ID', label: 'Voter ID' },
+  { type: 'BANK_STATEMENT', label: 'Bank statement with address' },
+  { type: 'ELECTRICITY_BILL', label: 'Electricity bill' },
+  { type: 'UTILITY_BILL', label: 'Water or other utility bill' },
+  { type: 'RENT_AGREEMENT', label: 'Rent agreement' },
+  { type: 'GPS_ADDRESS_PHOTO', label: 'GPS address photo' },
+] as const;
+export type CandidateAddressDocumentType = typeof CANDIDATE_ADDRESS_DOCUMENT_TYPES[number]['type'];
+export const CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES = [
+  { type: 'SALARY_SLIP', label: 'Salary slip' },
+  { type: 'FORM_16', label: 'Form 16' },
+  { type: 'EXPERIENCE_LETTER', label: 'Experience letter' },
+  { type: 'RELIEVING_LETTER', label: 'Relieving letter' },
+  { type: 'OFFER_LETTER', label: 'Offer letter' },
+  { type: 'APPOINTMENT_LETTER', label: 'Appointment letter' },
+  { type: 'INCREMENT_LETTER', label: 'Increment letter' },
+  { type: 'PROMOTION_LETTER', label: 'Promotion letter' },
+  { type: 'BANK_STATEMENT', label: 'Bank statement' },
+  { type: 'PF_STATEMENT', label: 'PF statement' },
+  { type: 'EMPLOYMENT_CONTRACT', label: 'Employment contract' },
+  { type: 'OTHER', label: 'Other employment document' },
+] as const;
+export type CandidateEmploymentDocumentType = typeof CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES[number]['type'];
+export type CandidateEmploymentDocumentConfig = {
+  type: CandidateEmploymentDocumentType;
+  enabled: boolean;
+  required: boolean;
+};
+export type CandidateCustomForm = {
+  id: string;
+  name: string;
+  category: CandidateCustomFormCategory;
+  enabled: boolean;
+  required: boolean;
+  fileName: string;
+};
 export type CandidateFormConfig = Record<CandidateIdentityFieldKey, {
   enabled: boolean;
   required: boolean;
   documentRequired: boolean;
-}>;
+}> & {
+  invitationExpiryDays: number;
+  sections: Record<CandidateFormSectionKey, { enabled: boolean }>;
+  address: {
+    currentAddressEnabled: boolean;
+    currentAddressRequired: boolean;
+    permanentAddressEnabled: boolean;
+    permanentAddressRequired: boolean;
+    documents: { type: CandidateAddressDocumentType; enabled: boolean; required: boolean }[];
+  };
+  customForms: CandidateCustomForm[];
+  employmentDocuments: CandidateEmploymentDocumentConfig[];
+};
 
 export const DEFAULT_CANDIDATE_FORM_CONFIG: CandidateFormConfig = {
+  invitationExpiryDays: 2,
   aadhaarNumber: { enabled: true, required: false, documentRequired: false },
   panNumber: { enabled: true, required: false, documentRequired: false },
   uanNumber: { enabled: true, required: false, documentRequired: false },
   passportNumber: { enabled: true, required: false, documentRequired: false },
   drivingLicenseNumber: { enabled: true, required: false, documentRequired: false },
   voterIdNumber: { enabled: true, required: false, documentRequired: false },
+  sections: {
+    family: { enabled: true },
+    education: { enabled: true },
+    employment: { enabled: true },
+    policeVerification: { enabled: false },
+    address: { enabled: true },
+  },
+  address: {
+    currentAddressEnabled: true,
+    currentAddressRequired: true,
+    permanentAddressEnabled: true,
+    permanentAddressRequired: false,
+    documents: CANDIDATE_ADDRESS_DOCUMENT_TYPES.map(({ type }) => ({ type, enabled: true, required: false })),
+  },
+  customForms: [],
+  employmentDocuments: CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.map(({ type }) => ({ type, enabled: true, required: false })),
 };
 
 export interface CompanyRef {

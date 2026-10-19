@@ -23,6 +23,40 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Client-specific candidate portal forms
+
+Company administrators can open a client and use its **Candidate form** tab to
+enable or hide candidate sections, configure identity fields, and upload
+client-specific PDF templates such as BGV or PCC forms. BGV templates appear
+in their own candidate-portal tab, and forms for additional checks appear under
+**Other checks**. Each template can be optional or required; check-specific
+categories are filtered against the candidate's selected checks.
+Administrators can also enable employment document types per client and mark
+each type as required. Candidates choose an enabled document type, such as
+salary slip, before attaching the corresponding file.
+Administrators can set a client-specific candidate portal link validity from
+1 to 30 days. New invitations default to 2 days unless the client selects a
+different duration; admins can still choose a custom duration when activating
+or extending an individual candidate link.
+The Address tab is also configurable per client: administrators can enable
+current and permanent address fields, mark either address as required, and
+choose which address documents candidates can upload. Options include Aadhaar,
+passport, driving licence, voter ID, bank statement, electricity or utility
+bill, rent agreement, and a GPS address photo (JPG or PNG). Required address
+details and uploads must be complete before consent is available.
+Candidates can give consent only after their required details and documents are
+complete. After consent, profile edits and uploads are locked.
+
+Templates are stored outside the public uploads directory and are downloaded
+through an authenticated company route or the candidate's active portal link.
+Older templates stored under the public uploads tree remain available through
+those protected routes, while direct public access to that legacy path returns
+404.
+The backend needs writable, persistent storage for its
+`private-candidate-form-templates` directory. PDF, DOC, and DOCX form templates
+are limited to 10 MB; candidate completed-form uploads accept PDF, JPG, or PNG
+up to 10 MB.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

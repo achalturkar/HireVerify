@@ -119,7 +119,7 @@ const reportValidator = { params: Joi.object({ id: Joi.string().uuid().required(
 const candidateValidator = { params: Joi.object({ id: Joi.string().uuid().required() }) };
 const invitationValidator = {
   params: Joi.object({ id: Joi.string().uuid().required() }),
-  body: Joi.object({ expiresInDays: Joi.number().integer().min(1).max(30).default(30) }).default({}),
+  body: Joi.object({ expiresInDays: Joi.number().integer().min(1).max(30) }).default({}),
 };
 const portalAccessValidator = {
   params: Joi.object({ id: Joi.string().uuid().required() }),

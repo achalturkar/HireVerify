@@ -7,6 +7,7 @@ import Image from 'next/image';
 import {
   AlertCircle,
   BriefcaseBusiness,
+  Camera,
   Check,
   CheckCircle2,
   Clock,
@@ -18,6 +19,7 @@ import {
   LayoutDashboard,
   Loader2,
   Lock,
+  MapPin,
   Paperclip,
   Save,
   ShieldCheck,
@@ -31,10 +33,11 @@ import type { LucideIcon } from 'lucide-react';
 import api from '@/services/api';
 import DateInput from '@/src/components/DateInput';
 import CandidateDocumentUpload from '@/src/components/candidate-portal/CandidateDocumentUpload';
+import CandidateFormTemplateUpload from '@/src/components/candidate-portal/CandidateFormTemplateUpload';
 import { formatCandidateName, splitCandidateName } from '@/src/lib/candidate-name';
 import { resolveLogoUrl } from '@/src/lib/logo';
-import { DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
-import type { CandidateFormConfig } from '@/src/types/client';
+import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
+import type { CandidateCustomForm, CandidateFormConfig, CandidateIdentityFieldKey } from '@/src/types/client';
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -49,21 +52,21 @@ type PortalDocument = {
   uploadedAt: string;
 };
 
-type PendingItem = { key: string; label: string; type: string; documentType?: string };
+type PendingItem = { key: string; label: string; type: string; documentType?: string; customFormId?: string; category?: string };
 
 type PortalData = {
   candidate: Record<string, string | null> & { status?: string };
   company: { name: string; logoUrl?: string | null; primaryColor?: string | null };
   client?: { name: string } | null;
   candidateFormConfig?: CandidateFormConfig;
-  case: { id: string; caseNumber: string; status: string } | null;
+  case: { id: string; caseNumber: string; status: string; checks?: string[] } | null;
   documents: PortalDocument[];
   invitation: { expiresAt: string };
-  progress: { pending: PendingItem[]; pendingCount: number; consentComplete: boolean; profileComplete: boolean };
+  progress: { pending: PendingItem[]; pendingCount: number; consentComplete: boolean; consentReady: boolean; formLocked: boolean; profileComplete: boolean };
 };
 
-type TabKey = 'overview' | 'details' | 'family' | 'identity' | 'education' | 'employment' | 'documents' | 'consent';
-type SectionKey = 'details' | 'family' | 'identity' | 'education' | 'employment';
+type TabKey = 'overview' | 'details' | 'family' | 'identity' | 'address' | 'education' | 'employment' | 'policeVerification' | 'bgv' | 'otherChecks' | 'documents' | 'consent';
+type SectionKey = 'details' | 'family' | 'identity' | 'education' | 'employment' | 'address';
 type FormState = Record<string, string>;
 
 type FieldDef = {
@@ -105,9 +108,12 @@ const splitFullName = splitCandidateName;
 const DETAILS_FIELDS: FieldDef[] = [
   { key: 'fullName', label: 'Full name', required: true, wide: true, validate: (value) => (splitFullName(value) ? null : 'Enter your first and last name.') },
   { key: 'email', label: 'Email address', type: 'email', required: true, validate: (v) => (EMAIL_PATTERN.test(v) ? null : 'Enter a valid email address.') },
-  { key: 'phone', label: 'Mobile number', type: 'tel', validate: (v) => (/^[+()\-\s\d]{7,18}$/.test(v) ? null : 'Enter a valid phone number.') },
-  { key: 'dateOfBirth', label: 'Date of birth', type: 'date', validate: (v) => (v > todayISO() ? 'Date of birth cannot be in the future.' : null) },
+  { key: 'phone', label: 'Mobile number', type: 'tel', required: true, validate: (v) => (/^[+()\-\s\d]{7,18}$/.test(v) ? null : 'Enter a valid phone number.') },
+  { key: 'dateOfBirth', label: 'Date of birth', type: 'date', required: true, validate: (v) => (v > todayISO() ? 'Date of birth cannot be in the future.' : null) },
   { key: 'gender', label: 'Gender', suggestions: ['Male', 'Female', 'Other', 'Prefer not to say'] },
+];
+
+const ADDRESS_FIELDS: FieldDef[] = [
   { key: 'currentAddress', label: 'Current address', multiline: true, wide: true },
   { key: 'permanentAddress', label: 'Permanent address', multiline: true, wide: true },
 ];
@@ -184,8 +190,9 @@ const SECTION_FIELDS: Record<SectionKey, FieldDef[]> = {
   identity: IDENTITY_FIELDS,
   education: EDUCATION_FIELDS,
   employment: EMPLOYMENT_FIELDS,
+  address: ADDRESS_FIELDS,
 };
-const SECTION_LABEL: Record<SectionKey, string> = { details: 'Your details', family: 'Your family details', identity: 'Your ID numbers', education: 'Your education details', employment: 'Your employment details' };
+const SECTION_LABEL: Record<SectionKey, string> = { details: 'Your details', family: 'Your family details', identity: 'Your ID numbers', education: 'Your education details', employment: 'Your employment details', address: 'Your address details' };
 const SECTIONS = Object.keys(SECTION_FIELDS) as SectionKey[];
 const ALL_FIELDS = SECTIONS.flatMap((section) => SECTION_FIELDS[section]);
 const EDITABLE_KEYS = ALL_FIELDS.map((field) => field.key);
@@ -201,14 +208,19 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: 'details', label: 'Details', icon: UserRound },
   { key: 'family', label: 'Family', icon: Users },
   { key: 'identity', label: 'ID numbers', icon: Hash },
+  { key: 'address', label: 'Address', icon: MapPin },
+  { key: 'bgv', label: 'BGV forms', icon: FileText },
   { key: 'education', label: 'Education', icon: GraduationCap },
   { key: 'employment', label: 'Employment', icon: BriefcaseBusiness },
+  { key: 'policeVerification', label: 'Police verification', icon: ShieldCheck },
+  { key: 'otherChecks', label: 'Other checks', icon: FileCheck },
   { key: 'documents', label: 'Documents', icon: FileCheck },
   { key: 'consent', label: 'Consent', icon: ShieldCheck },
 ];
 
 const EDUCATION_TYPES = ['EDUCATION_CERTIFICATE'];
-const EMPLOYMENT_TYPES = ['SALARY_SLIP', 'FORM_16', 'EXPERIENCE_LETTER', 'RELIEVING_LETTER', 'OFFER_LETTER', 'APPOINTMENT_LETTER', 'INCREMENT_LETTER', 'PROMOTION_LETTER', 'BANK_STATEMENT', 'PF_STATEMENT', 'EMPLOYMENT_CONTRACT', 'OTHER'];
+const EMPLOYMENT_TYPES: string[] = CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.map(({ type }) => type);
+const ADDRESS_TYPES: string[] = CANDIDATE_ADDRESS_DOCUMENT_TYPES.map(({ type }) => type);
 
 // Each ID pairs its number field with its document type, so the number and the copy live in one card.
 const IDENTITY_ITEMS = [
@@ -220,9 +232,18 @@ const IDENTITY_ITEMS = [
   { title: 'Voter ID', docType: 'VOTER_ID', fieldKey: 'voterIdNumber' },
 ];
 const IDENTITY_TYPES = IDENTITY_ITEMS.map((item) => item.docType);
+const FORM_CHECKS: Record<CandidateCustomForm['category'], string[]> = {
+  BGV: [],
+  IDENTITY: ['IDENTITY', 'IDENTITY_VERIFICATION', 'PAN', 'AADHAAR', 'UAN', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID', 'DOCUMENT', 'DOCUMENT_FORGERY'],
+  EDUCATION: ['EDUCATION', 'EDUCATION_VERIFICATION'],
+  EMPLOYMENT: ['EMPLOYMENT', 'EMPLOYMENT_VERIFICATION', 'UAN'],
+  POLICE_VERIFICATION: ['POLICE', 'POLICE_VERIFICATION', 'POLICE_RECORD', 'COURT'],
+  OTHER_CHECKS: [],
+  OTHER: [],
+};
+const STANDARD_FORM_CHECKS = new Set(Object.values(FORM_CHECKS).flat());
 
 const DOCUMENT_GROUPS = [
-  { title: 'Address proof', description: 'A document that confirms your current or permanent address.', types: ['ADDRESS_PROOF'] },
   { title: 'Other documents', description: 'Anything else the verification team asked for.', types: ['OTHER'] },
 ];
 
@@ -236,6 +257,9 @@ const CONSENT_TEXT =
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 const humanize = (value: string) => value.replaceAll('_', ' ').toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
+const documentTypeLabel = (type: string) => CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.find((item) => item.type === type)?.label
+  ?? CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === type)?.label
+  ?? humanize(type);
 
 const formatDate = (value?: string | null) => {
   if (!value) return '-';
@@ -302,8 +326,17 @@ const validateFields = (form: FormState, fields: FieldDef[]): Record<string, str
 const tabForPending = (item: PendingItem): TabKey => {
   const text = `${item.type} ${item.key}`.toLowerCase();
   if (text.includes('consent')) return 'consent';
+  if (item.category === 'POLICE_VERIFICATION') return 'policeVerification';
+  if (item.category === 'BGV') return 'bgv';
+  if (item.category === 'OTHER_CHECKS') return 'otherChecks';
+  if (item.category === 'EDUCATION') return 'education';
+  if (item.category === 'EMPLOYMENT') return 'employment';
+  if (item.category === 'ADDRESS') return 'address';
+  if (item.category === 'IDENTITY') return 'identity';
+  if (item.customFormId) return 'documents';
   if (item.key.startsWith('field-')) return 'identity';
   if (item.documentType) {
+    if (item.documentType === 'ADDRESS_PROOF' || item.documentType === 'GPS_ADDRESS_PHOTO') return 'address';
     if (IDENTITY_TYPES.includes(item.documentType)) return 'identity';
     if (EDUCATION_TYPES.includes(item.documentType)) return 'education';
     if (EMPLOYMENT_TYPES.includes(item.documentType)) return 'employment';
@@ -404,7 +437,7 @@ function SaveBar({ dirty, saving, label, onSave, bare = false, readOnly = false 
   return (
     <div className={`flex flex-wrap items-center gap-3 ${bare ? '' : 'mt-6 border-t border-slate-100 pt-4'}`}>
       {readOnly
-        ? <span className="text-xs text-slate-500">Details are locked because verification has started. Contact the company administrator if a correction is needed.</span>
+        ? <span className="text-xs text-slate-500">Details are locked after consent or case completion. Contact the company administrator if a correction is needed.</span>
         : <>
           <button type="button" onClick={onSave} disabled={!dirty || saving} className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50" style={{ backgroundColor: 'var(--accent)' }}>
             {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Save size={15} aria-hidden="true" />}
@@ -488,7 +521,7 @@ function ProgressRing({ percent }: { percent: number }) {
 /* ------------------------------------------------------------------ */
 type QueuedFile = { id: string; file: File; documentType: string; status: 'queued' | 'uploading' | 'failed'; error?: string };
 
-function AttachmentUploader({ token, title = '', description = '', types, variant = 'card', documentNumber = '', onUploaded }: {
+function AttachmentUploader({ token, title = '', description = '', types, variant = 'card', documentNumber = '', onUploaded, readOnly = false, documentCategory }: {
   token: string;
   title?: string;
   description?: string;
@@ -497,12 +530,19 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
   /** Sent with each file, so an ID copy carries the number typed beside it. */
   documentNumber?: string;
   onUploaded: (count: number) => void | Promise<void>;
+  readOnly?: boolean;
+  documentCategory?: 'EMPLOYMENT' | 'ADDRESS';
 }) {
   const inputId = useId();
   const [queue, setQueue] = useState<QueuedFile[]>([]);
+  const [selectedDocumentType, setSelectedDocumentType] = useState(types[0] ?? '');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    if (!types.includes(selectedDocumentType)) setSelectedDocumentType(types[0] ?? '');
+  }, [selectedDocumentType, types]);
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -512,8 +552,9 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
       const duplicate = queue.some((item) => item.file.name === file.name && item.file.size === file.size) || accepted.some((item) => item.file.name === file.name && item.file.size === file.size);
       if (duplicate) problems.push(`${file.name} is already in the list`);
       else if (!ALLOWED_MIME.includes(file.type)) problems.push(`${file.name} is not a PDF, JPG or PNG`);
+      else if (documentCategory === 'ADDRESS' && selectedDocumentType === 'GPS_ADDRESS_PHOTO' && !['image/jpeg', 'image/png'].includes(file.type)) problems.push(`${file.name} must be a JPG or PNG GPS address photo`);
       else if (file.size > MAX_FILE_BYTES) problems.push(`${file.name} is larger than ${MAX_FILE_BYTES / 1024 / 1024} MB`);
-      else accepted.push({ id: `${file.name}-${file.size}-${file.lastModified}`, file, documentType: types[0], status: 'queued' });
+      else accepted.push({ id: `${file.name}-${file.size}-${file.lastModified}`, file, documentType: selectedDocumentType, status: 'queued' });
     });
     setQueue((previous) => [...previous, ...accepted]);
     setNotice(problems.join('. '));
@@ -530,6 +571,7 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
         body.append('file', item.file);
         body.append('documentType', item.documentType);
         body.append('documentNumber', documentNumber);
+        if (documentCategory) body.append('documentCategory', documentCategory);
         await api.post(`/candidate-portal/${token}/documents`, body);
         uploaded += 1;
         setQueue((previous) => previous.filter((entry) => entry.id !== item.id));
@@ -543,6 +585,23 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
 
   const body = (
     <>
+      {types.length > 1 && (
+        <label className="mb-3 block text-sm font-medium text-slate-700">
+          Document type
+          <select
+            value={selectedDocumentType}
+            onChange={(event) => setSelectedDocumentType(event.target.value)}
+            disabled={busy}
+            className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm"
+          >
+            {types.map((type) => (
+              <option key={type} value={type}>
+                {documentTypeLabel(type)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label
         htmlFor={inputId}
         onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
@@ -573,7 +632,7 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  {types.length > 1 ? (
+                  {types.length > 1 && !documentCategory ? (
                     <select
                       aria-label={`Document type for ${item.file.name}`}
                       value={item.documentType}
@@ -584,7 +643,7 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
                       {types.map((type) => <option key={type} value={type}>{humanize(type)}</option>)}
                     </select>
                   ) : variant === 'inline' ? null : (
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{humanize(item.documentType)}</span>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{documentTypeLabel(item.documentType)}</span>
                   )}
                   <button type="button" disabled={busy} onClick={() => setQueue((previous) => previous.filter((entry) => entry.id !== item.id))} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40" aria-label={`Remove ${item.file.name}`}>
                     <Trash2 size={15} aria-hidden="true" />
@@ -602,8 +661,11 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
     </>
   );
 
-  if (variant === 'inline') return body;
-  return <SectionCard icon={Paperclip} title={title} description={description}>{body}</SectionCard>;
+  const content = readOnly
+    ? <p className="text-xs text-slate-500">Uploads are locked after consent has been recorded.</p>
+    : body;
+  if (variant === 'inline') return content;
+  return <SectionCard icon={Paperclip} title={title} description={description}>{content}</SectionCard>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -638,7 +700,7 @@ function IdentityCard({ title, field, value, error, documents, token, onChange, 
         <Field def={field} value={value} error={error} disabled={readOnly} onChange={onChange} />
         <div>
           <p className="mb-1.5 text-sm font-medium text-slate-700">Copy of {title}</p>
-          <AttachmentUploader variant="inline" token={token} types={[docType]} documentNumber={numberForFile} onUploaded={onUploaded} />
+          <AttachmentUploader variant="inline" token={token} types={[docType]} documentNumber={numberForFile} onUploaded={onUploaded} readOnly={readOnly} />
           {sorted.length > 0 && <div className="mt-3"><DocumentList documents={sorted} emptyText="" hideType /></div>}
         </div>
       </div>
@@ -718,13 +780,71 @@ export default function CandidatePortalPage() {
 
   const accent = useMemo(() => safeColor(portal?.company.primaryColor), [portal]);
   const candidateFormConfig = portal?.candidateFormConfig ?? DEFAULT_CANDIDATE_FORM_CONFIG;
+  const customForms = candidateFormConfig.customForms ?? [];
+  const identityConfigFor = (key: string) => candidateFormConfig[key as CandidateIdentityFieldKey];
+  const isCategoryRequested = (category: CandidateCustomForm['category']) => {
+    const selectedChecks = portal?.case?.checks ?? [];
+    if (category === 'OTHER_CHECKS') {
+      return !portal?.case || selectedChecks.length === 0 || selectedChecks.some((check) => !STANDARD_FORM_CHECKS.has(check));
+    }
+    return !portal?.case || selectedChecks.length === 0 || FORM_CHECKS[category].length === 0
+      || selectedChecks.some((check) => FORM_CHECKS[category].includes(check));
+  };
+  const customFormsFor = (category: CandidateCustomForm['category']) => customForms.filter((form) =>
+    form.enabled && form.category === category
+    && isCategoryRequested(category)
+    && (category !== 'EDUCATION' || candidateFormConfig.sections.education.enabled)
+    && (category !== 'EMPLOYMENT' || candidateFormConfig.sections.employment.enabled)
+    && (category !== 'POLICE_VERIFICATION' || candidateFormConfig.sections.policeVerification.enabled)
+    && (category !== 'IDENTITY' || IDENTITY_FIELDS.some((field) => identityConfigFor(field.key)?.enabled !== false)),
+  );
+  const visibleTabs = TABS.filter(({ key }) => {
+    if (key === 'address') {
+      const addressConfig = candidateFormConfig.address;
+      const addressPending = portal?.progress.pending.some((item) => item.category === 'ADDRESS');
+      return Boolean(addressPending || (candidateFormConfig.sections.address.enabled && (
+        addressConfig.currentAddressEnabled
+        || addressConfig.permanentAddressEnabled
+        || addressConfig.documents.some((document) => document.enabled)
+      )));
+    }
+    if (key === 'identity') {
+      const identityIsRequired = IDENTITY_FIELDS.some((field) => {
+        const fieldConfig = identityConfigFor(field.key);
+        return fieldConfig?.enabled !== false && (fieldConfig?.required || fieldConfig?.documentRequired);
+      });
+      return (IDENTITY_FIELDS.some((field) => identityConfigFor(field.key)?.enabled !== false) || customFormsFor('IDENTITY').length > 0)
+        && (isCategoryRequested('IDENTITY') || identityIsRequired);
+    }
+    if (key === 'family') return candidateFormConfig.sections.family.enabled;
+    if (key === 'education') return candidateFormConfig.sections.education.enabled && isCategoryRequested('EDUCATION');
+    if (key === 'employment') return candidateFormConfig.sections.employment.enabled && isCategoryRequested('EMPLOYMENT');
+    if (key === 'policeVerification') return candidateFormConfig.sections.policeVerification.enabled
+      && isCategoryRequested('POLICE_VERIFICATION')
+      && customFormsFor('POLICE_VERIFICATION').length > 0;
+    if (key === 'bgv') return customFormsFor('BGV').length > 0;
+    if (key === 'otherChecks') return customFormsFor('OTHER_CHECKS').length > 0;
+    return true;
+  });
+  const visibleTabKeys = visibleTabs.map(({ key }) => key).join('|');
+  const currentTab = visibleTabKeys.split('|').includes(activeTab) ? activeTab : 'overview';
   const effectiveSectionFields = useMemo(() => ({
     ...SECTION_FIELDS,
     identity: SECTION_FIELDS.identity
-      .filter((field) => candidateFormConfig[field.key as keyof CandidateFormConfig]?.enabled !== false)
+      .filter((field) => candidateFormConfig[field.key as CandidateIdentityFieldKey]?.enabled !== false)
       .map((field) => ({
         ...field,
-        required: candidateFormConfig[field.key as keyof CandidateFormConfig]?.required ?? false,
+        required: candidateFormConfig[field.key as CandidateIdentityFieldKey]?.required ?? false,
+      })),
+    address: SECTION_FIELDS.address
+      .filter((field) => candidateFormConfig.sections.address.enabled && (field.key === 'currentAddress'
+        ? candidateFormConfig.address.currentAddressEnabled
+        : candidateFormConfig.address.permanentAddressEnabled))
+      .map((field) => ({
+        ...field,
+        required: field.key === 'currentAddress'
+          ? candidateFormConfig.address.currentAddressRequired
+          : candidateFormConfig.address.permanentAddressRequired,
       })),
   }), [candidateFormConfig]);
 
@@ -745,7 +865,7 @@ export default function CandidatePortalPage() {
   }, [anyDirty]);
 
   const pendingByTab = useMemo(() => {
-    const flags: Record<TabKey, boolean> = { overview: false, details: false, family: false, identity: false, education: false, employment: false, documents: false, consent: false };
+    const flags: Record<TabKey, boolean> = { overview: false, details: false, family: false, identity: false, address: false, education: false, employment: false, policeVerification: false, bgv: false, otherChecks: false, documents: false, consent: false };
     if (!portal) return flags;
     portal.progress.pending.forEach((item) => { flags[tabForPending(item)] = true; });
     if (!portal.progress.profileComplete) flags.details = true;
@@ -755,8 +875,15 @@ export default function CandidatePortalPage() {
 
   const educationDocuments = useMemo(() => (portal?.documents ?? []).filter((document) => EDUCATION_TYPES.includes(document.documentType)), [portal]);
   const employmentDocuments = useMemo(() => (portal?.documents ?? []).filter((document) => EMPLOYMENT_TYPES.includes(document.documentType)), [portal]);
+  const addressDocuments = useMemo(() => (portal?.documents ?? []).filter((document) => ADDRESS_TYPES.includes(document.documentType)), [portal]);
+  const addressUploadTypes = Array.from(new Set([
+    ...candidateFormConfig.address.documents.filter((document) => document.enabled).map((document) => document.type),
+    ...(portal?.progress.pending ?? [])
+      .filter((item): item is PendingItem & { documentType: string } => item.category === 'ADDRESS' && Boolean(item.documentType))
+      .map((item) => item.documentType),
+  ]));
   const otherDocuments = useMemo(
-    () => (portal?.documents ?? []).filter((document) => !IDENTITY_TYPES.includes(document.documentType) && !EDUCATION_TYPES.includes(document.documentType) && !EMPLOYMENT_TYPES.includes(document.documentType)),
+    () => (portal?.documents ?? []).filter((document) => !IDENTITY_TYPES.includes(document.documentType) && !EDUCATION_TYPES.includes(document.documentType) && !EMPLOYMENT_TYPES.includes(document.documentType) && !ADDRESS_TYPES.includes(document.documentType)),
     [portal],
   );
 
@@ -875,7 +1002,7 @@ export default function CandidatePortalPage() {
   const companyLogo = resolveLogoUrl(portal.company.logoUrl);
   const companyMonogram = portal.company.name.trim().split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase() || 'C';
 
-  const profileReadOnly = Boolean(portal.case) || ['COMPLETED', 'VERIFICATION_IN_PROGRESS'].includes(portal.candidate.status ?? '');
+  const profileReadOnly = portal.progress.formLocked;
   const sectionPanel = (section: SectionKey, icon: LucideIcon, title: string, description: string, saveLabel: string, extra?: ReactNode) => (
     <SectionCard icon={icon} title={title} description={description}>
       {extra}
@@ -925,13 +1052,13 @@ export default function CandidatePortalPage() {
               {error || message}
             </div>
           )}
-          {profileReadOnly && <p role="status" className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">Candidate details are locked{portal.case?.caseNumber ? ` because BGV case ${portal.case.caseNumber} has been created` : ` because the candidate is ${humanize(portal.candidate.status ?? '')}`}. Contact the company administrator for corrections. You can still submit consent and requested documents.</p>}
+          {profileReadOnly && <p role="status" className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">Your details and uploads are locked after consent or case completion. Contact the company administrator if a correction is needed.</p>}
         </div>
 
         <nav className="sticky top-0 z-10 -mx-1 mb-5 bg-[#f5f7f6]/95 px-1 py-2 backdrop-blur" aria-label="Portal sections">
           <div role="tablist" className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-            {TABS.filter(({ key }) => key !== 'identity' || effectiveSectionFields.identity.length > 0).map(({ key, label, icon: Icon }) => {
-              const selected = activeTab === key;
+            {visibleTabs.map(({ key, label, icon: Icon }) => {
+              const selected = currentTab === key;
               const pending = pendingByTab[key];
               return (
                 <button
@@ -956,7 +1083,7 @@ export default function CandidatePortalPage() {
           </div>
         </nav>
 
-        {activeTab === 'overview' && (
+        {currentTab === 'overview' && (
           <div role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" className="space-y-5">
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
               <div className="flex items-center gap-4">
@@ -1010,26 +1137,26 @@ export default function CandidatePortalPage() {
           </div>
         )}
 
-        {activeTab === 'details' && (
+        {currentTab === 'details' && (
           <div role="tabpanel" id="panel-details" aria-labelledby="tab-details">
             {sectionPanel('details', UserRound, 'Your details', 'Make sure these match your official documents.', 'Save details')}
           </div>
         )}
 
-        {activeTab === 'family' && (
+        {currentTab === 'family' && (
           <div role="tabpanel" id="panel-family" aria-labelledby="tab-family">
             {sectionPanel('family', Users, 'Family details', 'Add your parents’ names as they appear on your official documents.', 'Save family details')}
           </div>
         )}
 
-        {activeTab === 'identity' && (
+        {currentTab === 'identity' && (
           <div role="tabpanel" id="panel-identity" aria-labelledby="tab-identity" className="space-y-4">
             <div className="px-1">
               <h2 className="text-lg font-semibold">ID numbers and documents</h2>
               <p className="mt-1 text-sm text-slate-600">Complete the identity fields required for this client and attach the requested document copies.</p>
               <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500"><Lock size={13} aria-hidden="true" />Sent over an encrypted connection and used only to verify you.</p>
             </div>
-            {IDENTITY_ITEMS.filter((item) => candidateFormConfig[item.fieldKey as keyof CandidateFormConfig]?.enabled !== false).map((item) => (
+            {IDENTITY_ITEMS.filter((item) => identityConfigFor(item.fieldKey)?.enabled !== false).map((item) => (
               <IdentityCard
                 key={item.docType}
                 title={item.title}
@@ -1043,16 +1170,51 @@ export default function CandidatePortalPage() {
                 readOnly={profileReadOnly}
               />
             ))}
+            {customFormsFor('IDENTITY').map((form) => (
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+            ))}
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
               <SaveBar bare dirty={dirtyBySection.identity} saving={saving} label="Save ID numbers" onSave={() => saveSection('identity')} readOnly={profileReadOnly} />
             </div>
           </div>
         )}
 
-        {activeTab === 'education' && (
+        {currentTab === 'address' && (
+          <div role="tabpanel" id="panel-address" aria-labelledby="tab-address" className="space-y-5">
+            {candidateFormConfig.sections.address.enabled && sectionPanel('address', MapPin, 'Current and permanent address', 'Enter the addresses where you currently live and where you are permanently registered.', 'Save addresses')}
+            <SectionCard icon={Camera} title="Address verification documents" description="Upload an accepted address proof such as Aadhaar, and a clear GPS-enabled photo of your current address when requested.">
+              <div className="mb-4 flex flex-wrap gap-2">
+                {candidateFormConfig.address.documents.filter((document) => document.enabled).map((document) => {
+                  const label = CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? humanize(document.type);
+                  return <span key={document.type} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{label}{document.required ? ' · required' : ''}</span>;
+                })}
+              </div>
+              {addressUploadTypes.length > 0 ? (
+                <AttachmentUploader
+                  token={token}
+                  title="Upload address documents"
+                  description="Choose the requested document type before adding your PDF or image."
+                  types={addressUploadTypes}
+                  documentCategory="ADDRESS"
+                  onUploaded={afterUpload}
+                  readOnly={profileReadOnly}
+                />
+              ) : <p className="text-sm text-slate-500">This client has not requested address verification documents.</p>}
+              <div className="mt-4">
+                <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded address documents ({addressDocuments.length})</h3>
+                <DocumentList documents={addressDocuments} emptyText="No address documents uploaded yet." />
+              </div>
+            </SectionCard>
+          </div>
+        )}
+
+        {currentTab === 'education' && (
           <div role="tabpanel" id="panel-education" aria-labelledby="tab-education" className="space-y-5">
             {sectionPanel('education', GraduationCap, 'Education details', 'Tell us about your highest completed qualification.', 'Save education details')}
-            <AttachmentUploader token={token} title="Education documents" description="Attach degree certificates, marksheets and other education records. Add as many files as you need." types={EDUCATION_TYPES} onUploaded={afterUpload} />
+            <AttachmentUploader token={token} title="Education documents" description="Attach degree certificates, marksheets and other education records. Add as many files as you need." types={EDUCATION_TYPES} onUploaded={afterUpload} readOnly={profileReadOnly} />
+            {customFormsFor('EDUCATION').map((form) => (
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+            ))}
             <div className="px-1">
               <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded education documents ({educationDocuments.length})</h3>
               <DocumentList documents={educationDocuments} emptyText="No education documents uploaded yet." />
@@ -1060,10 +1222,17 @@ export default function CandidatePortalPage() {
           </div>
         )}
 
-        {activeTab === 'employment' && (
+        {currentTab === 'employment' && (
           <div role="tabpanel" id="panel-employment" aria-labelledby="tab-employment" className="space-y-5">
             {sectionPanel('employment', BriefcaseBusiness, 'Employment details', 'Tell us about your current or most recent job.', 'Save employment details')}
-            <AttachmentUploader token={token} title="Employment documents" description="Attach experience letters and salary slips from every employer. Add as many files as you need." types={EMPLOYMENT_TYPES} onUploaded={afterUpload} />
+            {candidateFormConfig.sections.employment.enabled && candidateFormConfig.employmentDocuments.some((item) => item.enabled) ? (
+              <AttachmentUploader token={token} title="Employment documents" description="Select the document type first, then attach the matching file. You can upload multiple files for the selected type." types={candidateFormConfig.employmentDocuments.filter((item) => item.enabled).map((item) => item.type)} documentCategory="EMPLOYMENT" onUploaded={afterUpload} readOnly={profileReadOnly} />
+            ) : (
+              <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">This client has not requested employment document uploads.</p>
+            )}
+            {customFormsFor('EMPLOYMENT').map((form) => (
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+            ))}
             <div className="px-1">
               <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded employment documents ({employmentDocuments.length})</h3>
               <DocumentList documents={employmentDocuments} emptyText="No employment documents uploaded yet." />
@@ -1071,14 +1240,54 @@ export default function CandidatePortalPage() {
           </div>
         )}
 
-        {activeTab === 'documents' && (
+        {currentTab === 'policeVerification' && (
+          <div role="tabpanel" id="panel-policeVerification" aria-labelledby="tab-policeVerification" className="space-y-4">
+            <div className="px-1">
+              <h2 className="text-lg font-semibold">Police verification forms</h2>
+              <p className="mt-1 text-sm text-slate-600">Download each client-provided form, complete it and upload the completed copy.</p>
+            </div>
+            {customFormsFor('POLICE_VERIFICATION').map((form) => (
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+            ))}
+            {customFormsFor('POLICE_VERIFICATION').length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">No police verification form is currently requested.</p>}
+          </div>
+        )}
+
+        {currentTab === 'bgv' && (
+          <div role="tabpanel" id="panel-bgv" aria-labelledby="tab-bgv" className="space-y-4">
+            <div className="px-1">
+              <h2 className="text-lg font-semibold">BGV forms</h2>
+              <p className="mt-1 text-sm text-slate-600">Download each form provided by the client, complete it and upload the completed copy.</p>
+            </div>
+            {customFormsFor('BGV').map((form) => (
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+            ))}
+          </div>
+        )}
+
+        {currentTab === 'otherChecks' && (
+          <div role="tabpanel" id="panel-otherChecks" aria-labelledby="tab-otherChecks" className="space-y-4">
+            <div className="px-1">
+              <h2 className="text-lg font-semibold">Other check forms</h2>
+              <p className="mt-1 text-sm text-slate-600">Forms configured for additional checks in this verification case.</p>
+            </div>
+            {customFormsFor('OTHER_CHECKS').map((form) => (
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+            ))}
+          </div>
+        )}
+
+        {currentTab === 'documents' && (
           <div role="tabpanel" id="panel-documents" aria-labelledby="tab-documents" className="space-y-4">
             <div className="px-1">
-              <h2 className="text-lg font-semibold">Address proof and other documents</h2>
+              <h2 className="text-lg font-semibold">Other documents</h2>
               <p className="mt-1 text-sm text-slate-600">ID copies are on the ID numbers tab, and education and employment files are on their own tabs. Use PDF, JPG or PNG files where every corner and number is readable.</p>
             </div>
             {DOCUMENT_GROUPS.map((group) => (
-              <CandidateDocumentUpload key={group.title} token={token} accent={accent} title={group.title} description={group.description} types={group.types} onUploaded={refreshPortal} />
+              <CandidateDocumentUpload key={group.title} token={token} accent={accent} title={group.title} description={group.description} types={group.types} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+            ))}
+            {customFormsFor('OTHER').map((form) => (
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
             ))}
             <div className="px-1 pt-2">
               <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded documents ({otherDocuments.length})</h3>
@@ -1087,7 +1296,7 @@ export default function CandidatePortalPage() {
           </div>
         )}
 
-        {activeTab === 'consent' && (
+        {currentTab === 'consent' && (
           <div role="tabpanel" id="panel-consent" aria-labelledby="tab-consent">
             {progress.consentComplete ? (
               <section className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
@@ -1100,6 +1309,19 @@ export default function CandidatePortalPage() {
             ) : !portal.case ? (
               <SectionCard icon={ShieldCheck} title="Consent" description="Consent opens once your verification case has been created.">
                 <p className="text-sm text-slate-600">Check back soon, or contact {portal.company.name} if this stays empty.</p>
+              </SectionCard>
+            ) : !progress.consentReady ? (
+              <SectionCard icon={ShieldCheck} title="Consent" description="Consent is the final step after your details and required documents are complete.">
+                {progress.pending.some((item) => item.key !== 'consent') ? (
+                  <>
+                    <p className="text-sm text-slate-600">Complete these outstanding items before giving consent:</p>
+                    <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-slate-700">
+                      {progress.pending.filter((item) => item.key !== 'consent').map((item) => <li key={item.key}>{item.label}</li>)}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-600">This verification case is finalized. Contact {portal.company.name} if you need help.</p>
+                )}
               </SectionCard>
             ) : (
               <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-6">

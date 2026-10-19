@@ -22,9 +22,23 @@ const lock = asyncHandler(async (req, res) => {
 	const data = await service.lock({ candidateId: req.params.candidateId, companyId: req.user.companyId, locked: req.body.locked !== false });
 	return success(res, { message: 'Portal access updated.', data }, 'Portal access updated.');
 });
+const validateUpload = asyncHandler(async (req, _res, next) => {
+	await service.assertPortalEditable(req.params.token);
+	next();
+});
 const getPortal = asyncHandler(async (req, res) => success(res, await service.getPortal(req.params.token), 'Candidate portal'));
+const downloadFormTemplate = asyncHandler(async (req, res, next) => {
+	const { filePath, fileName } = await service.getCandidateFormTemplate(req.params.token, req.params.formId);
+	res.set({
+		'Cache-Control': 'private, no-store',
+		'X-Content-Type-Options': 'nosniff',
+	});
+	res.download(filePath, fileName, (error) => {
+		if (error) next(error);
+	});
+});
 const updateProfile = asyncHandler(async (req, res) => success(res, await service.updateProfile(req.params.token, req.body), 'Details updated.'));
 const consent = asyncHandler(async (req, res) => success(res, await service.recordConsent(req.params.token, req.body, req), 'Consent recorded.'));
-const uploadDocument = asyncHandler(async (req, res) => created(res, await service.addDocument(req.params.token, req.file, req.body.documentType || 'OTHER', req.body.documentNumber), 'Document uploaded.'));
+const uploadDocument = asyncHandler(async (req, res) => created(res, await service.addDocument(req.params.token, req.file, req.body.documentType || 'OTHER', req.body.documentNumber, req.body.customFormId, req.body.documentCategory), 'Document uploaded.'));
 
-module.exports = { issue, remind, status, lock, getPortal, updateProfile, consent, uploadDocument };
+module.exports = { issue, remind, status, lock, validateUpload, getPortal, downloadFormTemplate, updateProfile, consent, uploadDocument };

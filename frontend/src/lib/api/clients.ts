@@ -328,6 +328,51 @@ export async function updateClient(
   return res.data.data;
 }
 
+export async function uploadCandidateFormTemplate(
+  id: string,
+  payload: { file: File; name: string; category: string; required: boolean },
+  accessToken: string | null,
+): Promise<Client> {
+  const body = new FormData();
+  body.append('file', payload.file);
+  body.append('name', payload.name);
+  body.append('category', payload.category);
+  body.append('required', String(payload.required));
+  const res = await request<Envelope<Client>>(`/clients/${id}/candidate-form-templates`, accessToken, {
+    method: 'POST',
+    body,
+  });
+  return res.data.data;
+}
+
+export async function removeCandidateFormTemplate(
+  id: string,
+  formId: string,
+  accessToken: string | null,
+): Promise<Client> {
+  const res = await request<Envelope<Client>>(`/clients/${id}/candidate-form-templates/${formId}`, accessToken, {
+    method: 'DELETE',
+  });
+  return res.data.data;
+}
+
+export async function downloadCandidateFormTemplate(
+  id: string,
+  formId: string,
+  accessToken: string | null,
+): Promise<Blob> {
+  if (!accessToken) throw new ApiError('You must be signed in to do this.', 401);
+  const response = await fetch(`${API_BASE}/clients/${id}/candidate-form-templates/${formId}/download`, {
+    credentials: 'include',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(extractErrorMessage(body, response.status), response.status);
+  }
+  return response.blob();
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                   DELETE                                   */
 /* -------------------------------------------------------------------------- */

@@ -375,7 +375,7 @@ export async function getPortalCandidate(id: string, token: string | null): Prom
 export async function invitePortalCandidate(id: string, token: string | null): Promise<{ emailSent: boolean; url: string | null; expiresAt: string }> {
   const result = await request<{ data: { emailSent: boolean; url: string | null; expiresAt: string } }>(`/candidates/${id}/invitation`, token, {
     method: 'POST',
-    body: JSON.stringify({ expiresInDays: 30 }),
+    body: JSON.stringify({}),
   });
   return result.data;
 }

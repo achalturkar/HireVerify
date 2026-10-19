@@ -166,6 +166,64 @@ const updateClient = asyncHandler(async (req, res) => {
   });
 });
 
+const addCandidateFormTemplate = asyncHandler(async (req, res) => {
+  const data = await service.addCandidateFormTemplate({
+    id: req.params.id,
+    companyId: req.user.companyId,
+    userId: req.user.id,
+    file: req.file,
+    name: req.body.name,
+    category: req.body.category,
+    required: req.body.required,
+  });
+  const formId = data.candidateFormConfig.customForms.at(-1)?.id;
+  await writeAudit({
+    req,
+    action: 'client.candidate_form_template.create',
+    entity: 'Client',
+    entityId: req.params.id,
+    metadata: { formId },
+  });
+  return created(res, { message: 'Candidate form template uploaded.', data });
+});
+
+const verifyCandidateFormTemplateClient = asyncHandler(async (req, _res, next) => {
+  await service.getById({ id: req.params.id, companyId: req.user.companyId });
+  next();
+});
+
+const removeCandidateFormTemplate = asyncHandler(async (req, res) => {
+  const data = await service.removeCandidateFormTemplate({
+    id: req.params.id,
+    companyId: req.user.companyId,
+    userId: req.user.id,
+    formId: req.params.formId,
+  });
+  await writeAudit({
+    req,
+    action: 'client.candidate_form_template.delete',
+    entity: 'Client',
+    entityId: req.params.id,
+    metadata: { formId: req.params.formId },
+  });
+  return success(res, { message: 'Candidate form template removed.', data });
+});
+
+const downloadCandidateFormTemplate = asyncHandler(async (req, res, next) => {
+  const { filePath, fileName } = await service.getCandidateFormTemplate({
+    id: req.params.id,
+    companyId: req.user.companyId,
+    formId: req.params.formId,
+  });
+  res.set({
+    'Cache-Control': 'private, no-store',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.download(filePath, fileName, (error) => {
+    if (error) next(error);
+  });
+});
+
 /**
  * Soft Delete Client
  */
@@ -290,6 +348,10 @@ module.exports = {
   updateSubclient,
   deleteSubclient,
   updateClient,
+  addCandidateFormTemplate,
+  verifyCandidateFormTemplateClient,
+  removeCandidateFormTemplate,
+  downloadCandidateFormTemplate,
   deleteClient,
   activateClient,
   inactivateClient,

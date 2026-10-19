@@ -54,7 +54,7 @@ type Category = 'identity' | 'education' | 'employment' | 'address' | 'other';
 
 /** The longest link lifetime the admin UI offers. Keep this in line with the limit your API enforces. */
 const MAX_PORTAL_DAYS = 30;
-const DAY_PRESETS = [1, 3, 7, 14, 30];
+const DAY_PRESETS = [1, 2, 3, 7, 14, 30];
 const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000;
 
 const IDENTITY_ITEMS = [
@@ -363,7 +363,7 @@ export default function CandidateDetailPage() {
   const [profileValues, setProfileValues] = useState<ProfileDraft | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
-  const [daysInput, setDaysInput] = useState('7');
+  const [daysInput, setDaysInput] = useState('2');
   const [tab, setTab] = useState<Tab>('summary');
   const [docFilter, setDocFilter] = useState<Category | 'all'>('all');
   const [confirmLock, setConfirmLock] = useState(false);
@@ -393,6 +393,7 @@ export default function CandidateDetailPage() {
       ]);
       const candidateDetail = detail as CandidateDetail;
       setCandidate(candidateDetail);
+      setDaysInput(String(candidateDetail.portalLinkExpiryDays ?? 2));
       setProfileValues(toProfileDraft(candidateDetail));
       setPortal(status ?? (detail.portalInvitation ? { ...detail.portalInvitation, url: null } : null));
       setBgvCases(casesResult.items);

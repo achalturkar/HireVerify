@@ -35,6 +35,7 @@ export interface ListCandidatesParams {
 
 export interface Candidate {
   id: string;
+  portalLinkExpiryDays?: number;
   companyId: string;
   clientId: string;
   subclientId?: string | null;

@@ -1,8 +1,11 @@
 'use strict';
 
+const fs = require('fs/promises');
+const path = require('path');
 const { prisma } = require('../../common/prisma');
 const repo = require('./client.repository');
-const { normalizeConfig, validateConfig } = require('./candidate-intake-config');
+const { normalizeConfig, validateConfig, CUSTOM_FORM_CATEGORIES } = require('./candidate-intake-config');
+const { getTemplatePath, getLegacyTemplatePath, getLegacyTemplatePathFromUrl, findTemplatePath, TEMPLATE_EXTENSIONS } = require('./candidate-form-storage');
 
 const {
   NotFoundError,
@@ -432,7 +435,7 @@ const update = async ({
     }
   });
   if (payload.candidateFormConfig !== undefined) {
-    data.candidateFormConfig = validateConfig(payload.candidateFormConfig);
+    data.candidateFormConfig = validateConfig(payload.candidateFormConfig, id);
   }
 
   data.updatedById = currentUser?.id || null;
@@ -440,6 +443,96 @@ const update = async ({
   const updated = await repo.update(id, data);
 
   return toDto(updated);
+};
+
+const addCandidateFormTemplate = async ({ id, companyId, userId, file, name, category, required }) => {
+  try {
+    if (!file) throw new BadRequestError('Choose a PDF, DOC, or DOCX form template to upload.');
+    const client = await repo.findById(id, companyId);
+    if (!client) throw new NotFoundError('Client not found');
+    const label = String(name || '').trim();
+    if (!label || label.length > 100) throw new BadRequestError('Form name must be between 1 and 100 characters.');
+    if (!CUSTOM_FORM_CATEGORIES.includes(category)) throw new BadRequestError('Choose a valid form category.');
+    if (!['true', 'false', true, false].includes(required)) throw new BadRequestError('Form required setting is invalid.');
+
+    const signature = await fs.readFile(file.path);
+    const extension = path.extname(file.originalname).toLowerCase();
+    const validSignature = extension === '.pdf'
+      ? file.mimetype === 'application/pdf' && signature.subarray(0, 5).toString() === '%PDF-'
+      : extension === '.doc'
+        ? ['application/msword', 'application/vnd.ms-word'].includes(file.mimetype)
+          && signature.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))
+        : extension === '.docx'
+          ? file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            && signature.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
+          : false;
+    if (!validSignature) {
+      throw new BadRequestError('The uploaded file must be a valid PDF, DOC, or DOCX document.');
+    }
+    const formId = path.basename(file.filename, extension);
+    if (!TEMPLATE_EXTENSIONS.has(extension) || !/^[0-9a-f-]{36}$/i.test(formId) || path.resolve(file.path) !== getTemplatePath(id, formId, file.filename)) {
+      throw new BadRequestError('The candidate form template upload path is invalid.');
+    }
+    const config = normalizeConfig(client.candidateFormConfig);
+    if (config.customForms.length >= 20) throw new BadRequestError('A client can have at most 20 candidate form templates.');
+    if (category === 'POLICE_VERIFICATION') config.sections.policeVerification.enabled = true;
+    config.customForms.push({
+      id: formId,
+      name: label,
+      category,
+      enabled: true,
+      required: required === 'true' || required === true,
+      fileName: path.basename(file.originalname.replace(/\\/g, '/')).replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 255) || `${label}${extension}`,
+    });
+    const updated = await repo.update(id, {
+      candidateFormConfig: validateConfig(config),
+      updatedById: userId || null,
+    });
+    return toDto(updated);
+  } catch (error) {
+    if (file?.path) {
+      try {
+        await fs.unlink(file.path);
+      } catch (cleanupError) {
+        if (cleanupError.code !== 'ENOENT') throw cleanupError;
+      }
+    }
+    throw error;
+  }
+};
+
+const removeCandidateFormTemplate = async ({ id, companyId, userId, formId }) => {
+  const client = await repo.findById(id, companyId);
+  if (!client) throw new NotFoundError('Client not found');
+  const candidateFormConfig = validateConfig(client.candidateFormConfig, id);
+  const legacyFileUrl = client.candidateFormConfig?.customForms?.find((item) => item.id === formId)?.fileUrl;
+  const form = candidateFormConfig.customForms.find((item) => item.id === formId);
+  if (!form) throw new NotFoundError('Candidate form template not found.');
+  candidateFormConfig.customForms = candidateFormConfig.customForms.filter((item) => item.id !== formId);
+  const updated = await repo.update(id, { candidateFormConfig: validateConfig(candidateFormConfig, id), updatedById: userId || null });
+  for (const filePath of [
+    ...[...TEMPLATE_EXTENSIONS].map((extension) => getTemplatePath(id, formId, `${formId}${extension}`)),
+    getLegacyTemplatePath(id, formId),
+    getLegacyTemplatePathFromUrl(id, legacyFileUrl),
+  ].filter((filePath, index, paths) => filePath && paths.indexOf(filePath) === index)) {
+    try {
+      await fs.unlink(filePath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  return toDto(updated);
+};
+
+const getCandidateFormTemplate = async ({ id, companyId, formId }) => {
+  const client = await repo.findById(id, companyId);
+  if (!client) throw new NotFoundError('Client not found');
+  const form = validateConfig(client.candidateFormConfig, id).customForms.find((item) => item.id === formId);
+  if (!form) throw new NotFoundError('Candidate form template not found.');
+  const legacyFileUrl = client.candidateFormConfig?.customForms?.find((item) => item.id === formId)?.fileUrl;
+  const filePath = await findTemplatePath(id, formId, legacyFileUrl, form.fileName);
+  if (!filePath) throw new NotFoundError('Candidate form template file is missing.');
+  return { filePath, fileName: form.fileName };
 };
 
 /**
@@ -536,6 +629,9 @@ module.exports = {
   createSubclient,
   updateSubclient,
   removeSubclient,
+  addCandidateFormTemplate,
+  removeCandidateFormTemplate,
+  getCandidateFormTemplate,
   update,
   remove,
   activate,

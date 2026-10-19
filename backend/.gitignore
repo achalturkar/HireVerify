@@ -8,6 +8,9 @@ logs/
 
 .env.*
 
+# Client-specific candidate form templates are private uploads.
+/private-candidate-form-templates/
+
 node_modules/
 
 
