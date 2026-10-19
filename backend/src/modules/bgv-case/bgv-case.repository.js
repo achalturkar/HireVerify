@@ -49,6 +49,12 @@ const list = async ({ companyId, clientId, subclientId, candidateId, status, ove
         client: { select: { id: true, name: true, clientCode: true, contactEmail: true } },
         subclient: { select: { id: true, name: true, clientCode: true } },
         checks: { select: { type: true, status: true, result: true, resultData: true, remarks: true, documents: { select: { id: true } } } },
+        consents: {
+          where: { consentType: 'BGV_CONSENT' },
+          select: { consentType: true, consentGiven: true, revokedAt: true, consentedAt: true, createdAt: true, consentVersion: true, consentText: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
         _count: { select: { checks: true } },
       },
     }),

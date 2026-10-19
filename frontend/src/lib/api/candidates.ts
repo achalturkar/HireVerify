@@ -164,6 +164,32 @@ export async function getCandidate(id: string, accessToken?: string | null): Pro
   return json.data.data as Candidate;
 }
 
+export async function downloadCandidateFormPdf(
+  id: string,
+  candidateCode: string,
+  accessToken?: string | null
+): Promise<void> {
+  const token = accessToken ?? fallbackAccessToken();
+  const response = await fetch(`${API_BASE}/candidates/${id}/form-pdf`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => null);
+    throw new ApiError(extractErrorMessage(json, response.status), response.status);
+  }
+
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `candidate-form-${candidateCode.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export interface CandidatePayload {
   clientId: string;
   subclientId?: string | null;

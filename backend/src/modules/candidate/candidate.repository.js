@@ -12,6 +12,11 @@ const findById = (id, companyId, { includeDeleted = false } = {}) =>
       subclient: { select: { id: true, name: true, clientCode: true, serviceRates: true } },
       _count: { select: { bgvCases: true } },
       documents: true,
+      consents: {
+        where: { consentType: 'BGV_CONSENT' },
+        orderBy: { createdAt: 'desc' },
+        select: { consentGiven: true, consentVersion: true, consentText: true, consentedAt: true, revokedAt: true, createdAt: true, caseId: true },
+      },
       portalInvitation: { select: { activatedAt: true, lastSentAt: true, expiresAt: true, revokedAt: true, reminderCount: true, lastRemindedAt: true } },
     },
   });

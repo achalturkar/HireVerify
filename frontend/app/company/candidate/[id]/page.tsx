@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock,
   Copy,
+  Download,
   ExternalLink,
   Eye,
   EyeOff,
@@ -35,7 +36,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { ApiError, activateCandidatePortal, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
+import { ApiError, activateCandidatePortal, downloadCandidateFormPdf, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import { listBGVCases } from '@/src/lib/api/bgv';
 import type { BGVCase } from '@/src/types/bgv';
@@ -363,6 +364,7 @@ export default function CandidateDetailPage() {
   const [profileValues, setProfileValues] = useState<ProfileDraft | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [downloadingForm, setDownloadingForm] = useState(false);
   const [daysInput, setDaysInput] = useState('2');
   const [tab, setTab] = useState<Tab>('summary');
   const [docFilter, setDocFilter] = useState<Category | 'all'>('all');
@@ -482,6 +484,18 @@ export default function CandidateDetailPage() {
   const verifiedCount = documents.filter((document) => /(VERIFIED|APPROVED|ACCEPTED|COMPLETED)/i.test(document.verificationStatus)).length;
   const rejectedCount = documents.filter((document) => /(REJECT|FAIL|INVALID)/i.test(document.verificationStatus)).length;
   const reviewCount = documents.length - verifiedCount - rejectedCount;
+  const caseConsent = bgvCases
+    .flatMap((bgvCase) => (bgvCase.consents ?? []).map((consent) => ({ ...consent, caseNumber: bgvCase.caseNumber })))
+    .sort((a, b) => new Date(b.consentedAt || b.createdAt || 0).getTime() - new Date(a.consentedAt || a.createdAt || 0).getTime())[0];
+  const standaloneConsent = candidate?.consents
+    ?.map((consent) => ({ ...consent, caseNumber: null as string | null }))
+    .sort((a, b) => new Date(b.consentedAt || b.createdAt || 0).getTime() - new Date(a.consentedAt || a.createdAt || 0).getTime())[0];
+  const latestConsent = caseConsent || standaloneConsent;
+  const consentStatus = latestConsent?.consentGiven && !latestConsent.revokedAt
+    ? 'Yes'
+    : latestConsent?.revokedAt
+      ? 'Revoked'
+      : 'No';
 
   const run = async (action: () => Promise<void>, fallback: string) => {
     setBusy(true);
@@ -557,6 +571,21 @@ export default function CandidateDetailPage() {
     }
   };
 
+  const downloadForm = async () => {
+    if (!candidate) return;
+    setDownloadingForm(true);
+    setError('');
+    setNotice('');
+    try {
+      await downloadCandidateFormPdf(id, candidate.candidateCode, accessToken);
+      setNotice('Candidate form PDF downloaded.');
+    } catch (downloadError) {
+      setError(downloadError instanceof ApiError ? downloadError.message : 'Could not download the candidate form PDF.');
+    } finally {
+      setDownloadingForm(false);
+    }
+  };
+
   if (loading && !candidate) return <div className="grid min-h-[50vh] place-items-center text-[var(--muted)]"><Loader2 className="animate-spin" aria-label="Loading" /></div>;
   if (!candidate) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{error || 'Candidate not found.'}</div>;
 
@@ -606,6 +635,10 @@ export default function CandidateDetailPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => void downloadForm()} disabled={downloadingForm} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-semibold transition hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50">
+              {downloadingForm ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Download size={15} aria-hidden="true" />}
+              Download form PDF
+            </button>
             {canUpdateCandidate ? (
               <label className="sr-only" htmlFor="candidate-status">Candidate status</label>
             ) : null}
@@ -716,6 +749,31 @@ export default function CandidateDetailPage() {
               </div>
             ))}
           </div>
+
+          <Panel title="Background verification consent" description="Consent recorded by the candidate in the candidate portal.">
+            {casesLoading ? (
+              <p className="text-sm text-[var(--muted)]">Loading consent status…</p>
+            ) : casesError ? (
+              <p className="text-sm text-[var(--muted)]">Consent status is unavailable because candidate cases could not be loaded.</p>
+            ) : latestConsent ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <Pill className={consentStatus === 'Yes' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : consentStatus === 'Revoked' ? 'bg-red-50 text-red-700 ring-red-200' : 'bg-amber-50 text-amber-800 ring-amber-200'}>
+                    Candidate consent: {consentStatus}
+                  </Pill>
+                  <p className="mt-2 text-xs text-[var(--muted)]">
+                    {latestConsent.caseNumber ? `Case ${latestConsent.caseNumber}` : 'Recorded before case creation'}
+                    {latestConsent.consentedAt ? ` · ${consentStatus === 'Revoked' ? 'Originally given' : 'Given'} ${formatDateTime(latestConsent.consentedAt)}` : ''}
+                  </p>
+                  {latestConsent.consentVersion && <p className="mt-1 text-xs text-[var(--muted)]">Consent statement version {latestConsent.consentVersion}</p>}
+                </div>
+                {consentStatus === 'Yes' && <CheckCircle2 size={20} className="text-emerald-600" aria-label="Consent given" />}
+                {consentStatus === 'Revoked' && <XCircle size={20} className="text-red-600" aria-label="Consent revoked" />}
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--muted)]">No consent has been recorded for this candidate yet.</p>
+            )}
+          </Panel>
 
           <div className="grid gap-5 lg:grid-cols-5">
             <div className="lg:col-span-3">

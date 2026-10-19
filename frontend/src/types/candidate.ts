@@ -27,6 +27,18 @@ export interface CandidatePortalSummary {
   lastRemindedAt: string | null;
 }
 
+export interface CandidateEmploymentRecord {
+  isCurrent: boolean;
+  employerName: string | null;
+  employeeId: string | null;
+  designation: string | null;
+  department: string | null;
+  employmentType: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  workLocation: string | null;
+}
+
 export interface ListCandidatesParams {
   search?: string;
   limit?: number;
@@ -71,6 +83,7 @@ export interface Candidate {
   joiningDate?: string | null;
   workLocation?: string | null;
   currentEmployer?: string | null;
+  employmentHistory?: CandidateEmploymentRecord[];
   currentAddress?: string | null;
   permanentAddress?: string | null;
   status: CandidateStatus;
@@ -79,6 +92,7 @@ export interface Candidate {
   createdAt: string;
   updatedAt: string;
   bgvCaseCount?: number;
+  consents?: { consentGiven: boolean; consentVersion: string | null; consentedAt: string | null; revokedAt: string | null; createdAt: string }[];
   portalInvitation?: CandidatePortalSummary | null;
 }
 

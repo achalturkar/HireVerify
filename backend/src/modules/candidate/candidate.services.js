@@ -4,8 +4,10 @@ const { prisma } = require('../../common/prisma');
 const repo = require('./candidate.repository');
 
 const { NotFoundError, ConflictError, BadRequestError } = require('../../utils/errors');
+const { parseDateValue } = require('../../utils/date');
 const { IDENTITY_FIELDS, normalizeConfig, normalizeIdentityValue, validateIdentityValues } = require('../client/candidate-intake-config');
 const { normalizeCandidateName, hasCandidateName } = require('../../utils/candidate-name');
+const { createCandidateFormPdf } = require('./candidate-form.pdf');
 
 const toDto = (candidate) => ({
   id: candidate.id,
@@ -51,6 +53,7 @@ const toDto = (candidate) => ({
   joiningDate: candidate.joiningDate,
   workLocation: candidate.workLocation,
   currentEmployer: candidate.currentEmployer,
+  employmentHistory: candidate.employmentHistory || [],
   currentAddress: candidate.currentAddress,
   permanentAddress: candidate.permanentAddress,
   status: candidate.status,
@@ -60,6 +63,7 @@ const toDto = (candidate) => ({
   updatedAt: candidate.updatedAt,
   bgvCaseCount: candidate._count?.bgvCases,
   documents: candidate.documents?.map((document) => ({ id: document.id, documentType: document.documentType, documentNumber: document.documentNumber, fileName: document.fileName, fileUrl: document.fileUrl, verificationStatus: document.verificationStatus, uploadedAt: document.uploadedAt })) || [],
+  consents: candidate.consents || [],
   portalInvitation: candidate.portalInvitation || null,
 });
 
@@ -80,14 +84,7 @@ const createCandidateCode = async (clientId, companyId) => {
   return `${client.clientCode}-${year}-${String(count + 1).padStart(4, '0')}`;
 };
 
-const normalizeDateOfBirth = (value) => {
-  if (value === undefined) return undefined;
-  if (value === null || value === '') return null;
-
-  const date = value instanceof Date ? value : new Date(`${String(value).slice(0, 10)}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) throw new BadRequestError('Date of birth must be a valid date');
-  return date;
-};
+const normalizeDateOfBirth = (value) => parseDateValue(value, 'Date of birth');
 
 const assertClientBelongsToCompany = async (clientId, companyId) => {
   const client = await prisma.client.findFirst({
@@ -172,6 +169,12 @@ const getById = async ({ id, companyId }) => {
   return toDto(candidate);
 };
 
+const buildFormPdf = async ({ id, companyId }) => {
+  const candidate = await repo.findById(id, companyId);
+  if (!candidate) throw new NotFoundError('Candidate not found');
+  return createCandidateFormPdf(toDto(candidate));
+};
+
 const list = async ({ companyId, query }) => {
   const result = await repo.list({
     companyId,
@@ -245,4 +248,4 @@ const remove = async ({ id, companyId }) => {
   await repo.softDelete(id);
 };
 
-module.exports = { create, getById, list, update, remove };
+module.exports = { create, getById, buildFormPdf, list, update, remove };

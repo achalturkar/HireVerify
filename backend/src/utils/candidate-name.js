@@ -2,14 +2,31 @@
 
 const { BadRequestError } = require('./errors');
 
+const normalizeNamePart = (value) => {
+  if (value === undefined || value === null) return '';
+  return String(value).trim();
+};
+
 const validateCandidateName = (name) => {
-  if (name.firstName.length > 100 || name.middleName?.length > 100 || name.lastName.length > 100) {
+  const firstName = normalizeNamePart(name.firstName);
+  const middleName = normalizeNamePart(name.middleName);
+  const lastName = normalizeNamePart(name.lastName);
+  const fullName = normalizeNamePart(name.fullName);
+
+  if (firstName.length > 100 || middleName.length > 100 || lastName.length > 100) {
     throw new BadRequestError('First, middle, and last names cannot exceed 100 characters each.');
   }
-  if (name.fullName.length > 255) {
+  if (fullName.length > 255) {
     throw new BadRequestError('Full name cannot exceed 255 characters.');
   }
-  return name;
+
+  return {
+    ...name,
+    firstName,
+    middleName: middleName || null,
+    lastName,
+    fullName,
+  };
 };
 
 const splitCandidateName = (value) => {

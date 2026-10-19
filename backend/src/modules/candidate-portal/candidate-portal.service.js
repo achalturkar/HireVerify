@@ -7,6 +7,7 @@ const { prisma } = require('../../common/prisma');
 const config = require('../../config');
 const { sendMail, buildCandidatePortalEmail } = require('../../utils/mailer');
 const { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } = require('../../utils/errors');
+const { parseDateValue } = require('../../utils/date');
 const { IDENTITY_FIELDS, EMPLOYMENT_DOCUMENT_TYPES, ADDRESS_DOCUMENT_TYPES, normalizeConfig, normalizeIdentityValue, validateIdentityValues } = require('../client/candidate-intake-config');
 const { findTemplatePath } = require('../client/candidate-form-storage');
 const { normalizeCandidateName, hasCandidateName } = require('../../utils/candidate-name');
@@ -14,6 +15,14 @@ const { normalizeCandidateName, hasCandidateName } = require('../../utils/candid
 const MAX_INVITATION_DAYS = 30;
 const portalTokenKey = crypto.createHash('sha256').update(`candidate-portal:${config.jwt.accessSecret}`).digest();
 const DOCUMENT_TYPES = new Set(['PAN', 'UAN', 'AADHAAR', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID', 'EDUCATION_CERTIFICATE', 'EXPERIENCE_LETTER', 'SALARY_SLIP', 'FORM_16', 'RELIEVING_LETTER', 'OFFER_LETTER', 'APPOINTMENT_LETTER', 'INCREMENT_LETTER', 'PROMOTION_LETTER', 'BANK_STATEMENT', 'PF_STATEMENT', 'EMPLOYMENT_CONTRACT', ...ADDRESS_DOCUMENT_TYPES, 'OTHER']);
+const EMPLOYMENT_HISTORY_FIELDS = {
+  employerName: 255,
+  employeeId: 100,
+  designation: 150,
+  department: 120,
+  employmentType: 50,
+  workLocation: 150,
+};
 const CHECKS_FOR_FORM_CATEGORY = {
   IDENTITY: new Set(['IDENTITY', 'IDENTITY_VERIFICATION', 'PAN', 'AADHAAR', 'UAN', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID', 'DOCUMENT', 'DOCUMENT_FORGERY']),
   EDUCATION: new Set(['EDUCATION', 'EDUCATION_VERIFICATION']),
@@ -46,6 +55,8 @@ const decryptToken = (encryptedToken) => {
   }
 };
 const portalUrlFor = (token) => `${config.frontendUrl.replace(/\/$/, '')}/candidate-portal/${token}`;
+const consentTextFor = (companyName, clientName) =>
+  `I voluntarily authorize ${companyName}${clientName ? `, on behalf of ${clientName},` : ''} to collect and verify the information and documents I provide and to conduct the background verification checks requested for my application. I confirm that the information I have provided is accurate to the best of my knowledge. I understand that the verification results may be shared with ${clientName || companyName} and authorized personnel for this verification purpose. I have read and agree to this consent statement.`;
 const toStaffStatus = (invitation) => {
   if (!invitation) return null;
   const token = decryptToken(invitation.encryptedToken);
@@ -66,6 +77,10 @@ const invitationInclude = {
       company: { select: { name: true, primaryColor: true, logoUrl: true } },
       client: { select: { id: true, name: true, candidateFormConfig: true } },
       documents: true,
+      consents: {
+        where: { consentType: 'BGV_CONSENT' },
+        orderBy: { createdAt: 'desc' },
+      },
       bgvCases: {
         orderBy: { createdAt: 'desc' },
         take: 1,
@@ -101,9 +116,17 @@ const findInvitation = async (token) => {
 
 const isPortalLocked = (candidate) => {
   const activeCase = candidate.bgvCases?.[0];
-  const consentGiven = Boolean(activeCase?.consents?.some((consent) => consent.consentType === 'BGV_CONSENT' && consent.consentGiven));
+  const consentGiven = Boolean(
+    [...(activeCase?.consents || []), ...(candidate.consents || [])]
+      .some((consent) => consent.consentType === 'BGV_CONSENT' && consent.consentGiven && !consent.revokedAt),
+  );
   return consentGiven
     || ['COMPLETED', 'CANCELLED'].includes(activeCase?.status)
+    || (!activeCase && candidate.status === 'VERIFICATION_IN_PROGRESS');
+};
+const areUploadsLocked = (candidate) => {
+  const activeCase = candidate.bgvCases?.[0];
+  return ['COMPLETED', 'CANCELLED'].includes(activeCase?.status)
     || (!activeCase && candidate.status === 'VERIFICATION_IN_PROGRESS');
 };
 
@@ -114,8 +137,12 @@ const pendingFor = (candidate) => {
     ...(candidate.documents || []),
     ...(activeCase?.checks || []).flatMap((check) => check.documents || []),
   ];
-  const consentComplete = Boolean(activeCase?.consents?.some((consent) => consent.consentType === 'BGV_CONSENT' && consent.consentGiven && !consent.revokedAt));
+  const consentComplete = Boolean(
+    [...(activeCase?.consents || []), ...(candidate.consents || [])]
+      .some((consent) => consent.consentType === 'BGV_CONSENT' && consent.consentGiven && !consent.revokedAt),
+  );
   const formLocked = isPortalLocked(candidate);
+  const uploadsLocked = areUploadsLocked(candidate);
   const pending = [];
   for (const check of activeCase?.checks || []) {
     if (DOCUMENT_TYPES.has(check.type)) {
@@ -205,19 +232,27 @@ const pendingFor = (candidate) => {
   const profileComplete = Boolean(candidate.firstName && candidate.lastName && candidate.email && candidate.phone && candidate.dateOfBirth && addressComplete)
     && IDENTITY_FIELDS.every((field) => !candidateFormConfig[field.key].required || Boolean(candidate[field.key]));
   if (!profileComplete) pending.push({ key: 'profile', label: 'Review and complete your details', type: 'profile' });
-  const consentReady = Boolean(
-    activeCase
-    && !['COMPLETED', 'CANCELLED'].includes(activeCase.status)
-    && pending.length === 0,
-  );
-  if (activeCase && !consentComplete) pending.push({ key: 'consent', label: 'Give background verification consent', type: 'consent' });
-  return { activeCase, pending, consentComplete, consentReady, formLocked, profileComplete };
+  const consentReady = !consentComplete && (!activeCase || !['COMPLETED', 'CANCELLED'].includes(activeCase.status));
+  if (!consentComplete) pending.push({ key: 'consent', label: 'Give background verification consent', type: 'consent' });
+  return { activeCase, pending, consentComplete, consentReady, formLocked, uploadsLocked, profileComplete };
 };
 
 const toDto = (invitation) => {
   const candidate = invitation.candidate;
   const candidateFormConfig = normalizeConfig(candidate.client?.candidateFormConfig);
-  const { activeCase, pending, consentComplete, consentReady, formLocked, profileComplete } = pendingFor(candidate);
+  const { activeCase, pending, consentComplete, consentReady, formLocked, uploadsLocked, profileComplete } = pendingFor(candidate);
+  const storedEmploymentHistory = Array.isArray(candidate.employmentHistory) ? candidate.employmentHistory : [];
+  const currentEmployment = {
+    isCurrent: true,
+    employerName: candidate.currentEmployer,
+    employeeId: candidate.employeeId,
+    designation: candidate.employeeDesignation,
+    department: candidate.employeeDepartment,
+    employmentType: candidate.employmentType,
+    startDate: candidate.joiningDate,
+    endDate: null,
+    workLocation: candidate.workLocation,
+  };
   return {
     candidate: {
       id: candidate.id,
@@ -251,6 +286,7 @@ const toDto = (invitation) => {
       joiningDate: candidate.joiningDate,
       workLocation: candidate.workLocation,
       currentEmployer: candidate.currentEmployer,
+      employmentHistory: [currentEmployment, ...storedEmploymentHistory.filter((item) => item && item.isCurrent !== true)],
       currentAddress: candidate.currentAddress,
       permanentAddress: candidate.permanentAddress,
     },
@@ -259,7 +295,7 @@ const toDto = (invitation) => {
     candidateFormConfig,
     case: activeCase ? { id: activeCase.id, caseNumber: activeCase.caseNumber, status: activeCase.status, checks: activeCase.checks.map((check) => check.type) } : null,
     documents: (candidate.documents || []).map((document) => ({ id: document.id, documentType: document.documentType, documentNumber: document.documentNumber, fileName: document.fileName, fileUrl: document.fileUrl, verificationStatus: document.verificationStatus, uploadedAt: document.uploadedAt })),
-    progress: { pending, pendingCount: pending.length, consentComplete, consentReady, formLocked, profileComplete },
+    progress: { pending, pendingCount: pending.length, consentComplete, consentReady, formLocked, uploadsLocked, profileComplete },
     invitation: { expiresAt: invitation.expiresAt },
   };
 };
@@ -362,8 +398,8 @@ const getCandidateFormTemplate = async (token, formId) => {
 };
 const assertPortalEditable = async (token) => {
   const invitation = await findInvitation(token);
-  if (isPortalLocked(invitation.candidate)) {
-    throw new ConflictError('This candidate form is locked after consent or case completion.');
+  if (areUploadsLocked(invitation.candidate)) {
+    throw new ConflictError('Document uploads are locked after the verification case is completed or cancelled.');
   }
 };
 
@@ -405,6 +441,46 @@ const updateProfile = async (token, payload) => {
       throw new BadRequestError(`${section} details are not enabled for this client’s candidate form.`);
     }
   }
+  if (payload.employmentHistory !== undefined) {
+    if (!candidateFormConfig.sections.employment.enabled) {
+      throw new BadRequestError('employment details are not enabled for this client’s candidate form.');
+    }
+    if (!Array.isArray(payload.employmentHistory) || payload.employmentHistory.length < 1 || payload.employmentHistory.length > 10) {
+      throw new BadRequestError('Provide between 1 and 10 employment records.');
+    }
+    data.employmentHistory = payload.employmentHistory.map((record, index) => {
+      if (!record || typeof record !== 'object' || Array.isArray(record) || record.isCurrent !== (index === 0)) {
+        throw new BadRequestError('The first employment record must be current and all other records must be past employment.');
+      }
+      const normalized = { isCurrent: index === 0 };
+      for (const [field, maxLength] of Object.entries(EMPLOYMENT_HISTORY_FIELDS)) {
+        const value = record[field];
+        if (value !== undefined && value !== null && typeof value !== 'string') {
+          throw new BadRequestError(`${field} must be text.`);
+        }
+        const text = typeof value === 'string' ? value.trim() : '';
+        if (text.length > maxLength) throw new BadRequestError(`${field} cannot exceed ${maxLength} characters.`);
+        normalized[field] = text || null;
+      }
+      const startDate = record.startDate ? parseDateValue(record.startDate, 'Employment start date') : null;
+      const endDate = record.endDate ? parseDateValue(record.endDate, 'Employment end date') : null;
+      if (index === 0 && endDate) throw new BadRequestError('Current employment cannot have an end date.');
+      if (startDate && endDate && endDate < startDate) {
+        throw new BadRequestError('Employment end date cannot be before the start date.');
+      }
+      normalized.startDate = startDate ? startDate.toISOString().slice(0, 10) : null;
+      normalized.endDate = endDate ? endDate.toISOString().slice(0, 10) : null;
+      return normalized;
+    });
+    const current = data.employmentHistory[0];
+    data.currentEmployer = current.employerName;
+    data.employeeId = current.employeeId;
+    data.employeeDesignation = current.designation;
+    data.employeeDepartment = current.department;
+    data.employmentType = current.employmentType;
+    data.joiningDate = current.startDate ? parseDateValue(current.startDate, 'Employment start date') : null;
+    data.workLocation = current.workLocation;
+  }
   validateIdentityValues(data);
   for (const field of IDENTITY_FIELDS) {
     if (data[field.key] !== undefined) data[field.key] = normalizeIdentityValue(field.key, data[field.key]) || null;
@@ -414,8 +490,7 @@ const updateProfile = async (token, payload) => {
     if (data[dateField] === '') {
       data[dateField] = null;
     } else if (data[dateField]) {
-      data[dateField] = new Date(`${String(data[dateField]).slice(0, 10)}T00:00:00.000Z`);
-      if (Number.isNaN(data[dateField].getTime())) throw new BadRequestError(`${dateField} must be a valid date.`);
+      data[dateField] = parseDateValue(data[dateField], dateField);
     }
   }
   if (!Object.keys(data).length) throw new BadRequestError('Provide at least one detail to update.');
@@ -431,27 +506,37 @@ const updateProfile = async (token, payload) => {
 const recordConsent = async (token, payload, request) => {
   const invitation = await findInvitation(token);
   const activeCase = invitation.candidate.bgvCases[0];
-  if (!activeCase) throw new BadRequestError('There is no active verification case for this candidate.');
-  if (['COMPLETED', 'CANCELLED'].includes(activeCase.status)) throw new ConflictError('This candidate form is locked because the BGV case is finalized.');
+  if (activeCase && ['COMPLETED', 'CANCELLED'].includes(activeCase.status)) throw new ConflictError('This candidate form is locked because the BGV case is finalized.');
   if (payload.consentGiven !== true) throw new BadRequestError('Consent must be explicitly accepted.');
-  if (!pendingFor(invitation.candidate).consentReady) {
-    throw new BadRequestError('Complete all required candidate details and documents before giving consent.');
-  }
-  const existing = activeCase.consents.find((consent) => consent.consentType === 'BGV_CONSENT');
+  const existing = activeCase?.consents.find((consent) => consent.consentType === 'BGV_CONSENT')
+    || invitation.candidate.consents?.find((consent) => consent.consentType === 'BGV_CONSENT' && (!activeCase || !consent.caseId));
   if (existing?.consentGiven && !existing.revokedAt) {
     throw new ConflictError('Consent has already been recorded.');
   }
-  const data = { consentGiven: true, consentVersion: payload.consentVersion || '1.0', consentText: payload.consentText || 'I consent to the background verification checks requested for my application.', ipAddress: request.ip, userAgent: request.get('user-agent'), consentedAt: new Date(), revokedAt: null };
-  if (existing) await prisma.candidateConsent.update({ where: { id: existing.id }, data });
-  else await prisma.candidateConsent.create({ data: { candidateId: invitation.candidateId, caseId: activeCase.id, consentType: 'BGV_CONSENT', ...data } });
+  const data = {
+    consentGiven: true,
+    consentVersion: '1.1',
+    consentText: consentTextFor(invitation.candidate.company.name, invitation.candidate.client?.name),
+    ipAddress: request.ip,
+    userAgent: request.get('user-agent'),
+    consentedAt: new Date(),
+    revokedAt: null,
+  };
+  if (existing) {
+    await prisma.candidateConsent.update({ where: { id: existing.id }, data: { ...data, ...(activeCase ? { caseId: activeCase.id } : {}) } });
+  } else {
+    await prisma.candidateConsent.create({
+      data: { candidateId: invitation.candidateId, caseId: activeCase?.id || null, consentType: 'BGV_CONSENT', ...data },
+    });
+  }
   return getPortal(token);
 };
 
 const addDocument = async (token, file, documentType, documentNumber, customFormId, documentCategory) => {
   const invitation = await findInvitation(token);
-  if (isPortalLocked(invitation.candidate)) {
+  if (areUploadsLocked(invitation.candidate)) {
     if (file?.path) await fs.unlink(file.path).catch((error) => { if (error.code !== 'ENOENT') throw error; });
-    throw new ConflictError('This candidate form is locked after consent or case completion.');
+    throw new ConflictError('Document uploads are locked after the verification case is completed or cancelled.');
   }
   if (!file) throw new BadRequestError('Choose a document to upload.');
   if (!DOCUMENT_TYPES.has(documentType)) await rejectDocumentUpload(file, 'Document type is invalid.');

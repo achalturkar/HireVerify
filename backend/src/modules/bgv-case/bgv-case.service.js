@@ -70,6 +70,10 @@ const create = async ({ payload, companyId, currentUser }) => {
       const caseNumber = `${numberPrefix}-${String(highestSequence + 1).padStart(4, '0')}`;
 
       const item = await tx.bGVCase.create({ data: { companyId, clientId: payload.clientId, subclientId: candidate.subclientId, candidateId: payload.candidateId, caseNumber, status: payload.status || 'DRAFT', initiatedAt: payload.status === 'INITIATED' ? new Date() : null, clientReference: payload.clientReference || null, packageName: payload.packageName || null, remarks: payload.remarks || null, createdById: currentUser?.id || null } });
+      await tx.candidateConsent.updateMany({
+        where: { candidateId: payload.candidateId, caseId: null, consentType: 'BGV_CONSENT' },
+        data: { caseId: item.id },
+      });
       if (selectedChecks.length) await tx.verificationCheck.createMany({ data: selectedChecks.map((check) => ({ caseId: item.id, type: check.type, provider: check.provider || checkTypeMap.get(check.type).defaultProvider, priority: check.priority || 0 })) });
       await tx.candidate.update({ where: { id: payload.candidateId }, data: { status: 'VERIFICATION_IN_PROGRESS', updatedById: currentUser?.id || null } });
       await tx.verificationEvent.create({ data: { caseId: item.id, eventType: 'CREATED', message: 'BGV case created' } });

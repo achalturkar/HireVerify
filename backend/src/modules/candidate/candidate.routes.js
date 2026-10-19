@@ -14,6 +14,8 @@ router.route('/')
   .get(authorize('candidate.view'), validate(v.listValidator), controller.listCandidates)
   .post(authorize('candidate.create'), validate(v.createValidator), controller.createCandidate);
 
+router.get('/:id/form-pdf', authorize('candidate.view'), validate(v.idParamValidator), controller.downloadCandidateFormPdf);
+
 router.route('/:id')
   .get(authorize('candidate.view'), validate(v.idParamValidator), controller.getCandidate)
   .put(authorize('candidate.update'), validate(v.updateValidator), controller.updateCandidate)

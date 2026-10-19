@@ -18,9 +18,10 @@ type Props = {
   documents: FormDocument[];
   onUploaded: () => Promise<void>;
   readOnly?: boolean;
+  downloadOnly?: boolean;
 };
 
-export default function CandidateFormTemplateUpload({ token, accent, form, documents, onUploaded, readOnly = false }: Props) {
+export default function CandidateFormTemplateUpload({ token, accent, form, documents, onUploaded, readOnly = false, downloadOnly = false }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -106,6 +107,24 @@ export default function CandidateFormTemplateUpload({ token, accent, form, docum
     }
   };
 
+  if (downloadOnly) {
+    return (
+      <li className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-slate-900">{form.name}</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {completedDocument ? `Uploaded: ${completedDocument.fileName}` : form.required ? 'Required: download, complete and upload this form.' : 'Optional: download and return this form if requested.'}
+          </p>
+        </div>
+        <button type="button" onClick={() => void download()} disabled={downloading} className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+          {downloading ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />}
+          Download blank form
+        </button>
+        {message && <p role="status" className="w-full text-xs text-red-600">{message}</p>}
+      </li>
+    );
+  }
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -118,7 +137,7 @@ export default function CandidateFormTemplateUpload({ token, accent, form, docum
           Download blank form
         </button>
       </div>
-      {readOnly ? <p className="mt-4 text-xs text-slate-500">Uploads are locked after consent has been recorded.</p> : <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+      {readOnly ? <p className="mt-4 text-xs text-slate-500">Uploads are locked after the verification case is completed or cancelled.</p> : <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <div className="min-w-0 flex-1">
           <input ref={fileInput} type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.ms-word,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,.jpg,.jpeg,image/png,.png" onChange={(event) => setFile(event.target.files?.[0] ?? null)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
           <p className="mt-1 text-xs text-slate-500">PDF, DOC, DOCX, JPG or PNG, up to 10 MB. File contents are checked against the file type.</p>

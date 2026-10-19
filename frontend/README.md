@@ -42,10 +42,15 @@ The Address tab is also configurable per client: administrators can enable
 current and permanent address fields, mark either address as required, and
 choose which address documents candidates can upload. Options include Aadhaar,
 passport, driving licence, voter ID, bank statement, electricity or utility
-bill, rent agreement, and a GPS address photo (JPG or PNG). Required address
-details and uploads must be complete before consent is available.
-Candidates can give consent only after their required details and documents are
-complete. After consent, profile edits and uploads are locked.
+bill, rent agreement, and a GPS address photo (JPG or PNG). Required address details and uploads are shown on the candidate portal.
+Candidates can open and submit consent before a verification case is created
+and while they are completing required uploads, until the case is finalized.
+Pre-case consent is linked to the case when it is created. Profile edits lock
+after consent, but document uploads remain available until the verification
+case is completed or cancelled.
+Company users can download a formatted candidate form PDF from the candidate
+detail page, including submitted profile sections, employment history,
+uploaded document status, and recorded consent.
 
 Templates are stored outside the public uploads directory and are downloaded
 through an authenticated company route or the candidate's active portal link.

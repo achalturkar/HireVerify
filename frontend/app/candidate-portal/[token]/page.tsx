@@ -21,6 +21,7 @@ import {
   Lock,
   MapPin,
   Paperclip,
+  Plus,
   Save,
   ShieldCheck,
   Trash2,
@@ -52,17 +53,39 @@ type PortalDocument = {
   uploadedAt: string;
 };
 
+type EmploymentRecord = {
+  isCurrent: boolean;
+  employerName: string | null;
+  employeeId: string | null;
+  designation: string | null;
+  department: string | null;
+  employmentType: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  workLocation: string | null;
+};
+type PastEmploymentForm = {
+  employerName: string;
+  employeeId: string;
+  designation: string;
+  department: string;
+  employmentType: string;
+  startDate: string;
+  endDate: string;
+  workLocation: string;
+};
+
 type PendingItem = { key: string; label: string; type: string; documentType?: string; customFormId?: string; category?: string };
 
 type PortalData = {
-  candidate: Record<string, string | null> & { status?: string };
+  candidate: Record<string, unknown> & { status?: string; employmentHistory?: EmploymentRecord[] };
   company: { name: string; logoUrl?: string | null; primaryColor?: string | null };
   client?: { name: string } | null;
   candidateFormConfig?: CandidateFormConfig;
   case: { id: string; caseNumber: string; status: string; checks?: string[] } | null;
   documents: PortalDocument[];
   invitation: { expiresAt: string };
-  progress: { pending: PendingItem[]; pendingCount: number; consentComplete: boolean; consentReady: boolean; formLocked: boolean; profileComplete: boolean };
+  progress: { pending: PendingItem[]; pendingCount: number; consentComplete: boolean; consentReady: boolean; formLocked: boolean; uploadsLocked: boolean; profileComplete: boolean };
 };
 
 type TabKey = 'overview' | 'details' | 'family' | 'identity' | 'address' | 'education' | 'employment' | 'policeVerification' | 'bgv' | 'otherChecks' | 'documents' | 'consent';
@@ -183,6 +206,32 @@ const EMPLOYMENT_FIELDS: FieldDef[] = [
   { key: 'joiningDate', label: 'Joining date', type: 'date' },
   { key: 'workLocation', label: 'Work location' },
 ];
+const PAST_EMPLOYMENT_FIELDS: FieldDef[] = [
+  { key: 'employerName', label: 'Employer name', wide: true },
+  { key: 'employeeId', label: 'Employee ID' },
+  { key: 'designation', label: 'Designation' },
+  { key: 'department', label: 'Department' },
+  { key: 'employmentType', label: 'Employment type', options: ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'FREELANCE', 'CONSULTANT', 'OTHER'] },
+  { key: 'startDate', label: 'Start date', type: 'date' },
+  { key: 'endDate', label: 'End date', type: 'date' },
+  { key: 'workLocation', label: 'Work location' },
+];
+const emptyPastEmployment = (): PastEmploymentForm => ({
+  employerName: '', employeeId: '', designation: '', department: '', employmentType: '', startDate: '', endDate: '', workLocation: '',
+});
+const toPastEmploymentForms = (records: EmploymentRecord[] = []): PastEmploymentForm[] => {
+  const pastRecords = records.filter((record) => !record.isCurrent).map((record) => ({
+    employerName: record.employerName ?? '',
+    employeeId: record.employeeId ?? '',
+    designation: record.designation ?? '',
+    department: record.department ?? '',
+    employmentType: record.employmentType ?? '',
+    startDate: record.startDate?.slice(0, 10) ?? '',
+    endDate: record.endDate?.slice(0, 10) ?? '',
+    workLocation: record.workLocation ?? '',
+  }));
+  return pastRecords.length ? pastRecords : [emptyPastEmployment()];
+};
 
 const SECTION_FIELDS: Record<SectionKey, FieldDef[]> = {
   details: DETAILS_FIELDS,
@@ -250,8 +299,8 @@ const DOCUMENT_GROUPS = [
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png'];
 const FILE_ORIGIN = (process.env.NEXT_PUBLIC_API ?? '').replace(/\/api\/v1\/?$/, '');
-const CONSENT_TEXT =
-  'I consent to the background verification checks requested for my application and understand that the information I provide will be used for that purpose.';
+const consentTextFor = (companyName: string, clientName?: string) =>
+  `I voluntarily authorize ${companyName}${clientName ? `, on behalf of ${clientName},` : ''} to collect and verify the information and documents I provide and to conduct the background verification checks requested for my application. I confirm that the information I have provided is accurate to the best of my knowledge. I understand that the verification results may be shared with ${clientName || companyName} and authorized personnel for this verification purpose. I have read and agree to this consent statement.`;
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -292,17 +341,17 @@ const requestMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
-const toForm = (candidate: Record<string, string | null>): FormState =>
+const toForm = (candidate: Record<string, unknown>): FormState =>
   Object.fromEntries(
     EDITABLE_KEYS.map((key) => {
       if (key === 'fullName') return [key, formatCandidateName({
-        fullName: candidate.fullName,
-        firstName: candidate.firstName,
-        middleName: candidate.middleName,
-        lastName: candidate.lastName,
+        fullName: typeof candidate.fullName === 'string' ? candidate.fullName : null,
+        firstName: typeof candidate.firstName === 'string' ? candidate.firstName : null,
+        middleName: typeof candidate.middleName === 'string' ? candidate.middleName : null,
+        lastName: typeof candidate.lastName === 'string' ? candidate.lastName : null,
       })];
       const value = candidate[key];
-      if (value === null || value === undefined || value === '') return [key, ''];
+      if (typeof value !== 'string' || value === '') return [key, ''];
       const text = DATE_KEYS.has(key) ? String(value).slice(0, 10) : String(value);
       const field = FIELD_BY_KEY[key];
       return [key, field.format ? field.format(text) : text];
@@ -501,20 +550,6 @@ function DocumentList({ documents, emptyText, hideType = false }: { documents: P
   );
 }
 
-function ProgressRing({ percent }: { percent: number }) {
-  const radius = 26;
-  const circumference = 2 * Math.PI * radius;
-  return (
-    <div className="relative h-16 w-16 shrink-0" role="img" aria-label={`${percent}% complete`}>
-      <svg viewBox="0 0 64 64" className="h-16 w-16 -rotate-90">
-        <circle cx="32" cy="32" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="6" />
-        <circle cx="32" cy="32" r={radius} fill="none" stroke="var(--accent)" strokeWidth="6" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - percent / 100)} />
-      </svg>
-      <span className="absolute inset-0 grid place-items-center text-sm font-semibold text-slate-900">{percent}%</span>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 /* Multi-file attachment uploader                                      */
 /* Pick several files at once, set each file's type, upload together.  */
@@ -662,7 +697,7 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
   );
 
   const content = readOnly
-    ? <p className="text-xs text-slate-500">Uploads are locked after consent has been recorded.</p>
+    ? <p className="text-xs text-slate-500">Uploads are locked after the verification case is completed or cancelled.</p>
     : body;
   if (variant === 'inline') return content;
   return <SectionCard icon={Paperclip} title={title} description={description}>{content}</SectionCard>;
@@ -671,7 +706,7 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
 /* ------------------------------------------------------------------ */
 /* One card per ID: number field + upload + uploaded files             */
 /* ------------------------------------------------------------------ */
-function IdentityCard({ title, field, value, error, documents, token, onChange, onUploaded, readOnly = false }: {
+function IdentityCard({ title, field, value, error, documents, token, onChange, onUploaded, readOnly = false, uploadReadOnly = false }: {
   title: string;
   field: FieldDef;
   value: string;
@@ -681,6 +716,7 @@ function IdentityCard({ title, field, value, error, documents, token, onChange, 
   onChange: (value: string) => void;
   onUploaded: (count: number) => void | Promise<void>;
   readOnly?: boolean;
+  uploadReadOnly?: boolean;
 }) {
   const docType = IDENTITY_ITEMS.find((item) => item.fieldKey === field.key)?.docType ?? 'OTHER';
   const sorted = [...documents].sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
@@ -700,7 +736,7 @@ function IdentityCard({ title, field, value, error, documents, token, onChange, 
         <Field def={field} value={value} error={error} disabled={readOnly} onChange={onChange} />
         <div>
           <p className="mb-1.5 text-sm font-medium text-slate-700">Copy of {title}</p>
-          <AttachmentUploader variant="inline" token={token} types={[docType]} documentNumber={numberForFile} onUploaded={onUploaded} readOnly={readOnly} />
+          <AttachmentUploader variant="inline" token={token} types={[docType]} documentNumber={numberForFile} onUploaded={onUploaded} readOnly={uploadReadOnly} />
           {sorted.length > 0 && <div className="mt-3"><DocumentList documents={sorted} emptyText="" hideType /></div>}
         </div>
       </div>
@@ -717,6 +753,8 @@ export default function CandidatePortalPage() {
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>({});
   const [baseline, setBaseline] = useState<FormState>({});
+  const [pastEmployments, setPastEmployments] = useState<PastEmploymentForm[]>([emptyPastEmployment()]);
+  const [pastEmploymentBaseline, setPastEmploymentBaseline] = useState<PastEmploymentForm[]>([emptyPastEmployment()]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [consent, setConsent] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -742,8 +780,11 @@ export default function CandidatePortalPage() {
       setDaysLeft(Math.ceil((new Date(data.invitation.expiresAt).getTime() - Date.now()) / 86400000));
       if (syncForm) {
         const next = toForm(data.candidate);
+        const nextPastEmployments = toPastEmploymentForms(data.candidate.employmentHistory);
         setForm(next);
         setBaseline(next);
+        setPastEmployments(nextPastEmployments);
+        setPastEmploymentBaseline(nextPastEmployments);
       }
     },
     [token],
@@ -853,8 +894,9 @@ export default function CandidatePortalPage() {
     SECTIONS.forEach((section) => {
       result[section] = effectiveSectionFields[section].some((field) => (form[field.key] ?? '') !== (baseline[field.key] ?? ''));
     });
+    result.employment = result.employment || JSON.stringify(pastEmployments) !== JSON.stringify(pastEmploymentBaseline);
     return result;
-  }, [form, baseline, effectiveSectionFields]);
+  }, [form, baseline, effectiveSectionFields, pastEmployments, pastEmploymentBaseline]);
   const anyDirty = SECTIONS.some((section) => dirtyBySection[section]);
 
   useEffect(() => {
@@ -927,7 +969,7 @@ export default function CandidatePortalPage() {
       setActiveTab(SECTION_OF_KEY[Object.keys(found)[0]]);
       return;
     }
-    const payload: Record<string, string> = {};
+    const payload: Record<string, unknown> = {};
     const saved: FormState = {};
     fields.forEach((field) => {
       const raw = (form[field.key] ?? '').trim();
@@ -946,17 +988,38 @@ export default function CandidatePortalPage() {
       if (value === '' && DATE_KEYS.has(field.key)) return;
       payload[field.key] = value;
     });
+    if (section === 'employment') {
+      const currentEmployer = {
+        isCurrent: true,
+        employerName: form.currentEmployer?.trim() || null,
+        employeeId: form.employeeId?.trim() || null,
+        designation: form.employeeDesignation?.trim() || null,
+        department: form.employeeDepartment?.trim() || null,
+        employmentType: form.employmentType?.trim() || null,
+        startDate: form.joiningDate?.trim() || null,
+        endDate: null,
+        workLocation: form.workLocation?.trim() || null,
+      };
+      const pastRecords = pastEmployments
+        .filter((record) => Object.values(record).some((value) => value.trim()))
+        .map((record) => ({ ...record, isCurrent: false }));
+      payload.employmentHistory = [currentEmployer, ...pastRecords];
+    }
     void run(async () => {
       await api.patch(`/candidate-portal/${token}/profile`, payload);
       setBaseline((previous) => ({ ...previous, ...saved }));
       setForm((previous) => ({ ...previous, ...saved }));
+      if (section === 'employment') setPastEmploymentBaseline(pastEmployments);
       setMessage(`${SECTION_LABEL[section]} saved.`);
     });
   };
 
   const giveConsent = () =>
     run(async () => {
-      await api.post(`/candidate-portal/${token}/consent`, { consentGiven: true });
+      await api.post(`/candidate-portal/${token}/consent`, {
+        consentGiven: true,
+        consentVersion: '1.1',
+      });
       setConsent(false);
       setMessage('Your consent was recorded.');
     });
@@ -989,20 +1052,103 @@ export default function CandidatePortalPage() {
 
   const theme = { '--accent': accent, '--accent-soft': `${accent}1a`, '--accent-ring': `${accent}33` } as CSSProperties;
   const { progress } = portal;
-  const totalSteps = Math.max(progress.pendingCount + portal.documents.length + (progress.profileComplete ? 1 : 0) + (progress.consentComplete ? 1 : 0), 1);
-  const percent = progress.pendingCount === 0 ? 100 : Math.round(((totalSteps - progress.pendingCount) / totalSteps) * 100);
   const nameParts = splitFullName(form.fullName || '');
-  const firstName = nameParts?.firstName || portal.candidate.firstName || 'there';
-  const candidateName = form.fullName?.trim() || formatCandidateName({
-    fullName: portal.candidate.fullName,
-    firstName: portal.candidate.firstName,
-    middleName: portal.candidate.middleName,
-    lastName: portal.candidate.lastName,
-  });
+  const firstName = nameParts?.firstName || (typeof portal.candidate.firstName === 'string' ? portal.candidate.firstName : 'there');
   const companyLogo = resolveLogoUrl(portal.company.logoUrl);
   const companyMonogram = portal.company.name.trim().split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase() || 'C';
+  const requiredUploadItems = progress.pending.filter((item) => item.type === 'document' && !item.customFormId);
+  const overviewForms = (['BGV', 'IDENTITY', 'EDUCATION', 'EMPLOYMENT', 'POLICE_VERIFICATION', 'OTHER_CHECKS', 'OTHER'] as CandidateCustomForm['category'][])
+    .flatMap((category) => customFormsFor(category));
+  const overviewInstructions: { tab: TabKey; title: string; description: string; details: string[] }[] = [
+    {
+      tab: 'details',
+      title: 'Your details',
+      description: 'Enter your personal information exactly as it appears on your official documents.',
+      details: DETAILS_FIELDS.map((field) => `${field.label}${field.required ? ' (required)' : ''}`),
+    },
+  ];
+  if (candidateFormConfig.sections.family.enabled) {
+    overviewInstructions.push({
+      tab: 'family',
+      title: 'Family details',
+      description: 'Provide parent details where available.',
+      details: FAMILY_FIELDS.map((field) => field.label),
+    });
+  }
+  if (visibleTabs.some(({ key }) => key === 'identity')) {
+    const identityDetails = IDENTITY_ITEMS
+      .filter((item) => identityConfigFor(item.fieldKey)?.enabled !== false)
+      .map((item) => {
+        const config = identityConfigFor(item.fieldKey);
+        const field = FIELD_BY_KEY[item.fieldKey];
+        const requirements = [
+          config?.required ? 'number required' : 'number if available',
+          config?.documentRequired ? 'document copy required' : null,
+        ].filter(Boolean);
+        return `${field.label} (${requirements.join('; ')})`;
+      });
+    overviewInstructions.push({
+      tab: 'identity',
+      title: 'Identity information',
+      description: 'Enter the ID numbers enabled for your client. Upload copies marked as required.',
+      details: identityDetails,
+    });
+  }
+  if (visibleTabs.some(({ key }) => key === 'address')) {
+    const addressDetails = [
+      ...(candidateFormConfig.address.currentAddressEnabled
+        ? [`Current address${candidateFormConfig.address.currentAddressRequired ? ' (required)' : ''}`]
+        : []),
+      ...(candidateFormConfig.address.permanentAddressEnabled
+        ? [`Permanent address${candidateFormConfig.address.permanentAddressRequired ? ' (required)' : ''}`]
+        : []),
+      ...candidateFormConfig.address.documents.filter((document) => document.enabled).map((document) => {
+        const label = CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? humanize(document.type);
+        return `${label}${document.required ? ' (required)' : ' (optional)'}`;
+      }),
+    ];
+    overviewInstructions.push({
+      tab: 'address',
+      title: 'Address verification',
+      description: 'Provide the enabled address details and any address proof requested by your client.',
+      details: addressDetails,
+    });
+  }
+  if (visibleTabs.some(({ key }) => key === 'education')) {
+    overviewInstructions.push({
+      tab: 'education',
+      title: 'Education history',
+      description: 'Enter your education details and prepare supporting records or any client-provided education form.',
+      details: [...effectiveSectionFields.education.map((field) => field.label), 'Education certificates or marksheets'],
+    });
+  }
+  if (visibleTabs.some(({ key }) => key === 'employment')) {
+    const enabledEmploymentDocuments = candidateFormConfig.employmentDocuments.filter((document) => document.enabled);
+    overviewInstructions.push({
+      tab: 'employment',
+      title: 'Employment history',
+      description: 'Enter your current employer first, then add past employers from most recent to oldest. You can enter up to 10 employers total.',
+      details: [
+        'Current employer and role details',
+        'Past employer name, role and employment dates',
+        ...enabledEmploymentDocuments.map((document) => {
+          const label = CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? humanize(document.type);
+          return `${label}${document.required ? ' (required)' : ' (optional)'}`;
+        }),
+      ],
+    });
+  }
+  if (portal.case) {
+    overviewInstructions.push({
+      tab: 'consent',
+      title: 'Review and give consent',
+      description: 'Review your information and give consent after completing the required details, documents and forms.',
+      details: ['Consent is needed before the requested verification checks can begin.'],
+    });
+  }
 
   const profileReadOnly = portal.progress.formLocked;
+  const uploadReadOnly = portal.progress.uploadsLocked;
   const sectionPanel = (section: SectionKey, icon: LucideIcon, title: string, description: string, saveLabel: string, extra?: ReactNode) => (
     <SectionCard icon={icon} title={title} description={description}>
       {extra}
@@ -1052,7 +1198,7 @@ export default function CandidatePortalPage() {
               {error || message}
             </div>
           )}
-          {profileReadOnly && <p role="status" className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">Your details and uploads are locked after consent or case completion. Contact the company administrator if a correction is needed.</p>}
+          {profileReadOnly && <p role="status" className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">Your profile details are locked after consent. You can continue uploading documents until the verification case is completed or cancelled.</p>}
         </div>
 
         <nav className="sticky top-0 z-10 -mx-1 mb-5 bg-[#f5f7f6]/95 px-1 py-2 backdrop-blur" aria-label="Portal sections">
@@ -1085,55 +1231,85 @@ export default function CandidatePortalPage() {
 
         {currentTab === 'overview' && (
           <div role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" className="space-y-5">
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-              <div className="flex items-center gap-4">
-                <ProgressRing percent={percent} />
-                <div className="min-w-0">
-                  <h2 className="text-lg font-semibold">{progress.pendingCount === 0 ? 'Everything is complete' : `${progress.pendingCount} ${progress.pendingCount === 1 ? 'step' : 'steps'} left`}</h2>
-                  <p className="text-sm text-slate-500">{progress.pendingCount === 0 ? 'Thank you. The verification team will take it from here.' : 'Finish these steps so your verification can start.'}</p>
-                  {portal.case && <p className="mt-1 text-xs text-slate-500">Case {portal.case.caseNumber}, {humanize(portal.case.status)}</p>}
-                </div>
-              </div>
-              {progress.pending.length > 0 && (
-                <ul className="mt-5 space-y-2">
-                  {progress.pending.map((item) => (
-                    <li key={item.key}>
-                      <button type="button" onClick={() => setActiveTab(tabForPending(item))} className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-left text-sm text-slate-800 transition hover:border-slate-300 hover:bg-white">
-                        <span className="flex items-center gap-2.5"><span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />{item.label}</span>
-                        <span className="text-xs font-semibold" style={{ color: 'var(--accent)' }}>Complete</span>
+            <SectionCard icon={FileCheck} title="What to fill in" description={`Follow these instructions for the checks and form settings${portal.client?.name ? ` configured by ${portal.client.name}` : ' configured for your verification'}.`}>
+              <ol className="space-y-3">
+                {overviewInstructions.map((instruction, index) => (
+                  <li key={instruction.tab} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold text-slate-900">{index + 1}. {instruction.title}</h3>
+                        <p className="mt-1 text-sm leading-5 text-slate-600">{instruction.description}</p>
+                      </div>
+                      <button type="button" onClick={() => setActiveTab(instruction.tab)} className="shrink-0 text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
+                        Open section
                       </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-              <h2 className="text-base font-semibold">Your name</h2>
-              <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-                <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Full name</dt><dd className="mt-1 font-medium">{candidateName || 'Not provided'}</dd></div>
-                <div><dt className="text-xs text-slate-500">First name</dt><dd className="mt-1 font-medium">{nameParts?.firstName || 'Not provided'}</dd></div>
-                <div><dt className="text-xs text-slate-500">Middle name</dt><dd className="mt-1 font-medium">{nameParts?.middleName || 'Not provided'}</dd></div>
-                <div><dt className="text-xs text-slate-500">Last name</dt><dd className="mt-1 font-medium">{nameParts?.lastName || 'Not provided'}</dd></div>
-              </dl>
-            </section>
-
-            <SectionCard icon={ShieldCheck} title="How it works" description="You can come back to this link any time before it expires.">
-              <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {[
-                  ['Confirm your details', 'Check your name, contact and address.'],
-                  ['Add your IDs', 'Enter each ID number and attach a copy.'],
-                  ['Add education and work', 'Fill in your history and attach the files.'],
-                  ['Give consent', 'Authorise the checks so they can begin.'],
-                ].map(([title, text], index) => (
-                  <li key={title} className="rounded-xl bg-slate-50 p-4">
-                    <span className="grid h-6 w-6 place-items-center rounded-full text-xs font-semibold text-white" style={{ backgroundColor: 'var(--accent)' }}>{index + 1}</span>
-                    <p className="mt-2.5 text-sm font-semibold text-slate-900">{title}</p>
-                    <p className="mt-1 text-sm text-slate-600">{text}</p>
+                    </div>
+                    {instruction.details.length > 0 && (
+                      <ul className="mt-3 grid gap-1.5 text-xs text-slate-600 sm:grid-cols-2">
+                        {instruction.details.map((detail) => (
+                          <li key={detail} className="flex items-start gap-2">
+                            <Check size={13} className="mt-0.5 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden="true" />
+                            <span>{detail}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </li>
                 ))}
               </ol>
             </SectionCard>
+
+            <SectionCard icon={FileCheck} title="What you need to prepare" description="These requirements are based on the checks and forms selected for your client.">
+              <div className="space-y-5">
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-slate-900">Documents to upload</h3>
+                  {requiredUploadItems.length > 0 ? (
+                    <ul className="space-y-2">
+                      {requiredUploadItems.map((item) => (
+                        <li key={item.key} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
+                          <span className="flex items-center gap-2.5 text-sm text-slate-800">
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
+                            {item.label}
+                          </span>
+                          <button type="button" onClick={() => setActiveTab(tabForPending(item))} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
+                            Go to upload
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm text-emerald-800">
+                      No required document uploads are outstanding.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-slate-900">Forms to download</h3>
+                  {overviewForms.length > 0 ? (
+                    <ul className="space-y-2">
+                      {overviewForms.map((form) => (
+                        <CandidateFormTemplateUpload
+                          key={form.id}
+                          token={token}
+                          accent={accent}
+                          form={form}
+                          documents={portal.documents}
+                          onUploaded={refreshPortal}
+                          readOnly={profileReadOnly}
+                          downloadOnly
+                        />
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm text-slate-600">
+                      No additional forms are configured for your verification.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </SectionCard>
+
           </div>
         )}
 
@@ -1168,10 +1344,11 @@ export default function CandidatePortalPage() {
                 onChange={(value) => setField(item.fieldKey, value)}
                 onUploaded={afterUpload}
                 readOnly={profileReadOnly}
+                uploadReadOnly={uploadReadOnly}
               />
             ))}
             {customFormsFor('IDENTITY').map((form) => (
-              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
             ))}
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
               <SaveBar bare dirty={dirtyBySection.identity} saving={saving} label="Save ID numbers" onSave={() => saveSection('identity')} readOnly={profileReadOnly} />
@@ -1197,7 +1374,7 @@ export default function CandidatePortalPage() {
                   types={addressUploadTypes}
                   documentCategory="ADDRESS"
                   onUploaded={afterUpload}
-                  readOnly={profileReadOnly}
+                  readOnly={uploadReadOnly}
                 />
               ) : <p className="text-sm text-slate-500">This client has not requested address verification documents.</p>}
               <div className="mt-4">
@@ -1211,9 +1388,9 @@ export default function CandidatePortalPage() {
         {currentTab === 'education' && (
           <div role="tabpanel" id="panel-education" aria-labelledby="tab-education" className="space-y-5">
             {sectionPanel('education', GraduationCap, 'Education details', 'Tell us about your highest completed qualification.', 'Save education details')}
-            <AttachmentUploader token={token} title="Education documents" description="Attach degree certificates, marksheets and other education records. Add as many files as you need." types={EDUCATION_TYPES} onUploaded={afterUpload} readOnly={profileReadOnly} />
+            <AttachmentUploader token={token} title="Education documents" description="Attach degree certificates, marksheets and other education records. Add as many files as you need." types={EDUCATION_TYPES} onUploaded={afterUpload} readOnly={uploadReadOnly} />
             {customFormsFor('EDUCATION').map((form) => (
-              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
             ))}
             <div className="px-1">
               <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded education documents ({educationDocuments.length})</h3>
@@ -1224,14 +1401,51 @@ export default function CandidatePortalPage() {
 
         {currentTab === 'employment' && (
           <div role="tabpanel" id="panel-employment" aria-labelledby="tab-employment" className="space-y-5">
-            {sectionPanel('employment', BriefcaseBusiness, 'Employment details', 'Tell us about your current or most recent job.', 'Save employment details')}
+            {sectionPanel('employment', BriefcaseBusiness, 'Current employer', 'Add your current employer and role details.', 'Save employment details')}
+            {candidateFormConfig.sections.employment.enabled && (
+              <SectionCard icon={BriefcaseBusiness} title="Past employers" description="Add your previous employment, starting with your most recent past employer. You can include up to 9 past employers.">
+                <div className="space-y-4">
+                  {pastEmployments.map((employment, index) => (
+                    <div key={`past-employer-${index}`} className="rounded-xl border border-slate-200 p-4">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-semibold text-slate-900">Past employer {index + 1}</h3>
+                        {pastEmployments.length > 1 && (
+                          <button type="button" onClick={() => setPastEmployments((previous) => previous.filter((_, itemIndex) => itemIndex !== index))} disabled={profileReadOnly} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
+                            <Trash2 size={14} aria-hidden="true" /> Remove
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        {PAST_EMPLOYMENT_FIELDS.map((field) => (
+                          <Field
+                            key={`${index}-${field.key}`}
+                            def={{ ...field, key: `past-${index}-${field.key}` }}
+                            value={employment[field.key as keyof PastEmploymentForm]}
+                            disabled={profileReadOnly}
+                            onChange={(value) => setPastEmployments((previous) => previous.map((item, itemIndex) => (
+                              itemIndex === index ? { ...item, [field.key]: value } : item
+                            )))}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {1 + pastEmployments.length < 10 && (
+                    <button type="button" onClick={() => setPastEmployments((previous) => [...previous, emptyPastEmployment()])} disabled={profileReadOnly} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                      <Plus size={16} aria-hidden="true" /> Add more
+                    </button>
+                  )}
+                  <p className="text-xs text-slate-500">{1 + pastEmployments.length} of 10 employer records shown, including your current employer.</p>
+                </div>
+              </SectionCard>
+            )}
             {candidateFormConfig.sections.employment.enabled && candidateFormConfig.employmentDocuments.some((item) => item.enabled) ? (
-              <AttachmentUploader token={token} title="Employment documents" description="Select the document type first, then attach the matching file. You can upload multiple files for the selected type." types={candidateFormConfig.employmentDocuments.filter((item) => item.enabled).map((item) => item.type)} documentCategory="EMPLOYMENT" onUploaded={afterUpload} readOnly={profileReadOnly} />
+              <AttachmentUploader token={token} title="Employment documents" description="Select the document type first, then attach the matching file. You can upload multiple files for the selected type." types={candidateFormConfig.employmentDocuments.filter((item) => item.enabled).map((item) => item.type)} documentCategory="EMPLOYMENT" onUploaded={afterUpload} readOnly={uploadReadOnly} />
             ) : (
               <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">This client has not requested employment document uploads.</p>
             )}
             {customFormsFor('EMPLOYMENT').map((form) => (
-              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
             ))}
             <div className="px-1">
               <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded employment documents ({employmentDocuments.length})</h3>
@@ -1247,7 +1461,7 @@ export default function CandidatePortalPage() {
               <p className="mt-1 text-sm text-slate-600">Download each client-provided form, complete it and upload the completed copy.</p>
             </div>
             {customFormsFor('POLICE_VERIFICATION').map((form) => (
-              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
             ))}
             {customFormsFor('POLICE_VERIFICATION').length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">No police verification form is currently requested.</p>}
           </div>
@@ -1260,7 +1474,7 @@ export default function CandidatePortalPage() {
               <p className="mt-1 text-sm text-slate-600">Download each form provided by the client, complete it and upload the completed copy.</p>
             </div>
             {customFormsFor('BGV').map((form) => (
-              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
             ))}
           </div>
         )}
@@ -1272,7 +1486,7 @@ export default function CandidatePortalPage() {
               <p className="mt-1 text-sm text-slate-600">Forms configured for additional checks in this verification case.</p>
             </div>
             {customFormsFor('OTHER_CHECKS').map((form) => (
-              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
             ))}
           </div>
         )}
@@ -1284,10 +1498,10 @@ export default function CandidatePortalPage() {
               <p className="mt-1 text-sm text-slate-600">ID copies are on the ID numbers tab, and education and employment files are on their own tabs. Use PDF, JPG or PNG files where every corner and number is readable.</p>
             </div>
             {DOCUMENT_GROUPS.map((group) => (
-              <CandidateDocumentUpload key={group.title} token={token} accent={accent} title={group.title} description={group.description} types={group.types} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+              <CandidateDocumentUpload key={group.title} token={token} accent={accent} title={group.title} description={group.description} types={group.types} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
             ))}
             {customFormsFor('OTHER').map((form) => (
-              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={profileReadOnly} />
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
             ))}
             <div className="px-1 pt-2">
               <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded documents ({otherDocuments.length})</h3>
@@ -1303,25 +1517,12 @@ export default function CandidatePortalPage() {
                 <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-600" size={20} aria-hidden="true" />
                 <div>
                   <h2 className="font-semibold text-emerald-900">Consent recorded</h2>
-                  <p className="mt-1 text-sm text-emerald-800">You have authorised the background verification checks. You don&apos;t need to do anything else here.</p>
+                  <p className="mt-1 text-sm text-emerald-800">You have authorised the background verification checks. You can continue uploading any outstanding documents; profile details can no longer be edited.</p>
                 </div>
               </section>
-            ) : !portal.case ? (
-              <SectionCard icon={ShieldCheck} title="Consent" description="Consent opens once your verification case has been created.">
-                <p className="text-sm text-slate-600">Check back soon, or contact {portal.company.name} if this stays empty.</p>
-              </SectionCard>
             ) : !progress.consentReady ? (
-              <SectionCard icon={ShieldCheck} title="Consent" description="Consent is the final step after your details and required documents are complete.">
-                {progress.pending.some((item) => item.key !== 'consent') ? (
-                  <>
-                    <p className="text-sm text-slate-600">Complete these outstanding items before giving consent:</p>
-                    <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-slate-700">
-                      {progress.pending.filter((item) => item.key !== 'consent').map((item) => <li key={item.key}>{item.label}</li>)}
-                    </ul>
-                  </>
-                ) : (
-                  <p className="text-sm text-slate-600">This verification case is finalized. Contact {portal.company.name} if you need help.</p>
-                )}
+              <SectionCard icon={ShieldCheck} title="Consent" description="Consent is unavailable for a finalized verification case.">
+                <p className="text-sm text-slate-600">This verification case is completed or cancelled. Contact {portal.company.name} if you need help.</p>
               </SectionCard>
             ) : (
               <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-6">
@@ -1329,14 +1530,15 @@ export default function CandidatePortalPage() {
                   <ShieldCheck size={18} className="text-amber-700" aria-hidden="true" />
                   <h2 className="font-semibold text-amber-950">Background verification consent</h2>
                 </div>
-                <p className="text-sm leading-6 text-amber-900">{CONSENT_TEXT}</p>
-                <label className="mt-4 flex items-start gap-2.5 text-sm text-amber-950">
-                  <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1 h-4 w-4" />
-                  I have read and agree to the consent statement.
+                <p className="text-sm leading-6 text-amber-900">{consentTextFor(portal.company.name, portal.client?.name)}</p>
+                {!portal.case && <p className="mt-2 text-sm text-amber-900">You can submit consent now. It will be linked to your verification case when one is created.</p>}
+                <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-amber-300 bg-white/70 p-3 text-sm text-amber-950">
+                  <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-amber-700" />
+                  <span>I have read and understood the statement above. I voluntarily agree to the background verification and authorize the use of my information for this purpose.</span>
                 </label>
                 <button type="button" onClick={giveConsent} disabled={!consent || saving} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50">
                   {saving && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}
-                  Give consent
+                  Submit consent
                 </button>
               </section>
             )}

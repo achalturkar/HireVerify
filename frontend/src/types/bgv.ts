@@ -59,7 +59,7 @@ export interface BGVCase {
   checks?: VerificationCheck[];
   verificationStatuses?: VerificationStatus[];
   reportVerificationStatus?: string;
-  consents?: { consentType: string; consentGiven: boolean; revokedAt: string | null; consentedAt?: string | null; createdAt?: string }[];
+  consents?: { consentType: string; consentGiven: boolean; revokedAt: string | null; consentedAt?: string | null; createdAt?: string; consentVersion?: string | null; consentText?: string | null }[];
   events?: { id: string; eventType: string; status?: string | null; message?: string | null; createdAt: string }[];
   _count?: { checks: number };
 }

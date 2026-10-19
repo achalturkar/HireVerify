@@ -17,6 +17,15 @@ const getCandidate = asyncHandler(async (req, res) => {
   return success(res, { message: 'Candidate', data });
 });
 
+const downloadCandidateFormPdf = asyncHandler(async (req, res) => {
+  const doc = await service.buildFormPdf({ id: req.params.id, companyId: req.user.companyId });
+  const safeCode = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="candidate-form-${safeCode}.pdf"`);
+  doc.pipe(res);
+  doc.end();
+});
+
 const listCandidates = asyncHandler(async (req, res) => {
   const pagination = parsePagination(req.query);
   const { items, total } = await service.list({
@@ -38,4 +47,4 @@ const deleteCandidate = asyncHandler(async (req, res) => {
   return success(res, { message: 'Candidate deleted successfully.' });
 });
 
-module.exports = { createCandidate, getCandidate, listCandidates, updateCandidate, deleteCandidate };
+module.exports = { createCandidate, getCandidate, downloadCandidateFormPdf, listCandidates, updateCandidate, deleteCandidate };
