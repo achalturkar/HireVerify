@@ -71,7 +71,7 @@ const ensureDefaultSuperAdmin = async () => {
     });
     if (companyAdminRole) {
       const companyAdminPermissionIds = allPermissions
-        .filter((permission) => ['company.view', 'company.update', 'marketing.view', 'marketing.manage', 'marketing.send'].includes(permission.key))
+        .filter((permission) => ['company.view', 'company.update', 'candidate.export', 'marketing.view', 'marketing.manage', 'marketing.send'].includes(permission.key))
         .map((permission) => permission.id);
       await prisma.rolePermission.createMany({
         data: companyAdminPermissionIds.map((permissionId) => ({ roleId: companyAdminRole.id, permissionId })),

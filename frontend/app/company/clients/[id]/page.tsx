@@ -4,13 +4,13 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
-  ArrowLeft, BarChart3, ChevronLeft, ChevronRight, Download, FileCheck2, FileText, Globe, Mail, Pencil, Phone, Receipt, Users, MapPin, Power, PowerOff, ShieldCheck, UserPlus, Trash2, Building2, SlidersHorizontal, Plus, Check, X,
+  ArrowLeft, BarChart3, ChevronLeft, ChevronRight, Download, FileCheck2, FileText, Globe, Mail, Pencil, Phone, Receipt, Users, MapPin, Power, PowerOff, ShieldCheck, UserPlus, Trash2, Building2, SlidersHorizontal, Plus, Check, X, Search,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getReportVerificationStatus, getVerificationStatus } from '@/src/lib/verification-status';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import { getClient, updateClient, uploadCandidateFormTemplate, removeCandidateFormTemplate, downloadCandidateFormTemplate, activateClient, inactivateClient, listClientPortalUsers, inviteClientPortalUser, updateClientPortalUser, revokeClientPortalUser, listSubclients, createSubclient, updateSubclient, deleteSubclient, ApiError as ClientApiError } from '@/src/lib/api/clients';
-import { listCandidates, createCandidate, sendCandidatePortalLink, ApiError as CandidateApiError } from '@/src/lib/api/candidates';
+import { listCandidates, exportCandidates, createCandidate, sendCandidatePortalLink, ApiError as CandidateApiError } from '@/src/lib/api/candidates';
 import { ApiError as BGVApiError, downloadBGVReport, listBGVCases, listVerificationCheckTypes } from '@/src/lib/api/bgv';
 import type { BGVCase, VerificationCheckType, VerificationType } from '@/src/types/bgv';
 import { downloadInvoicePdf, InvoiceApiError, listInvoices } from '@/src/lib/api/invoices';
@@ -22,9 +22,10 @@ import CandidateFormModal from '@/src/components/layout/company/candidate/Candid
 import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
 import { setClientPortalScope } from '@/src/lib/api/client-portal';
 import type { CandidateFormConfig, CandidateIdentityFieldKey, Client, ClientFormValues, ClientPortalAccountMethod, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
-import type { Candidate, CandidateFormValues, PaginationMeta } from '@/src/types/candidate';
+import type { Candidate, CandidateFormValues, CandidateStatus, PaginationMeta } from '@/src/types/candidate';
 
 const PAGE_SIZE = 10;
+const CANDIDATE_STATUSES: CandidateStatus[] = ['PENDING', 'INVITED', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'ON_HOLD'];
 type TabKey = 'overview' | 'analytics' | 'billing' | 'subclients' | 'candidates' | 'cases' | 'reports' | 'invoices' | 'report-branding' | 'candidate-form' | 'portal-access' | 'client-portal';
 const TABS: { key: TabKey; label: string; icon: typeof Users }[] = [
   { key: 'overview', label: 'Overview', icon: Users },
@@ -151,6 +152,12 @@ export default function ClientDetailPage() {
   const [candidatesPage, setCandidatesPage] = useState(1);
   const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
+  const [candidateSearch, setCandidateSearch] = useState('');
+  const [candidateStatusFilter, setCandidateStatusFilter] = useState<CandidateStatus | ''>('');
+  const [candidateDateFrom, setCandidateDateFrom] = useState('');
+  const [candidateDateTo, setCandidateDateTo] = useState('');
+  const [candidateExporting, setCandidateExporting] = useState(false);
+  const [candidateExportError, setCandidateExportError] = useState<string | null>(null);
   const [candidateModalOpen, setCandidateModalOpen] = useState(false);
   const [candidateSubmitting, setCandidateSubmitting] = useState(false);
   const [candidateCreateMessage, setCandidateCreateMessage] = useState<string | null>(null);
@@ -538,7 +545,18 @@ export default function ClientDetailPage() {
     setCandidatesError(null);
     try {
       const res = await listCandidates(
-        { page: candidatesPage, limit: PAGE_SIZE, clientId: id, subclientId: subclientFilter || undefined, sortBy: 'createdAt', sortOrder: 'desc' },
+        {
+          page: candidatesPage,
+          limit: PAGE_SIZE,
+          clientId: id,
+          subclientId: subclientFilter || undefined,
+          search: candidateSearch || undefined,
+          status: candidateStatusFilter,
+          dateFrom: candidateDateFrom || undefined,
+          dateTo: candidateDateTo || undefined,
+          sortBy: 'createdAt',
+          sortOrder: 'desc',
+        },
         accessToken
       );
       setCandidates(res.items);
@@ -548,13 +566,44 @@ export default function ClientDetailPage() {
     } finally {
       setCandidatesLoading(false);
     }
-  }, [id, candidatesPage, accessToken, subclientFilter]);
+  }, [id, candidatesPage, accessToken, subclientFilter, candidateSearch, candidateStatusFilter, candidateDateFrom, candidateDateTo]);
 
   useEffect(() => {
     if (tab !== 'candidates') return undefined;
     const timer = window.setTimeout(() => { void loadCandidates(); }, 0);
     return () => window.clearTimeout(timer);
   }, [tab, loadCandidates]);
+
+  const downloadCandidateExport = async () => {
+    if (!id || (candidateDateFrom && candidateDateTo && candidateDateFrom > candidateDateTo)) return;
+    setCandidateExporting(true);
+    setCandidateExportError(null);
+    try {
+      const blob = await exportCandidates({
+        clientId: id,
+        subclientId: subclientFilter || undefined,
+        search: candidateSearch || undefined,
+        status: candidateStatusFilter,
+        dateFrom: candidateDateFrom || undefined,
+        dateTo: candidateDateTo || undefined,
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+      }, accessToken);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const safeClientName = (client?.name || 'client').trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_-]/g, '');
+      link.href = url;
+      link.download = `${safeClientName || 'client'}-candidates-${candidateDateFrom || 'all'}-to-${candidateDateTo || 'all'}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setCandidateExportError(err instanceof CandidateApiError ? err.message : 'Could not export candidates.');
+    } finally {
+      setCandidateExporting(false);
+    }
+  };
 
   useEffect(() => {
     if (tab !== 'subclients' && tab !== 'candidates') return undefined;
@@ -1504,25 +1553,50 @@ export default function ClientDetailPage() {
 
       {tab === 'candidates' && (
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-[var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">People</p>
-              <h2 className="mt-0.5 text-[15px] font-semibold">Candidate directory</h2>
-              <p className="mt-0.5 text-[12px] text-[var(--muted)]">{candidatesMeta.total} candidates linked to {client.name}</p>
-              {candidateCreateMessage && <p role="status" className="mt-1 text-[11px] text-[var(--primary)]">{candidateCreateMessage}</p>}
+          <div className="space-y-4 border-b border-[var(--border)] px-4 py-4 sm:px-5 sm:py-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">People</p>
+                <h2 className="mt-0.5 text-[15px] font-semibold">Candidate directory</h2>
+                <p className="mt-0.5 text-[12px] text-[var(--muted)]">{candidatesMeta.total} candidates linked to {client.name}</p>
+                {candidateCreateMessage && <p role="status" className="mt-1 text-[11px] text-[var(--primary)]">{candidateCreateMessage}</p>}
+                {candidateExportError && <p role="alert" className="mt-1 text-[11px] text-[#FF6B6B]">{candidateExportError}</p>}
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {Boolean(user?.role.isSuperAdmin || permissions.includes('candidate.export')) && <button type="button" onClick={() => void downloadCandidateExport()} disabled={candidateExporting || Boolean(candidateDateFrom && candidateDateTo && candidateDateFrom > candidateDateTo)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] px-3.5 py-2.5 text-[12px] font-semibold text-[var(--foreground)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-50">
+                  <Download size={14} />{candidateExporting ? 'Preparing…' : 'Download Excel'}
+                </button>}
+                <button type="button" onClick={() => setCandidateModalOpen(true)} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--primary)] px-3.5 py-2.5 text-[12px] font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90">
+                  <Users size={14} /> Add candidate
+                </button>
+              </div>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <label className="text-[10px] font-medium text-[var(--muted)]">Subclient
-                <select value={subclientFilter} onChange={(event) => { setSubclientFilter(event.target.value); setCandidatesPage(1); }} className="mt-1 block min-w-44 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[11px] text-[var(--foreground)]">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <label className="relative min-w-0 text-[10px] font-medium text-[var(--muted)] xl:col-span-2">Search candidates
+                <Search size={13} className="absolute left-2.5 top-[31px] text-[var(--muted)]" />
+                <input value={candidateSearch} onChange={(event) => { setCandidateSearch(event.target.value); setCandidatesPage(1); }} placeholder="Name, reference, email or mobile" className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-8 pr-3 text-[12px] text-[var(--foreground)]" />
+              </label>
+              <label className="min-w-0 text-[10px] font-medium text-[var(--muted)]">Subclient
+                <select value={subclientFilter} onChange={(event) => { setSubclientFilter(event.target.value); setCandidatesPage(1); }} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[12px] text-[var(--foreground)]">
                   <option value="">All candidates</option>
                   <option value="none">Client only (no subclient)</option>
                   {subclients.map((subclient) => <option key={subclient.id} value={subclient.id}>{subclient.name}</option>)}
                 </select>
               </label>
-              <button onClick={() => setCandidateModalOpen(true)} className="inline-flex items-center justify-center gap-1.5 self-start rounded-lg bg-[var(--primary)] px-3.5 py-2.5 text-[12.5px] font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 sm:self-auto">
-                <Users size={14} /> Add candidate
-              </button>
+              <label className="min-w-0 text-[10px] font-medium text-[var(--muted)]">Status
+                <select value={candidateStatusFilter} onChange={(event) => { setCandidateStatusFilter(event.target.value as CandidateStatus | ''); setCandidatesPage(1); }} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[12px] text-[var(--foreground)]">
+                  <option value="">All statuses</option>
+                  {CANDIDATE_STATUSES.map((status) => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
+                </select>
+              </label>
+              <label className="min-w-0 text-[10px] font-medium text-[var(--muted)]">Added from
+                <input type="date" value={candidateDateFrom} onChange={(event) => { const value = event.target.value; setCandidateDateFrom(value); if (candidateDateTo && value > candidateDateTo) setCandidateDateTo(''); setCandidatesPage(1); }} className="mt-1 block w-full min-w-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[12px] text-[var(--foreground)]" />
+              </label>
+              <label className="min-w-0 text-[10px] font-medium text-[var(--muted)]">Added to
+                <input type="date" value={candidateDateTo} min={candidateDateFrom || undefined} onChange={(event) => { setCandidateDateTo(event.target.value); setCandidatesPage(1); }} className="mt-1 block w-full min-w-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[12px] text-[var(--foreground)]" />
+              </label>
             </div>
+            <p className="text-[11px] text-[var(--muted)]">Showing {candidatesMeta.total} matching candidate{candidatesMeta.total === 1 ? '' : 's'}{candidateDateFrom || candidateDateTo ? ` · Added ${candidateDateFrom || 'any time'} to ${candidateDateTo || 'present'}` : ''}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[740px] text-left text-[13px]">

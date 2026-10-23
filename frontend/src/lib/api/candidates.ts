@@ -127,6 +127,8 @@ export interface ListCandidatesParams {
   clientId?: string;
   subclientId?: string;
   status?: CandidateStatus | '';
+  dateFrom?: string;
+  dateTo?: string;
   includeDeleted?: boolean;
   sortBy?: 'candidateCode' | 'firstName' | 'lastName' | 'email' | 'status' | 'createdAt' | 'updatedAt';
   sortOrder?: 'asc' | 'desc';
@@ -148,6 +150,8 @@ export async function listCandidates(
   if (params.clientId) qs.set('clientId', params.clientId);
   if (params.subclientId) qs.set('subclientId', params.subclientId);
   if (params.status) qs.set('status', params.status);
+  if (params.dateFrom) qs.set('dateFrom', params.dateFrom);
+  if (params.dateTo) qs.set('dateTo', params.dateTo);
   if (params.includeDeleted) qs.set('includeDeleted', 'true');
   qs.set('sortBy', params.sortBy || 'createdAt');
   qs.set('sortOrder', params.sortOrder || 'desc');
@@ -157,6 +161,34 @@ export async function listCandidates(
     items: json.data.data as Candidate[],
     meta: json.data.meta as PaginationMeta,
   };
+}
+
+export async function exportCandidates(
+  params: Pick<ListCandidatesParams, 'search' | 'clientId' | 'subclientId' | 'status' | 'dateFrom' | 'dateTo' | 'sortBy' | 'sortOrder'>,
+  accessToken?: string | null
+): Promise<Blob> {
+  const token = accessToken ?? fallbackAccessToken();
+  const query = buildQuery({
+    search: params.search,
+    clientId: params.clientId,
+    subclientId: params.subclientId,
+    status: params.status,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    sortBy: params.sortBy || 'createdAt',
+    sortOrder: params.sortOrder || 'desc',
+  });
+  const response = await fetch(`${API_BASE}/candidates/export${query}`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => null);
+    throw new ApiError(extractErrorMessage(json, response.status), response.status);
+  }
+
+  return response.blob();
 }
 
 export async function getCandidate(id: string, accessToken?: string | null): Promise<Candidate> {
@@ -184,6 +216,32 @@ export async function downloadCandidateFormPdf(
   const link = document.createElement('a');
   link.href = url;
   link.download = `candidate-form-${candidateCode.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function downloadCandidateExcel(
+  id: string,
+  candidateCode: string,
+  accessToken?: string | null
+): Promise<void> {
+  const token = accessToken ?? fallbackAccessToken();
+  const response = await fetch(`${API_BASE}/candidates/${id}/export`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => null);
+    throw new ApiError(extractErrorMessage(json, response.status), response.status);
+  }
+
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `candidate-${candidateCode.replace(/[^a-zA-Z0-9_-]/g, '_')}.xlsx`;
   document.body.appendChild(link);
   link.click();
   link.remove();

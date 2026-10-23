@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { ApiError, activateCandidatePortal, downloadCandidateFormPdf, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
+import { ApiError, activateCandidatePortal, downloadCandidateExcel, downloadCandidateFormPdf, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import { listBGVCases } from '@/src/lib/api/bgv';
 import type { BGVCase } from '@/src/types/bgv';
@@ -356,6 +356,7 @@ export default function CandidateDetailPage() {
   const router = useRouter();
   const { accessToken, permissions } = useAuth();
   const canUpdateCandidate = permissions.includes('candidate.update');
+  const canExportCandidate = permissions.includes('candidate.export');
   const [candidate, setCandidate] = useState<CandidateDetail | null>(null);
   const [bgvCases, setBgvCases] = useState<BGVCase[]>([]);
   const [casesLoading, setCasesLoading] = useState(false);
@@ -365,6 +366,7 @@ export default function CandidateDetailPage() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [downloadingForm, setDownloadingForm] = useState(false);
+  const [downloadingCandidateExcel, setDownloadingCandidateExcel] = useState(false);
   const [daysInput, setDaysInput] = useState('2');
   const [tab, setTab] = useState<Tab>('summary');
   const [docFilter, setDocFilter] = useState<Category | 'all'>('all');
@@ -586,6 +588,21 @@ export default function CandidateDetailPage() {
     }
   };
 
+  const downloadCandidateDetails = async () => {
+    if (!candidate) return;
+    setDownloadingCandidateExcel(true);
+    setError('');
+    setNotice('');
+    try {
+      await downloadCandidateExcel(id, candidate.candidateCode, accessToken);
+      setNotice('Candidate information Excel downloaded.');
+    } catch (downloadError) {
+      setError(downloadError instanceof ApiError ? downloadError.message : 'Could not download candidate information.');
+    } finally {
+      setDownloadingCandidateExcel(false);
+    }
+  };
+
   if (loading && !candidate) return <div className="grid min-h-[50vh] place-items-center text-[var(--muted)]"><Loader2 className="animate-spin" aria-label="Loading" /></div>;
   if (!candidate) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{error || 'Candidate not found.'}</div>;
 
@@ -639,6 +656,10 @@ export default function CandidateDetailPage() {
               {downloadingForm ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Download size={15} aria-hidden="true" />}
               Download form PDF
             </button>
+            {canExportCandidate && <button type="button" onClick={() => void downloadCandidateDetails()} disabled={downloadingCandidateExcel} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-semibold transition hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50">
+              {downloadingCandidateExcel ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Download size={15} aria-hidden="true" />}
+              Download Excel
+            </button>}
             {canUpdateCandidate ? (
               <label className="sr-only" htmlFor="candidate-status">Candidate status</label>
             ) : null}

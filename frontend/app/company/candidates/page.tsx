@@ -2,12 +2,12 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Clock3, Copy, FileCheck2, Mail, Pencil, Plus, Search, Trash2, UserRound, Users } from 'lucide-react';
+import { CheckCircle2, Clock3, Copy, Download, FileCheck2, Mail, Pencil, Plus, Search, Trash2, UserRound, Users } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import CandidateConfirmDialog from '@/src/components/layout/company/candidate/CandidateConfirmDialog';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
 import { formatCandidateName } from '@/src/lib/candidate-name';
-import { ApiError, createCandidate, deleteCandidate, listCandidates, sendCandidatePortalLink, updateCandidate } from '@/src/lib/api/candidates';
+import { ApiError, createCandidate, deleteCandidate, exportCandidates, listCandidates, sendCandidatePortalLink, updateCandidate } from '@/src/lib/api/candidates';
 import { listClients, listSubclients } from '@/src/lib/api/clients';
 import type { Candidate, CandidateFormValues, CandidateStatus, PaginationMeta } from '@/src/types/candidate';
 import type { Client } from '@/src/types/client';
@@ -51,6 +51,8 @@ export default function CandidatesPage() {
   const [clientId, setClientId] = useState('');
   const [subclientId, setSubclientId] = useState('');
   const [status, setStatus] = useState<CandidateStatus | ''>('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [summaryCounts, setSummaryCounts] = useState<Record<string, number | null>>({ '': null, PENDING: null, IN_PROGRESS: null, COMPLETED: null });
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -60,6 +62,7 @@ export default function CandidatesPage() {
   const [active, setActive] = useState<Candidate | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Candidate | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [candidateNotice, setCandidateNotice] = useState<string | null>(null);
   const [candidateInviteUrl, setCandidateInviteUrl] = useState<string | null>(null);
@@ -67,12 +70,12 @@ export default function CandidatesPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const result = await listCandidates({ page, limit: PAGE_SIZE, search, clientId: clientId || undefined, subclientId: subclientId || undefined, status, sortBy: 'createdAt', sortOrder: 'desc' }, accessToken);
+      const result = await listCandidates({ page, limit: PAGE_SIZE, search, clientId: clientId || undefined, subclientId: subclientId || undefined, status, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, sortBy: 'createdAt', sortOrder: 'desc' }, accessToken);
       setItems(result.items); setMeta(result.meta);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load candidates.');
     } finally { setLoading(false); }
-  }, [accessToken, page, search, clientId, subclientId, status]);
+  }, [accessToken, page, search, clientId, subclientId, status, dateFrom, dateTo]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, 0);
@@ -92,6 +95,8 @@ export default function CandidatesPage() {
           clientId: clientId || undefined,
           subclientId: subclientId || undefined,
           status: cardStatus || undefined,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined,
           sortBy: 'createdAt',
           sortOrder: 'desc',
         }, accessToken)
@@ -106,7 +111,7 @@ export default function CandidatesPage() {
     };
     void loadSummary();
     return () => { active = false; };
-  }, [accessToken, clientId, search, subclientId]);
+  }, [accessToken, clientId, search, subclientId, dateFrom, dateTo]);
 
   useEffect(() => {
     listClients({ page: 1, limit: 200, sortBy: 'name', sortOrder: 'asc' }, accessToken)
@@ -193,15 +198,58 @@ export default function CandidatesPage() {
     finally { setSubmitting(false); }
   };
 
+  const downloadCandidates = async () => {
+    setExporting(true);
+    setError(null);
+    try {
+      const blob = await exportCandidates({
+        search,
+        clientId: clientId || undefined,
+        subclientId: subclientId || undefined,
+        status,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+      }, accessToken);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'candidates-export.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not export candidates.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const canExportCandidates = Boolean(user?.role.isSuperAdmin || user?.permissions.includes('candidate.export'));
+  const hasCandidateFilters = Boolean(search || clientId || subclientId || status || dateFrom || dateTo);
+  const invalidDateRange = Boolean(dateFrom && dateTo && dateFrom > dateTo);
+  const clearCandidateFilters = () => {
+    setPage(1);
+    setSearch('');
+    setClientId('');
+    setSubclientId('');
+    setStatus('');
+    setDateFrom('');
+    setDateTo('');
+    setSubclients([]);
+    setSubclientsError(null);
+  };
   const clientMap = new Map(clients.map((client) => [client.id, client.name]));
 
   return <div className="mx-auto max-w-6xl space-y-6">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[11px] uppercase tracking-[0.14em] text-[var(--primary)]">Verification subjects</p><h1 className="text-[26px] font-semibold">Candidates</h1><p className="mt-1 text-[13px] text-[var(--muted)]">People linked to background verification cases.</p></div><button onClick={() => { setActive(null); setFormError(null); setModal('create'); }} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[13px] font-semibold text-[var(--primary-foreground)]"><Plus size={15} />Add candidate</button></div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[11px] uppercase tracking-[0.14em] text-[var(--primary)]">Verification subjects</p><h1 className="text-[26px] font-semibold">Candidates</h1><p className="mt-1 text-[13px] text-[var(--muted)]">People linked to background verification cases.</p></div><div className="flex flex-wrap gap-2">{canExportCandidates && <button type="button" onClick={downloadCandidates} disabled={exporting || invalidDateRange} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2.5 text-[13px] font-semibold text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)] disabled:opacity-50"><Download size={15} />{exporting ? 'Preparing…' : 'Download Excel'}</button>}<button onClick={() => { setActive(null); setFormError(null); setModal('create'); }} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[13px] font-semibold text-[var(--primary-foreground)]"><Plus size={15} />Add candidate</button></div></div>
     {candidateNotice && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-[12px] text-emerald-700"><span>{candidateNotice}</span>{candidateInviteUrl && <button type="button" onClick={copyCandidateInvite} className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 px-2.5 py-1.5 font-semibold"><Copy size={13} />Copy invitation link</button>}</div>}
     <section aria-label="Candidate summary" className="space-y-3">
       <div>
         <h2 className="text-[15px] font-semibold text-[var(--foreground)]">Candidate overview</h2>
-        <p className="mt-0.5 text-[11px] text-[var(--muted)]">Select a card to filter candidates. Counts follow the search and client filters.</p>
+        <p className="mt-0.5 text-[11px] text-[var(--muted)]">Select a card to filter candidates. Counts follow the search, client, and date filters.</p>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {candidateSummaryCards.map((card) => {
@@ -219,7 +267,34 @@ export default function CandidatesPage() {
       </div>
       {summaryError && <p role="alert" className="text-[12px] text-[#FF6B6B]">{summaryError}</p>}
     </section>
-    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap"><label className="relative flex-1"><Search size={15} className="absolute left-3 top-3 text-[var(--muted)]" /><input value={search} onChange={(event) => { setPage(1); setSearch(event.target.value); }} placeholder="Search candidates" className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-9 pr-3 text-[13px]" /></label><select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as CandidateStatus | ''); }} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px]" aria-label="Filter by candidate status"><option value="">All statuses</option>{Object.keys(statusStyle).map((value) => <option key={value} value={value}>{statusLabel[value as CandidateStatus]}</option>)}</select><select value={clientId} onChange={(event) => { setPage(1); setClientId(event.target.value); setSubclientId(''); setSubclients([]); setSubclientsError(null); }} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px]" aria-label="Filter candidates by client"><option value="">All clients</option>{clients.filter((client) => !client.parentClientId).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select>{clientId && <select value={subclientId} onChange={(event) => { setPage(1); setSubclientId(event.target.value); }} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px]" aria-label="Filter candidates by subclient"><option value="">All subclients</option><option value="none">Direct client candidates</option>{subclients.map((subclient) => <option key={subclient.id} value={subclient.id}>{subclient.name}</option>)}</select>}</div>
+    <section aria-label="Candidate filters" className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+        <label className="relative min-w-0 text-[11px] font-medium text-[var(--muted)] sm:col-span-2 xl:col-span-2">Search
+          <Search size={15} className="absolute left-3 top-[34px] text-[var(--muted)]" />
+          <input value={search} onChange={(event) => { setPage(1); setSearch(event.target.value); }} placeholder="Name, reference, email or mobile" className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-9 pr-3 text-[13px] text-[var(--foreground)]" />
+        </label>
+        <label className="min-w-0 text-[11px] font-medium text-[var(--muted)]">Status
+          <select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as CandidateStatus | ''); }} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)]" aria-label="Filter by candidate status"><option value="">All statuses</option>{Object.keys(statusStyle).map((value) => <option key={value} value={value}>{statusLabel[value as CandidateStatus]}</option>)}</select>
+        </label>
+        <label className="min-w-0 text-[11px] font-medium text-[var(--muted)]">Client
+          <select value={clientId} onChange={(event) => { setPage(1); setClientId(event.target.value); setSubclientId(''); setSubclients([]); setSubclientsError(null); }} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)]" aria-label="Filter candidates by client"><option value="">All clients</option>{clients.filter((client) => !client.parentClientId).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select>
+        </label>
+        {clientId && <label className="min-w-0 text-[11px] font-medium text-[var(--muted)]">Subclient
+          <select value={subclientId} onChange={(event) => { setPage(1); setSubclientId(event.target.value); }} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)]" aria-label="Filter candidates by subclient"><option value="">All subclients</option><option value="none">Direct client candidates</option>{subclients.map((subclient) => <option key={subclient.id} value={subclient.id}>{subclient.name}</option>)}</select>
+        </label>}
+        <label className="min-w-0 text-[11px] font-medium text-[var(--muted)]">Added from
+          <input type="date" value={dateFrom} onChange={(event) => { const value = event.target.value; setDateFrom(value); if (dateTo && value > dateTo) setDateTo(''); setPage(1); }} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)]" />
+        </label>
+        <label className="min-w-0 text-[11px] font-medium text-[var(--muted)]">Added to
+          <input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)]" />
+        </label>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
+        <p className="text-[11px] text-[var(--muted)]">{meta.total} matching candidate{meta.total === 1 ? '' : 's'}{dateFrom || dateTo ? ` · Added ${dateFrom || 'any time'} to ${dateTo || 'present'}` : ''}</p>
+        {hasCandidateFilters && <button type="button" onClick={clearCandidateFilters} className="rounded-md px-2.5 py-1.5 text-[12px] font-medium text-[var(--primary)] hover:bg-[var(--primary)]/10">Clear filters</button>}
+      </div>
+      {invalidDateRange && <p role="alert" className="mt-2 text-[12px] text-[#FF6B6B]">The start date must be on or before the end date.</p>}
+    </section>
     {subclientsError && <p role="alert" className="text-[12px] text-[#FF6B6B]">{subclientsError}</p>}
     <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]"><div className="overflow-x-auto"><table className="w-full text-left text-[13px]"><thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wider text-[var(--muted)]"><tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Client</th><th className="px-5 py-3">Cases</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Actions</th></tr></thead><tbody className="divide-y divide-[var(--border)]">
       {loading ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]">Loading candidates...</td></tr> : error ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[#FF6B6B]">{error}</td></tr> : items.length === 0 ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]"><Users size={24} className="mx-auto mb-2" />No candidates found.</td></tr> : items.map((candidate) => <tr key={candidate.id} onClick={() => { window.location.href = `/company/candidate/${candidate.id}`; }} className="cursor-pointer transition-colors hover:bg-[var(--surface-muted)]"><td className="px-5 py-4 font-mono text-[12px] text-[var(--muted)]">{candidate.candidateCode}</td><td className="px-5 py-4"><Link href={`/company/candidate/${candidate.id}`} className="font-medium hover:text-[var(--primary)]">{formatCandidateName(candidate)}</Link><p className="text-[11px] text-[var(--muted)]">{candidate.email}</p></td><td className="px-5 py-4 text-[var(--muted)]"><p>{clientMap.get(candidate.clientId) ?? '—'}</p>{candidate.subclient?.name && <p className="mt-0.5 text-[11px]">Subclient: {candidate.subclient.name}</p>}</td><td className="px-5 py-4">{candidate.bgvCaseCount ?? 0}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${statusStyle[candidate.status]}`}>{statusLabel[candidate.status]}</span></td><td className="px-5 py-4 text-right"><div className="inline-flex items-center gap-1">

@@ -196,6 +196,21 @@ const list = async ({ companyId, query }) => {
   return { items: result.items.map(toDto), total: result.total };
 };
 
+const listForExport = async ({ companyId, query }) => repo.listForExport({
+  companyId,
+  candidateId: query.candidateId,
+  search: query.search,
+  clientId: query.clientId,
+  subclientId: query.subclientId,
+  status: query.status,
+  dateFrom: query.dateFrom,
+  dateTo: query.dateTo,
+  sortBy: ['candidateCode', 'firstName', 'lastName', 'email', 'status', 'createdAt', 'updatedAt'].includes(query.sortBy)
+    ? query.sortBy
+    : 'createdAt',
+  sortOrder: ['asc', 'desc'].includes(query.sortOrder) ? query.sortOrder : 'desc',
+});
+
 const update = async ({ id, companyId, payload, currentUser }) => {
   const existing = await repo.findById(id, companyId);
   if (!existing) throw new NotFoundError('Candidate not found');
@@ -248,4 +263,4 @@ const remove = async ({ id, companyId }) => {
   await repo.softDelete(id);
 };
 
-module.exports = { create, getById, buildFormPdf, list, update, remove };
+module.exports = { create, getById, buildFormPdf, list, listForExport, update, remove };

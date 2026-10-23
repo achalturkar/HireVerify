@@ -90,10 +90,17 @@ const listValidator = {
     clientId: Joi.string().uuid(),
     subclientId: Joi.alternatives().try(Joi.string().uuid(), Joi.string().valid('none')),
     status: Joi.string().valid(...STATUSES),
+    dateFrom: Joi.string().isoDate(),
+    dateTo: Joi.string().isoDate(),
     sortBy: Joi.string().valid('candidateCode', 'firstName', 'lastName', 'email', 'status', 'createdAt', 'updatedAt'),
     sortOrder: Joi.string().valid('asc', 'desc'),
     includeDeleted: Joi.string().valid('true', 'false'),
-  }),
+  }).custom((query, helpers) => {
+    if (query.dateFrom && query.dateTo && query.dateFrom > query.dateTo) {
+      return helpers.error('date.range');
+    }
+    return query;
+  }).messages({ 'date.range': '"dateFrom" must be on or before "dateTo"' }),
 };
 
 const idParamValidator = { params: Joi.object({ id: Joi.string().uuid().required() }) };
