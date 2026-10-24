@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, ArrowRight, ArrowUpRight, Building2, CheckCircle2, Clock3, Copy, Download, FileCheck2, FileText, KeyRound, MessageSquareText, Plus, RefreshCw, Receipt, Sparkles, Users, X, Eye, Search } from 'lucide-react';
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, Clock3, Copy, Download, FileCheck2, FileText, KeyRound, MessageSquareText, Plus, RefreshCw, Receipt, Sparkles, Users, X, Eye, Search } from 'lucide-react';
+import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { changePassword } from '@/src/lib/api/users';
 import { getReportVerificationStatus, getVerificationStatus } from '@/src/lib/verification-status';
@@ -102,6 +102,9 @@ export default function ClientPortalPage() {
   const [dashboard, setDashboard] = useState<PortalDashboardSummary | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [analyticsYear, setAnalyticsYear] = useState(new Date().getFullYear());
+  const [analyticsCurrency, setAnalyticsCurrency] = useState('');
   const updateFilter = (key: keyof PortalListFilters, value: string) => {
     setPage(1);
     setFilters((current) => ({ ...current, [key]: value }));
@@ -174,13 +177,13 @@ export default function ClientPortalPage() {
     setDashboardLoading(true);
     setDashboardError(null);
     try {
-      setDashboard(await getPortalDashboard(accessToken));
+      setDashboard(await getPortalDashboard(accessToken, analyticsPeriod, analyticsYear));
     } catch (loadError) {
       setDashboardError(errorMessage(loadError, 'Could not load dashboard data.'));
     } finally {
       setDashboardLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, analyticsPeriod, analyticsYear]);
 
   useEffect(() => {
     if (authLoading || !isPortalUser || section !== 'dashboard') return;
@@ -359,17 +362,21 @@ export default function ClientPortalPage() {
         iconBg: 'bg-violet-500/10 text-violet-700',
         href: '/client-portal/invoices',
       }] : []),
-      ...(dashboard?.permissions.subclients ? [{
-        label: 'Subclients',
-        value: dashboard.counts.subclients,
-        icon: Building2,
-        href: '/client-portal/subclients',
-        detail: 'Organizations managed under your account',
-        accent: 'text-cyan-600 bg-cyan-500/10',
-        iconBg: 'bg-cyan-500/10 text-cyan-700',
-      }] : []),
     ];
     const chartHasData = dashboard?.monthlyActivity.some((month) => (month.candidates ?? 0) > 0 || (month.cases ?? 0) > 0 || (month.reports ?? 0) > 0 || (month.invoices ?? 0) > 0) ?? false;
+    const invoiceCurrencies = dashboard?.invoiceAnalytics.map((item) => item.currency) ?? [];
+    const activeCurrency = invoiceCurrencies.includes(analyticsCurrency) ? analyticsCurrency : invoiceCurrencies[0] || 'INR';
+    const selectedInvoiceAnalytics = dashboard?.invoiceAnalytics.find((item) => item.currency === activeCurrency);
+    const financialTrend = dashboard?.financialActivity.map((item) => ({
+      label: item.label,
+      invoiced: item.currencies.find((currency) => currency.currency === activeCurrency)?.invoiced ?? 0,
+      paid: item.currencies.find((currency) => currency.currency === activeCurrency)?.paid ?? 0,
+    })) ?? [];
+    const formatMoney = (value: number) => new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: activeCurrency,
+      maximumFractionDigits: 0,
+    }).format(value);
     const quickLinks = [
       ...(dashboard?.permissions.cases ? [{
         label: 'Track case progress',
@@ -392,13 +399,6 @@ export default function ClientPortalPage() {
         icon: Receipt,
         accent: 'bg-amber-500/10 text-amber-700',
       }] : []),
-      ...(dashboard?.permissions.subclients ? [{
-        label: 'Manage subclients',
-        description: `${(dashboard.counts.subclients ?? 0).toLocaleString()} subclients in your account`,
-        href: '/client-portal/subclients',
-        icon: Building2,
-        accent: 'bg-cyan-500/10 text-cyan-700',
-      }] : []),
       {
         label: 'Request support',
         description: 'Ask your account team for help',
@@ -408,6 +408,22 @@ export default function ClientPortalPage() {
       },
     ];
     const recentUpdateGroups = [
+      ...(dashboard?.permissions.candidates ? [{
+        id: 'candidates',
+        title: 'Candidates',
+        count: dashboard.counts.candidates ?? 0,
+        countLabel: 'candidate records',
+        href: '/client-portal/candidates',
+        icon: Users,
+        accent: 'bg-sky-500/10 text-sky-700',
+        latest: dashboard.recentCandidates[0] ? {
+          title: dashboard.recentCandidates[0].fullName,
+          detail: `${dashboard.recentCandidates[0].candidateCode} · New candidate`,
+          date: dateTimeText(dashboard.recentCandidates[0].createdAt),
+          href: `/client-portal/candidates/${dashboard.recentCandidates[0].id}`,
+          action: 'View candidate',
+        } : null,
+      }] : []),
       ...(dashboard?.permissions.cases ? [{
         id: 'cases',
         title: 'BGV cases',
@@ -456,16 +472,6 @@ export default function ClientPortalPage() {
           action: 'View invoices',
         } : null,
       }] : []),
-      ...(dashboard?.permissions.subclients ? [{
-        id: 'subclients',
-        title: 'Subclients',
-        count: dashboard.counts.subclients ?? 0,
-        countLabel: 'managed organizations',
-        href: '/client-portal/subclients',
-        icon: Building2,
-        accent: 'bg-cyan-500/10 text-cyan-700',
-        latest: null,
-      }] : []),
     ];
 
     return (
@@ -488,11 +494,6 @@ export default function ClientPortalPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {dashboard?.permissions.subclients && (
-                <Link href="/client-portal/subclients" className="inline-flex w-fit shrink-0 items-center justify-center gap-2 rounded-xl border border-current/25 bg-black/5 px-4 py-2.5 text-[12px] font-semibold transition hover:bg-black/10">
-                  <Building2 size={15} />Manage subclients
-                </Link>
-              )}
               {hasPortalPermission(permissions, 'clientportal.candidates.create', isPortalAdmin) && (
                 <Link href="/client-portal/candidates" className="inline-flex w-fit shrink-0 items-center justify-center gap-2 rounded-xl bg-[var(--primary-foreground)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary)] shadow-sm transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current">
                   <Plus size={15} />Add candidate
@@ -504,6 +505,23 @@ export default function ClientPortalPage() {
             </div>
           </div>
         </section>
+
+        {dashboard?.notifications.length ? <section aria-label="Client portal notifications" className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+          <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4 sm:px-6">
+            <div><h3 className="text-[14px] font-semibold">Latest notifications</h3><p className="mt-1 text-[11px] text-[var(--muted)]">New candidates, completed cases, reports, invoices, and payments.</p></div>
+            <span className="rounded-full bg-[var(--primary)]/10 px-2.5 py-1 text-[10px] font-semibold text-[var(--primary)]">{dashboard.notifications.length} updates</span>
+          </div>
+          <div className="grid divide-y divide-[var(--border)] md:grid-cols-2 md:divide-y-0">
+            {dashboard.notifications.slice(0, 6).map((item) => <Link key={item.id} href={item.href} className="flex min-w-0 items-start gap-3 px-5 py-3.5 transition hover:bg-[var(--surface-muted)] sm:px-6">
+              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--primary)]" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[11px] font-semibold">{item.title}</span>
+                <span className="mt-0.5 block truncate text-[10px] text-[var(--muted)]">{item.description}</span>
+              </span>
+              <span className="shrink-0 text-[9px] text-[var(--muted)]">{dateText(item.createdAt)}</span>
+            </Link>)}
+          </div>
+        </section> : null}
 
         <section aria-label="Recent portal updates" className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4 sm:px-6">
@@ -595,8 +613,15 @@ export default function ClientPortalPage() {
                 <div className="grid gap-4 xl:grid-cols-[1.4fr_0.6fr]">
                   {dashboard.monthlyActivity.length > 0 && <section className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-6">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div><h3 className="text-[14px] font-semibold">Activity over time</h3><p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Monthly candidates, BGV cases, completed reports, and invoices for your organization.</p></div>
-                      <span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-medium text-[var(--muted)]">Last 12 months</span>
+                      <div><h3 className="text-[14px] font-semibold">Workspace performance</h3><p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Candidate growth, BGV cases, completed reports, and invoice volume.</p></div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select aria-label="Analytics time grouping" value={analyticsPeriod} onChange={(event) => setAnalyticsPeriod(event.target.value as 'monthly' | 'yearly')} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-[10px] font-semibold">
+                          <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
+                        </select>
+                        <select aria-label="Analytics year" value={analyticsYear} onChange={(event) => setAnalyticsYear(Number(event.target.value))} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-[10px] font-semibold">
+                          {Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index).map((year) => <option key={year} value={year}>{analyticsPeriod === 'yearly' ? `Through ${year}` : year}</option>)}
+                        </select>
+                      </div>
                     </div>
                     {chartHasData
                       ? <div className="mt-5 h-[300px] w-full" role="img" aria-label="Line chart showing monthly candidate, BGV case, completed report, and invoice activity">
@@ -617,7 +642,7 @@ export default function ClientPortalPage() {
                       : <div className="mt-5 flex h-[220px] flex-col items-center justify-center rounded-xl bg-[var(--surface-muted)] px-4 text-center">
                         <Activity size={22} className="text-[var(--muted)]" />
                         <p className="mt-3 text-[12px] font-medium">No activity to chart yet</p>
-                        <p className="mt-1 max-w-sm text-[11px] leading-5 text-[var(--muted)]">When candidates, cases, or invoices are added, their month-by-month activity will appear here.</p>
+                        <p className="mt-1 max-w-sm text-[11px] leading-5 text-[var(--muted)]">When candidates, cases, reports, or invoices are added, this performance chart will update.</p>
                       </div>}
                   </section>}
 
@@ -637,6 +662,49 @@ export default function ClientPortalPage() {
                     </div>
                   </section>}
                 </div>
+
+                {dashboard.permissions.invoices && <section aria-label="Invoice analytics" className="space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--primary)]">Billing intelligence</p><h3 className="mt-1 text-[15px] font-semibold">Invoice performance</h3><p className="mt-1 text-[11px] text-[var(--muted)]">Lifetime billed, collected, outstanding, and overdue balances.</p></div>
+                    <div className="flex items-center gap-2">
+                      {invoiceCurrencies.length > 1 && <select aria-label="Invoice analytics currency" value={activeCurrency} onChange={(event) => setAnalyticsCurrency(event.target.value)} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-[10px] font-semibold">
+                        {invoiceCurrencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+                      </select>}
+                      <Link href="/client-portal/invoices" className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-3 py-2 text-[10px] font-semibold hover:bg-[var(--surface-muted)]">All invoice activity<ArrowUpRight size={13} /></Link>
+                    </div>
+                  </div>
+                  {!selectedInvoiceAnalytics
+                    ? <div className="rounded-xl bg-[var(--surface-muted)] px-4 py-8 text-center text-[11px] text-[var(--muted)]">Invoice analytics will appear when invoices are issued.</div>
+                    : <>
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        {[
+                          { label: 'Total invoiced', value: formatMoney(selectedInvoiceAnalytics.totalInvoiced), detail: `${selectedInvoiceAnalytics.invoices} issued invoices`, color: 'text-slate-700' },
+                          { label: 'Payments received', value: formatMoney(selectedInvoiceAnalytics.totalPaid), detail: 'Recorded payments', color: 'text-emerald-700' },
+                          { label: 'Outstanding', value: formatMoney(selectedInvoiceAnalytics.outstanding), detail: 'Balance to be paid', color: 'text-amber-700' },
+                          { label: 'Overdue', value: formatMoney(selectedInvoiceAnalytics.overdue), detail: `${selectedInvoiceAnalytics.overdueInvoices} overdue invoices`, color: 'text-rose-700' },
+                        ].map((metric) => <div key={metric.label} className="rounded-xl border border-[var(--border)] px-4 py-3">
+                          <p className="text-[10px] font-medium text-[var(--muted)]">{metric.label}</p><p className={`mt-1 truncate text-lg font-semibold tabular-nums ${metric.color}`}>{metric.value}</p><p className="mt-1 text-[9px] text-[var(--muted)]">{metric.detail}</p>
+                        </div>)}
+                      </div>
+                      <div className="h-[240px] w-full" role="img" aria-label={`Invoice amount billed and payments received by ${analyticsPeriod === 'monthly' ? 'month' : 'year'} in ${activeCurrency}`}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={financialTrend} margin={{ top: 8, right: 12, left: -14, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="invoiceBilledGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6C8FF5" stopOpacity={0.34} /><stop offset="100%" stopColor="#6C8FF5" stopOpacity={0.02} /></linearGradient>
+                              <linearGradient id="invoicePaidGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#16A98C" stopOpacity={0.3} /><stop offset="100%" stopColor="#16A98C" stopOpacity={0.02} /></linearGradient>
+                            </defs>
+                            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'var(--muted)', fontSize: 10 }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--muted)', fontSize: 10 }} />
+                            <Tooltip formatter={(value) => formatMoney(Number(value ?? 0))} contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--foreground)', fontSize: 11 }} />
+                            <Legend verticalAlign="bottom" height={24} wrapperStyle={{ fontSize: 10, color: 'var(--muted)' }} />
+                            <Area type="monotone" dataKey="invoiced" name="Invoiced" stroke="#6C8FF5" strokeWidth={2} fill="url(#invoiceBilledGradient)" />
+                            <Area type="monotone" dataKey="paid" name="Payments received" stroke="#16A98C" strokeWidth={2} fill="url(#invoicePaidGradient)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </>}
+                </section>}
 
                 {dashboard.permissions.cases && <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
                   <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">

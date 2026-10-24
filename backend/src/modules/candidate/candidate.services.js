@@ -69,6 +69,7 @@ const toDto = (candidate) => ({
   employmentHistory: candidate.employmentHistory || [],
   currentAddress: candidate.currentAddress,
   permanentAddress: candidate.permanentAddress,
+  addressVerificationLocations: candidate.addressVerificationLocations || [],
   status: candidate.status,
   createdById: candidate.createdById,
   updatedById: candidate.updatedById,

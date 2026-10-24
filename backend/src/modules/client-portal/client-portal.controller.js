@@ -125,6 +125,132 @@ const getCandidateFormConfig = asyncHandler(async (req, res) => {
   return success(res, { message: 'Candidate form configuration', data: normalizeConfig(client.candidateFormConfig) });
 });
 
+const getNotifications = asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  const scope = { companyId: req.user.companyId, clientId: req.user.clientId };
+  const [candidates, cases, completedCases, reports, invoices, payments] = await Promise.all([
+    req.permissions.has('clientportal.candidates.view')
+      ? prisma.candidate.findMany({
+        where: { ...scope, isDeleted: false },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: { id: true, candidateCode: true, fullName: true, createdAt: true },
+      })
+      : [],
+    req.permissions.has('clientportal.cases.view')
+      ? prisma.bGVCase.findMany({
+        where: scope,
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: { id: true, caseNumber: true, status: true, createdAt: true, completedAt: true, candidate: { select: { fullName: true } } },
+      })
+      : [],
+    req.permissions.has('clientportal.cases.view')
+      ? prisma.bGVCase.findMany({
+        where: { ...scope, status: 'COMPLETED', completedAt: { not: null } },
+        orderBy: { completedAt: 'desc' },
+        take: 10,
+        select: { id: true, caseNumber: true, completedAt: true, candidate: { select: { fullName: true } } },
+      })
+      : [],
+    req.permissions.has('clientportal.reports.view')
+      ? prisma.bGVCase.findMany({
+        where: { ...scope, status: 'COMPLETED', completedAt: { not: null } },
+        orderBy: { completedAt: 'desc' },
+        take: 10,
+        select: { id: true, caseNumber: true, completedAt: true, candidate: { select: { fullName: true } } },
+      })
+      : [],
+    req.permissions.has('clientportal.invoices.view')
+      ? prisma.invoice.findMany({
+        where: { ...scope, status: { notIn: ['DRAFT', 'VOID'] } },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: {
+          id: true,
+          invoiceNumber: true,
+          total: true,
+          currency: true,
+          createdAt: true,
+          sentAt: true,
+        },
+      })
+      : [],
+    req.permissions.has('clientportal.invoices.view')
+      ? prisma.invoicePayment.findMany({
+        where: {
+          invoice: {
+            is: {
+              companyId: req.user.companyId,
+              clientId: req.user.clientId,
+              status: { notIn: ['DRAFT', 'VOID'] },
+            },
+          },
+        },
+        orderBy: { paymentDate: 'desc' },
+        take: 10,
+        select: {
+          id: true,
+          amount: true,
+          paymentDate: true,
+          invoice: { select: { invoiceNumber: true, currency: true } },
+        },
+      })
+      : [],
+  ]);
+  const notifications = [
+    ...candidates.map((candidate) => ({
+      id: `candidate:${candidate.id}`,
+      type: 'candidate',
+      title: 'New candidate added',
+      description: `${candidate.fullName} · ${candidate.candidateCode}`,
+      createdAt: candidate.createdAt,
+      href: `/client-portal/candidates/${candidate.id}`,
+    })),
+    ...cases.map((item) => ({
+      id: `case:${item.id}`,
+      type: 'case',
+      title: 'New BGV case created',
+      description: `${item.caseNumber} · ${item.candidate.fullName}`,
+      createdAt: item.createdAt,
+      href: `/client-portal/cases/${item.id}`,
+    })),
+    ...completedCases.map((item) => ({
+      id: `case_completed:${item.id}`,
+      type: 'case_completed',
+      title: 'BGV case completed',
+      description: `${item.caseNumber} · ${item.candidate.fullName}`,
+      createdAt: item.completedAt,
+      href: `/client-portal/cases/${item.id}`,
+    })),
+    ...reports.map((item) => ({
+      id: `report:${item.id}`,
+      type: 'report',
+      title: 'Report generated',
+      description: `${item.caseNumber} · ${item.candidate.fullName}`,
+      createdAt: item.completedAt,
+      href: '/client-portal/reports',
+    })),
+    ...invoices.map((invoice) => ({
+      id: `invoice:${invoice.id}`,
+      type: 'invoice',
+      title: 'New invoice issued',
+      description: `${invoice.invoiceNumber} · ${invoice.currency} ${Number(invoice.total).toLocaleString('en-IN')}`,
+      createdAt: invoice.sentAt || invoice.createdAt,
+      href: '/client-portal/invoices',
+    })),
+    ...payments.map((payment) => ({
+      id: `payment:${payment.id}`,
+      type: 'payment',
+      title: 'Invoice payment recorded',
+      description: `${payment.invoice.invoiceNumber} · ${payment.invoice.currency} ${Number(payment.amount).toLocaleString('en-IN')}`,
+      createdAt: payment.paymentDate,
+      href: '/client-portal/invoices',
+    })),
+  ].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt)).slice(0, 20);
+  return success(res, { message: 'Client portal notifications', data: notifications });
+});
+
 const getDashboard = asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   const canViewCandidates = req.permissions.has('clientportal.candidates.view');
@@ -133,12 +259,17 @@ const getDashboard = asyncHandler(async (req, res) => {
   const canViewInvoices = req.permissions.has('clientportal.invoices.view');
   const canViewSubclients = req.permissions.has('clientportal.subclients.view') || req.permissions.has('clientportal.subclients.manage');
   const scope = { companyId: req.user.companyId, clientId: req.user.clientId };
-  const monthStart = new Date();
-  monthStart.setUTCDate(1);
-  monthStart.setUTCHours(0, 0, 0, 0);
-  monthStart.setUTCMonth(monthStart.getUTCMonth() - 11);
+  const period = req.query.period === 'yearly' ? 'yearly' : 'monthly';
+  const requestedYear = Number(req.query.year);
+  const selectedYear = Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= 2200
+    ? requestedYear
+    : new Date().getUTCFullYear();
+  const firstYear = period === 'monthly' ? selectedYear : selectedYear - 4;
+  const trendStart = new Date(Date.UTC(firstYear, 0, 1));
+  const trendEnd = new Date(Date.UTC(selectedYear + 1, 0, 1));
+  const bucketCount = period === 'monthly' ? 12 : 5;
   const invoiceWhere = { ...scope, status: { notIn: ['DRAFT', 'VOID'] } };
-  const [candidateCount, caseCount, openCaseCount, completedCaseCount, reportCount, invoiceCount, subclientCount, chartCandidates, chartCases, chartReports, chartInvoices, recentCases, recentReports, recentInvoices] = await Promise.all([
+  const [candidateCount, caseCount, openCaseCount, completedCaseCount, reportCount, invoiceCount, subclientCount, chartCandidates, chartCases, chartReports, recentCandidates, recentCases, recentCompletedCases, recentReports, recentInvoices, invoiceRows] = await Promise.all([
     canViewCandidates ? prisma.candidate.count({ where: { ...scope, isDeleted: false } }) : null,
     canViewCases ? prisma.bGVCase.count({ where: scope }) : null,
     canViewCases ? prisma.bGVCase.count({ where: { ...scope, status: { notIn: ['COMPLETED', 'CANCELLED'] } } }) : null,
@@ -147,30 +278,44 @@ const getDashboard = asyncHandler(async (req, res) => {
     canViewInvoices ? prisma.invoice.count({ where: invoiceWhere }) : null,
     canViewSubclients ? prisma.client.count({ where: { companyId: req.user.companyId, parentClientId: req.user.clientId, isDeleted: false } }) : null,
     canViewCandidates ? prisma.candidate.findMany({
-      where: { ...scope, isDeleted: false, createdAt: { gte: monthStart } },
+      where: { ...scope, isDeleted: false, createdAt: { gte: trendStart, lt: trendEnd } },
       select: { createdAt: true },
     }) : [],
     canViewCases ? prisma.bGVCase.findMany({
-      where: { ...scope, createdAt: { gte: monthStart } },
+      where: { ...scope, createdAt: { gte: trendStart, lt: trendEnd } },
       select: { createdAt: true, status: true },
     }) : [],
     canViewReports ? prisma.bGVCase.findMany({
-      where: { ...scope, status: 'COMPLETED', completedAt: { gte: monthStart } },
+      where: { ...scope, status: 'COMPLETED', completedAt: { gte: trendStart, lt: trendEnd } },
       select: { completedAt: true },
     }) : [],
-    canViewInvoices ? prisma.invoice.findMany({
-      where: { ...invoiceWhere, invoiceDate: { gte: monthStart } },
-      select: { invoiceDate: true },
+    canViewCandidates ? prisma.candidate.findMany({
+      where: { ...scope, isDeleted: false },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { id: true, candidateCode: true, fullName: true, createdAt: true },
     }) : [],
     canViewCases ? prisma.bGVCase.findMany({
       where: scope,
       orderBy: { createdAt: 'desc' },
-      take: 5,
+      take: 10,
       select: {
         id: true,
         caseNumber: true,
         status: true,
         createdAt: true,
+        completedAt: true,
+        candidate: { select: { fullName: true, firstName: true, middleName: true, lastName: true, candidateCode: true } },
+      },
+    }) : [],
+    canViewCases ? prisma.bGVCase.findMany({
+      where: { ...scope, status: 'COMPLETED', completedAt: { not: null } },
+      orderBy: { completedAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        caseNumber: true,
+        completedAt: true,
         candidate: { select: { fullName: true, firstName: true, middleName: true, lastName: true, candidateCode: true } },
       },
     }) : [],
@@ -188,42 +333,181 @@ const getDashboard = asyncHandler(async (req, res) => {
     canViewInvoices ? prisma.invoice.findMany({
       where: invoiceWhere,
       orderBy: [{ invoiceDate: 'desc' }, { createdAt: 'desc' }],
-      take: 5,
-      select: { id: true, invoiceNumber: true, status: true, invoiceDate: true, dueDate: true, currency: true, total: true, payments: { select: { amount: true } } },
+      take: 10,
+      select: {
+        id: true,
+        invoiceNumber: true,
+        status: true,
+        invoiceDate: true,
+        createdAt: true,
+        sentAt: true,
+        dueDate: true,
+        currency: true,
+        total: true,
+        payments: { select: { id: true, amount: true, paymentDate: true } },
+      },
+    }) : [],
+    canViewInvoices ? prisma.invoice.findMany({
+      where: invoiceWhere,
+      select: {
+        id: true,
+        invoiceNumber: true,
+        total: true,
+        currency: true,
+        status: true,
+        dueDate: true,
+        invoiceDate: true,
+        payments: { select: { id: true, amount: true, paymentDate: true } },
+      },
     }) : [],
   ]);
-  const months = Array.from({ length: 12 }, (_, index) => {
-    const date = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + index, 1));
+  const months = Array.from({ length: bucketCount }, (_, index) => {
+    const date = period === 'monthly'
+      ? new Date(Date.UTC(selectedYear, index, 1))
+      : new Date(Date.UTC(firstYear + index, 0, 1));
     return {
-      key: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,
-      month: date.toLocaleDateString('en-IN', { month: 'short', year: '2-digit', timeZone: 'UTC' }),
+      key: period === 'monthly'
+        ? `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`
+        : String(date.getUTCFullYear()),
+      month: period === 'monthly'
+        ? date.toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' })
+        : String(date.getUTCFullYear()),
       candidates: 0,
       cases: 0,
       reports: 0,
       invoices: 0,
     };
   });
-  const monthIndex = new Map(months.map((month, index) => [month.key, index]));
+  const bucketIndex = (date) => period === 'monthly'
+    ? months.findIndex((month) => month.key === date.toISOString().slice(0, 7))
+    : months.findIndex((month) => month.key === String(date.getUTCFullYear()));
   for (const item of chartCandidates) {
-    const index = monthIndex.get(item.createdAt.toISOString().slice(0, 7));
-    if (index !== undefined) months[index].candidates += 1;
+    const index = bucketIndex(item.createdAt);
+    if (index >= 0) months[index].candidates += 1;
   }
   for (const item of chartCases) {
-    const index = monthIndex.get(item.createdAt.toISOString().slice(0, 7));
-    if (index === undefined) continue;
+    const index = bucketIndex(item.createdAt);
+    if (index < 0) continue;
     months[index].cases += 1;
   }
   for (const item of chartReports) {
-    const index = monthIndex.get(item.completedAt.toISOString().slice(0, 7));
-    if (index !== undefined) months[index].reports += 1;
+    const index = bucketIndex(item.completedAt);
+    if (index >= 0) months[index].reports += 1;
   }
-  for (const item of chartInvoices) {
-    const index = monthIndex.get(item.invoiceDate.toISOString().slice(0, 7));
-    if (index !== undefined) months[index].invoices += 1;
+  const financialBuckets = new Map();
+  const financialTotals = new Map();
+  for (const invoice of invoiceRows) {
+    const currency = invoice.currency || 'INR';
+    const total = Number(invoice.total);
+    const paid = invoice.payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const outstanding = Math.max(0, total - paid);
+    const isOverdue = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(invoice.status)
+      && outstanding > 0
+      && invoice.dueDate < new Date(new Date().toDateString());
+    const summary = financialTotals.get(currency) || {
+      currency, totalInvoiced: 0, totalPaid: 0, outstanding: 0, overdue: 0, invoices: 0, overdueInvoices: 0,
+    };
+    summary.totalInvoiced += total;
+    summary.totalPaid += paid;
+    summary.outstanding += outstanding;
+    summary.overdue += isOverdue ? outstanding : 0;
+    summary.invoices += 1;
+    summary.overdueInvoices += isOverdue ? 1 : 0;
+    financialTotals.set(currency, summary);
+
+    const invoiceBucket = bucketIndex(invoice.invoiceDate);
+    if (invoiceBucket >= 0) {
+      months[invoiceBucket].invoices += 1;
+      const key = `${months[invoiceBucket].key}:${currency}`;
+      const values = financialBuckets.get(key) || { key: months[invoiceBucket].key, label: months[invoiceBucket].month, currency, invoiced: 0, paid: 0 };
+      values.invoiced += total;
+      financialBuckets.set(key, values);
+    }
+    for (const payment of invoice.payments) {
+      const paymentBucket = bucketIndex(payment.paymentDate);
+      if (paymentBucket < 0) continue;
+      const key = `${months[paymentBucket].key}:${currency}`;
+      const values = financialBuckets.get(key) || { key: months[paymentBucket].key, label: months[paymentBucket].month, currency, invoiced: 0, paid: 0 };
+      values.paid += Number(payment.amount);
+      financialBuckets.set(key, values);
+    }
   }
+  const financialActivity = months.map((month) => ({
+    key: month.key,
+    label: month.month,
+    currencies: [...financialBuckets.values()]
+      .filter((entry) => entry.key === month.key)
+      .map(({ currency, invoiced, paid }) => ({ currency, invoiced, paid })),
+  }));
+  const notifications = [];
+  for (const candidate of recentCandidates) {
+    notifications.push({
+      id: `candidate:${candidate.id}`,
+      type: 'candidate',
+      title: 'New candidate added',
+      description: `${candidate.fullName} · ${candidate.candidateCode}`,
+      createdAt: candidate.createdAt,
+      href: `/client-portal/candidates/${candidate.id}`,
+    });
+  }
+  for (const item of recentCases) {
+    notifications.push({
+      id: `case:${item.id}`,
+      type: 'case',
+      title: 'New BGV case created',
+      description: `${item.caseNumber} · ${item.candidate.fullName}`,
+      createdAt: item.createdAt,
+      href: `/client-portal/cases/${item.id}`,
+    });
+  }
+  for (const item of recentCompletedCases) {
+    notifications.push({
+      id: `case_completed:${item.id}`,
+      type: 'case_completed',
+      title: 'BGV case completed',
+      description: `${item.caseNumber} · ${item.candidate.fullName}`,
+      createdAt: item.completedAt,
+      href: `/client-portal/cases/${item.id}`,
+    });
+  }
+  for (const item of recentReports) {
+    notifications.push({
+      id: `report:${item.id}`,
+      type: 'report',
+      title: 'Report generated',
+      description: `${item.caseNumber} · ${item.candidate.fullName}`,
+      createdAt: item.completedAt,
+      href: '/client-portal/reports',
+    });
+  }
+  for (const invoice of recentInvoices) {
+    notifications.push({
+      id: `invoice:${invoice.id}`,
+      type: 'invoice',
+      title: 'New invoice issued',
+      description: `${invoice.invoiceNumber} · ${invoice.currency} ${Number(invoice.total).toLocaleString('en-IN')}`,
+      createdAt: invoice.sentAt || invoice.createdAt,
+      href: '/client-portal/invoices',
+    });
+  }
+  for (const invoice of invoiceRows) {
+    for (const payment of invoice.payments) {
+      notifications.push({
+        id: `payment:${payment.id}`,
+        type: 'payment',
+        title: 'Invoice payment recorded',
+        description: `${invoice.invoiceNumber} · ${invoice.currency} ${Number(payment.amount).toLocaleString('en-IN')}`,
+        createdAt: payment.paymentDate,
+        href: '/client-portal/invoices',
+      });
+    }
+  }
+  notifications.sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
   return success(res, {
     message: 'Client dashboard summary',
     data: {
+      period,
+      year: selectedYear,
       permissions: { candidates: canViewCandidates, cases: canViewCases, reports: canViewReports, invoices: canViewInvoices, subclients: canViewSubclients },
       counts: {
         candidates: candidateCount,
@@ -242,6 +526,10 @@ const getDashboard = asyncHandler(async (req, res) => {
         ...(canViewReports ? { reports } : {}),
         ...(canViewInvoices ? { invoices } : {}),
       })) : [],
+      financialActivity: canViewInvoices ? financialActivity : [],
+      invoiceAnalytics: canViewInvoices ? [...financialTotals.values()] : [],
+      notifications: notifications.slice(0, 20),
+      recentCandidates,
       recentCases,
       recentReports,
       recentInvoices: canViewInvoices ? recentInvoices.map((invoice) => {
@@ -591,7 +879,14 @@ const listInvoices = asyncHandler(async (req, res) => {
         dueDate: true,
         currency: true,
         total: true,
-        payments: { select: { amount: true } },
+        payments: {
+          orderBy: { paymentDate: 'desc' },
+          select: { id: true, amount: true, paymentDate: true, method: true },
+        },
+        activity: {
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, action: true, createdAt: true },
+        },
       },
     }),
     prisma.invoice.count({ where }),
@@ -613,6 +908,11 @@ const listInvoices = asyncHandler(async (req, res) => {
       total: Number(invoice.total),
       amountPaid,
       balanceDue,
+      payments: invoice.payments.map((payment) => ({
+        ...payment,
+        amount: Number(payment.amount),
+      })),
+      activity: invoice.activity,
     };
   }).filter((invoice) => !req.query.status || invoice.status === req.query.status);
   const items = req.query.status === 'OVERDUE'
@@ -635,4 +935,4 @@ const downloadInvoice = asyncHandler(async (req, res) => {
   res.send(pdf);
 });
 
-module.exports = { getCandidateFormConfig, listSubclients, createSubclient, updateSubclient, listSubclientUsers, inviteSubclientUser, updateSubclientUser, removeSubclientUser, getDashboard, listCandidates, createCandidate, updateCandidate, getCandidate, downloadCandidateFormPdf, inviteCandidate, getCandidatePortalAccess, remindCandidate, updateCandidatePortalAccess, listCases, getCase, listReports, downloadReport, listInvoices, downloadInvoice };
+module.exports = { getCandidateFormConfig, getNotifications, listSubclients, createSubclient, updateSubclient, listSubclientUsers, inviteSubclientUser, updateSubclientUser, removeSubclientUser, getDashboard, listCandidates, createCandidate, updateCandidate, getCandidate, downloadCandidateFormPdf, inviteCandidate, getCandidatePortalAccess, remindCandidate, updateCandidatePortalAccess, listCases, getCase, listReports, downloadReport, listInvoices, downloadInvoice };

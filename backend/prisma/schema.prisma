@@ -458,6 +458,7 @@ model Candidate {
 
   currentAddress   String? @map("current_address")
   permanentAddress String? @map("permanent_address")
+  addressVerificationLocations String[] @default([]) @map("address_verification_locations")
 
   status CandidateStatus @default(PENDING)
 

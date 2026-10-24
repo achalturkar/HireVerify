@@ -142,6 +142,8 @@ export interface PortalPage<T> {
 }
 
 export interface PortalDashboardSummary {
+  period: 'monthly' | 'yearly';
+  year: number;
   permissions: { candidates: boolean; cases: boolean; reports: boolean; invoices: boolean; subclients: boolean };
   counts: {
     candidates: number | null;
@@ -153,11 +155,28 @@ export interface PortalDashboardSummary {
     subclients: number | null;
   };
   monthlyActivity: { key: string; month: string; candidates?: number; cases?: number; reports?: number; invoices?: number }[];
+  financialActivity: {
+    key: string;
+    label: string;
+    currencies: { currency: string; invoiced: number; paid: number }[];
+  }[];
+  invoiceAnalytics: {
+    currency: string;
+    totalInvoiced: number;
+    totalPaid: number;
+    outstanding: number;
+    overdue: number;
+    invoices: number;
+    overdueInvoices: number;
+  }[];
+  notifications: PortalNotification[];
+  recentCandidates: { id: string; candidateCode: string; fullName: string; createdAt: string }[];
   recentCases: {
     id: string;
     caseNumber: string;
     status: string;
     createdAt: string;
+    completedAt: string | null;
     candidate: PortalCase['candidate'];
   }[];
   recentReports: {
@@ -167,6 +186,15 @@ export interface PortalDashboardSummary {
     candidate: PortalCase['candidate'];
   }[];
   recentInvoices: Pick<PortalInvoice, 'id' | 'invoiceNumber' | 'status' | 'invoiceDate' | 'currency' | 'total'>[];
+}
+
+export interface PortalNotification {
+  id: string;
+  type: 'candidate' | 'case' | 'case_completed' | 'report' | 'invoice' | 'payment';
+  title: string;
+  description: string;
+  createdAt: string;
+  href: string;
 }
 
 export interface PortalListFilters {
@@ -187,6 +215,13 @@ export interface PortalInvoice {
   total: number;
   amountPaid: number;
   balanceDue: number;
+  payments: {
+    id: string;
+    amount: number;
+    paymentDate: string;
+    method: string | null;
+  }[];
+  activity: { id: string; action: string; createdAt: string }[];
 }
 
 export type ClientRequestStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
@@ -303,8 +338,18 @@ async function list<T>(path: string, page: number, token: string | null, filters
   };
 }
 
-export async function getPortalDashboard(token: string | null): Promise<PortalDashboardSummary> {
-  const result = await request<{ data: PortalDashboardSummary }>('/dashboard', token);
+export async function getPortalDashboard(
+  token: string | null,
+  period: 'monthly' | 'yearly' = 'monthly',
+  year = new Date().getFullYear(),
+): Promise<PortalDashboardSummary> {
+  const query = new URLSearchParams({ period, year: String(year) });
+  const result = await request<{ data: PortalDashboardSummary }>(`/dashboard?${query.toString()}`, token);
+  return result.data;
+}
+
+export async function getPortalNotifications(token: string | null): Promise<PortalNotification[]> {
+  const result = await request<{ data: PortalNotification[] }>('/notifications', token);
   return result.data;
 }
 

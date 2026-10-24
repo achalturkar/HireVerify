@@ -904,6 +904,12 @@ export default function CandidateDetailPage() {
       {tab === 'addresses' && (
         <div className="space-y-5">
           <Panel title="Address information" description="Addresses submitted by the candidate, kept separate for review.">
+            <p className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm">
+              <span className="font-semibold">Selected for address verification: </span>
+              {candidate.addressVerificationLocations?.length
+                ? candidate.addressVerificationLocations.map((location) => location === 'current' ? 'Current address' : 'Permanent address').join(', ')
+                : 'No address locations selected'}
+            </p>
             <div className="grid gap-4 md:grid-cols-2">
               {([['Current address', field('currentAddress')], ['Permanent address', field('permanentAddress')]] as [string, unknown][]).map(([label, value]) => (
                 <div key={label} className="min-h-32 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">

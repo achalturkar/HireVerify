@@ -36,7 +36,7 @@ export const CANDIDATE_FORM_REQUIRED_FIELD_GROUPS = [
   },
   {
     key: 'education',
-    label: 'Education record',
+    label: 'Higher education',
     fields: [
       { key: 'qualification', label: 'Qualification', defaultRequired: false },
       { key: 'courseName', label: 'Course or degree', defaultRequired: false },

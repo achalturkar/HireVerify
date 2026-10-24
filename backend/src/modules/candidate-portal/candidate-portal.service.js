@@ -395,6 +395,7 @@ const toDto = (invitation) => {
       employmentHistory: [currentEmployment, ...storedEmploymentHistory.filter((item) => item && item.isCurrent !== true)],
       currentAddress: candidate.currentAddress,
       permanentAddress: candidate.permanentAddress,
+      addressVerificationLocations: candidate.addressVerificationLocations || [],
     },
     company: candidate.company,
     client: candidate.client ? {
@@ -523,7 +524,7 @@ const updateProfile = async (token, payload) => {
   if (immutableFields.some((field) => Object.prototype.hasOwnProperty.call(payload, field))) {
     throw new BadRequestError('Name and email address cannot be changed from the candidate portal. Contact the inviting company to request a correction.');
   }
-  const allowed = ['phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount', 'candidateNotes', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'educationHistory', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'currentAddress', 'permanentAddress'];
+  const allowed = ['phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount', 'candidateNotes', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'educationHistory', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'currentAddress', 'permanentAddress', 'addressVerificationLocations'];
   const data = {};
   for (const field of allowed) {
     if (payload[field] !== undefined) data[field] = payload[field];
@@ -539,6 +540,20 @@ const updateProfile = async (token, payload) => {
   }
   if (data.permanentAddress !== undefined && !addressConfig.permanentAddressEnabled) {
     throw new BadRequestError('Permanent address is not enabled for this client’s candidate form.');
+  }
+  if (data.addressVerificationLocations !== undefined) {
+    if (!candidateFormConfig.sections.address.enabled) {
+      throw new BadRequestError('Address details are not enabled for this client’s candidate form.');
+    }
+    const availableLocations = new Set([
+      ...(addressConfig.currentAddressEnabled ? ['current'] : []),
+      ...(addressConfig.permanentAddressEnabled ? ['permanent'] : []),
+    ]);
+    if (!Array.isArray(data.addressVerificationLocations)
+      || data.addressVerificationLocations.some((location) => typeof location !== 'string' || !availableLocations.has(location))
+      || new Set(data.addressVerificationLocations).size !== data.addressVerificationLocations.length) {
+      throw new BadRequestError('Select only enabled address locations for verification.');
+    }
   }
   for (const field of IDENTITY_FIELDS) {
     if (data[field.key] !== undefined && !candidateFormConfig[field.key].enabled) {
@@ -587,8 +602,8 @@ const updateProfile = async (token, payload) => {
     if (!candidateFormConfig.sections.education.enabled) {
       throw new BadRequestError('Education details are not enabled for this client’s candidate form.');
     }
-    if (!Array.isArray(payload.educationHistory) || payload.educationHistory.length > 10) {
-      throw new BadRequestError('Provide up to 10 education records.');
+    if (!Array.isArray(payload.educationHistory) || payload.educationHistory.length > 5) {
+      throw new BadRequestError('Provide up to 5 higher education records.');
     }
     data.educationHistory = payload.educationHistory.map((record) => {
       if (!record || typeof record !== 'object' || Array.isArray(record)) {

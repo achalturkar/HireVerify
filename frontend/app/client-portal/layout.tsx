@@ -3,13 +3,13 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { Building2, FileCheck2, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageSquareText, Receipt, Users, X } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Bell, Building2, CheckCheck, FileCheck2, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageSquareText, Receipt, Users, X } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { listClients } from '@/src/lib/api/clients';
 import { ThemeToggle } from '@/src/components/layout/theme-toggle';
 import BrandMark from '@/src/components/ui/BrandMark';
-import { getClientPortalScope, hasPortalPermission, setClientPortalScope } from '@/src/lib/api/client-portal';
+import { getClientPortalScope, getPortalNotifications, hasPortalPermission, setClientPortalScope, type PortalNotification } from '@/src/lib/api/client-portal';
 import { resolveLogoUrl } from '@/src/lib/logo';
 import type { Client, ClientPortalPermission } from '@/src/types/client';
 
@@ -47,6 +47,13 @@ export default function ClientPortalLayout({ children }: { children: ReactNode }
   const [clientScopeError, setClientScopeError] = useState<string | null>(null);
   const client = isCompanyAdmin ? selectedClient : user?.client;
   const company = user?.company;
+  const notificationScope = client?.id || user?.client?.id || '';
+  const notificationReadKey = `hireverify-client-portal-read-${notificationScope || 'unknown'}`;
+  const [notifications, setNotifications] = useState<PortalNotification[]>([]);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
   const links = sections.filter((item) =>
     !item.permission ||
     hasPortalPermission(permissions, item.permission, isCompanyAdmin) ||
@@ -86,6 +93,61 @@ export default function ClientPortalLayout({ children }: { children: ReactNode }
     void loadClients();
     return () => { active = false; };
   }, [accessToken, isCompanyAdmin]);
+
+  useEffect(() => {
+    if (!notificationScope || !accessToken || (!user?.role.isClientUser && !isCompanyAdmin)) return;
+    let active = true;
+    const task = Promise.resolve().then(() => {
+      const stored = window.localStorage.getItem(notificationReadKey);
+      if (active) setReadNotificationIds(stored ? stored.split(',').filter(Boolean) : []);
+    });
+    return () => {
+      active = false;
+      void task;
+    };
+  }, [accessToken, isCompanyAdmin, notificationReadKey, notificationScope, user?.role.isClientUser]);
+
+  useEffect(() => {
+    if (!notificationScope || !accessToken || (!user?.role.isClientUser && !isCompanyAdmin)) return;
+    let active = true;
+    const loadNotifications = async () => {
+      try {
+        const result = await getPortalNotifications(accessToken);
+        if (active) {
+          setNotifications(result);
+          setNotificationError(null);
+        }
+      } catch (error) {
+        if (active) setNotificationError(error instanceof Error ? error.message : 'Could not load notifications.');
+      }
+    };
+    void loadNotifications();
+    const timer = window.setInterval(() => { void loadNotifications(); }, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [accessToken, isCompanyAdmin, notificationScope, user?.role.isClientUser]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) setNotificationsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const unreadCount = notifications.filter((item) => !readNotificationIds.includes(item.id)).length;
+  const markNotificationRead = (id: string) => {
+    const next = [...new Set([...readNotificationIds, id])];
+    setReadNotificationIds(next);
+    window.localStorage.setItem(notificationReadKey, next.join(','));
+  };
+  const markAllNotificationsRead = () => {
+    const next = notifications.map((item) => item.id);
+    setReadNotificationIds(next);
+    window.localStorage.setItem(notificationReadKey, next.join(','));
+  };
 
   if (loading || (!user?.role.isClientUser && !isCompanyAdmin)) return <div className="flex min-h-screen items-center justify-center text-sm text-[var(--muted)]">Loading client portal…</div>;
   if (isCompanyAdmin && clientScopeLoading) return <div className="flex min-h-screen items-center justify-center text-sm text-[var(--muted)]">Loading company clients…</div>;
@@ -151,6 +213,35 @@ export default function ClientPortalLayout({ children }: { children: ReactNode }
               <span className="max-w-36 truncate text-[11px] text-[var(--muted)]">{company?.name}</span><span className="text-[var(--muted)]">/</span><span className="max-w-36 truncate text-[11px] font-medium">{client?.name}</span>
             </div>
             <ThemeToggle />
+            <div className="relative" ref={notificationsRef}>
+              <button type="button" onClick={() => setNotificationsOpen((open) => !open)} aria-label="Notifications" title="Notifications" className="relative flex h-9 w-9 items-center justify-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]">
+                <Bell size={17} />
+                {unreadCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+              </button>
+              {notificationsOpen && <div className="absolute right-0 z-40 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl">
+                <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
+                  <div><p className="text-[13px] font-semibold">Notifications</p><p className="text-[10px] text-[var(--muted)]">Updates for your client workspace</p></div>
+                  <button type="button" onClick={markAllNotificationsRead} disabled={unreadCount === 0} className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--primary)] disabled:opacity-40"><CheckCheck size={13} />Mark all read</button>
+                </div>
+                {notificationError && <p role="alert" className="border-b border-rose-500/15 bg-rose-500/5 px-4 py-2 text-[10px] text-rose-700">{notificationError}</p>}
+                <div className="max-h-80 overflow-y-auto">
+                  {notifications.length === 0
+                    ? <p className="px-4 py-8 text-center text-[11px] text-[var(--muted)]">{notificationError ? 'Notifications are temporarily unavailable.' : 'You’re all caught up. New candidates, cases, reports, invoices, and payments will appear here.'}</p>
+                    : notifications.map((item) => {
+                      const isRead = readNotificationIds.includes(item.id);
+                      return <Link key={item.id} href={item.href} onClick={() => { markNotificationRead(item.id); setNotificationsOpen(false); }} className={`flex gap-3 border-b border-[var(--border)] px-4 py-3 transition hover:bg-[var(--surface-muted)] ${isRead ? 'opacity-60' : ''}`}>
+                        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${isRead ? 'bg-[var(--muted)]' : 'bg-[var(--primary)]'}`} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[11px] font-semibold">{item.title}</span>
+                          <span className="mt-0.5 block truncate text-[10px] text-[var(--muted)]">{item.description}</span>
+                          <span className="mt-1 block text-[9px] text-[var(--muted)]">{new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(item.createdAt))}</span>
+                        </span>
+                      </Link>;
+                    })}
+                </div>
+                <Link href="/client-portal" onClick={() => setNotificationsOpen(false)} className="block px-4 py-3 text-center text-[10px] font-semibold text-[var(--primary)] hover:bg-[var(--surface-muted)]">View workspace activity</Link>
+              </div>}
+            </div>
             {isCompanyAdmin
               ? <Link href="/company/dashboard" className="hidden rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-medium hover:bg-[var(--surface-muted)] sm:block">Company admin</Link>
               : <button type="button" onClick={() => router.push('/client-portal/account')} className="rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-medium hover:bg-[var(--surface-muted)]">Account</button>}

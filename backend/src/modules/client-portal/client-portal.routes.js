@@ -166,6 +166,7 @@ const subclientUserPathValidator = {
 };
 
 router.get('/candidate-form-config', authorize('clientportal.candidates.view'), controller.getCandidateFormConfig);
+router.get('/notifications', controller.getNotifications);
 router.get('/dashboard', controller.getDashboard);
 router.get('/subclients', authorize(['clientportal.subclients.view', 'clientportal.subclients.manage'], { any: true }), controller.listSubclients);
 router.post('/subclients', authorize('clientportal.subclients.manage'), validate(createSubclientValidator), controller.createSubclient);

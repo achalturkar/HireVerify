@@ -86,6 +86,7 @@ export interface Candidate {
   employmentHistory?: CandidateEmploymentRecord[];
   currentAddress?: string | null;
   permanentAddress?: string | null;
+  addressVerificationLocations?: ('current' | 'permanent')[];
   status: CandidateStatus;
   createdById: string | null;
   updatedById: string | null;

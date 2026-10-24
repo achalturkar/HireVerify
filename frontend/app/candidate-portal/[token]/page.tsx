@@ -93,7 +93,7 @@ type EducationRecord = {
 type PendingItem = { key: string; label: string; type: string; documentType?: string; customFormId?: string; category?: string };
 
 type PortalData = {
-  candidate: Record<string, unknown> & { status?: string; employmentHistory?: EmploymentRecord[]; educationHistory?: EducationRecord[] };
+  candidate: Record<string, unknown> & { status?: string; employmentHistory?: EmploymentRecord[]; educationHistory?: EducationRecord[]; addressVerificationLocations?: string[] };
   company: { name: string; logoUrl?: string | null; primaryColor?: string | null };
   client?: { name: string; contactName?: string | null; contactEmail?: string | null; contactPhone?: string | null } | null;
   candidateFormConfig?: CandidateFormConfig;
@@ -333,7 +333,7 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: 'address', label: 'Address', icon: MapPin },
   { key: 'bgv', label: 'BGV forms', icon: FileText },
   { key: 'cibil', label: 'CIBIL', icon: FileCheck },
-  { key: 'education', label: 'Education', icon: GraduationCap },
+  { key: 'education', label: 'Higher education', icon: GraduationCap },
   { key: 'employment', label: 'Employment', icon: BriefcaseBusiness },
   { key: 'policeVerification', label: 'Police verification', icon: ShieldCheck },
   { key: 'otherChecks', label: 'Other checks', icon: FileCheck },
@@ -417,21 +417,26 @@ const requestMessage = (error: unknown, fallback: string): string => {
 };
 
 const toForm = (candidate: Record<string, unknown>): FormState =>
-  Object.fromEntries(
-    EDITABLE_KEYS.map((key) => {
-      if (key === 'fullName') return [key, formatCandidateName({
-        fullName: typeof candidate.fullName === 'string' ? candidate.fullName : null,
-        firstName: typeof candidate.firstName === 'string' ? candidate.firstName : null,
-        middleName: typeof candidate.middleName === 'string' ? candidate.middleName : null,
-        lastName: typeof candidate.lastName === 'string' ? candidate.lastName : null,
-      })];
-      const value = candidate[key];
-      if ((typeof value !== 'string' && typeof value !== 'number') || value === '') return [key, ''];
-      const text = DATE_KEYS.has(key) ? String(value).slice(0, 10) : String(value);
-      const field = FIELD_BY_KEY[key];
-      return [key, field.format ? field.format(text) : text];
-    }),
-  );
+  ({
+    ...Object.fromEntries(
+      EDITABLE_KEYS.map((key) => {
+        if (key === 'fullName') return [key, formatCandidateName({
+          fullName: typeof candidate.fullName === 'string' ? candidate.fullName : null,
+          firstName: typeof candidate.firstName === 'string' ? candidate.firstName : null,
+          middleName: typeof candidate.middleName === 'string' ? candidate.middleName : null,
+          lastName: typeof candidate.lastName === 'string' ? candidate.lastName : null,
+        })];
+        const value = candidate[key];
+        if ((typeof value !== 'string' && typeof value !== 'number') || value === '') return [key, ''];
+        const text = DATE_KEYS.has(key) ? String(value).slice(0, 10) : String(value);
+        const field = FIELD_BY_KEY[key];
+        return [key, field.format ? field.format(text) : text];
+      }),
+    ),
+    addressVerificationLocations: Array.isArray(candidate.addressVerificationLocations)
+      ? candidate.addressVerificationLocations.filter((location): location is string => typeof location === 'string').join(',')
+      : '',
+  });
 
 const validateFields = (form: FormState, fields: FieldDef[]): Record<string, string> => {
   const errors: Record<string, string> = {};
@@ -1047,6 +1052,7 @@ export default function CandidatePortalPage() {
     SECTIONS.forEach((section) => {
       result[section] = effectiveSectionFields[section].some((field) => (form[field.key] ?? '') !== (baseline[field.key] ?? ''));
     });
+    result.address = result.address || (form.addressVerificationLocations ?? '') !== (baseline.addressVerificationLocations ?? '');
     result.employment = result.employment || JSON.stringify(pastEmployments) !== JSON.stringify(pastEmploymentBaseline);
     result.education = JSON.stringify(educationRecords) !== JSON.stringify(educationBaseline);
     return result;
@@ -1126,6 +1132,13 @@ export default function CandidatePortalPage() {
     });
   };
 
+  const getAddressVerificationLocations = () => (form.addressVerificationLocations ?? '')
+    .split(',')
+    .filter((location) => (
+      (location === 'current' && candidateFormConfig.address.currentAddressEnabled)
+      || (location === 'permanent' && candidateFormConfig.address.permanentAddressEnabled)
+    ));
+
   // Each tab saves only its own fields, so one section can never block another.
   const saveSection = (section: SectionKey) => {
     const fields = effectiveSectionFields[section];
@@ -1187,6 +1200,10 @@ export default function CandidatePortalPage() {
       payload.spouseName = '';
       saved.spouseName = '';
       setForm((previous) => ({ ...previous, spouseName: '' }));
+    }
+    if (section === 'address') {
+      saved.addressVerificationLocations = getAddressVerificationLocations().join(',');
+      payload.addressVerificationLocations = getAddressVerificationLocations();
     }
     if (section === 'education') {
       const records = educationRecords.filter((record) =>
@@ -1293,6 +1310,9 @@ export default function CandidatePortalPage() {
           : value;
       });
       if (candidateFormConfig.sections.family.enabled && form.maritalStatus !== 'MARRIED') payload.spouseName = '';
+      if (candidateFormConfig.sections.address.enabled) {
+        payload.addressVerificationLocations = getAddressVerificationLocations();
+      }
       if (candidateFormConfig.sections.education.enabled) {
         const records = educationRecords.filter((record) =>
           Object.values(record).some((value) => value !== record.id && value.trim())
@@ -1326,6 +1346,7 @@ export default function CandidatePortalPage() {
       }
       const saved = { ...form };
       if (candidateFormConfig.sections.family.enabled && form.maritalStatus !== 'MARRIED') saved.spouseName = '';
+      saved.addressVerificationLocations = getAddressVerificationLocations().join(',');
       const success = await run(async () => {
         await api.patch(`/candidate-portal/${token}/profile`, payload);
         setBaseline(saved);
@@ -1733,7 +1754,41 @@ export default function CandidatePortalPage() {
 
         {currentTab === 'address' && (
           <div role="tabpanel" id="panel-address" aria-labelledby="tab-address" className="space-y-5">
-            {candidateFormConfig.sections.address.enabled && sectionPanel('address', MapPin, 'Current and permanent address', 'Enter the addresses where you currently live and where you are permanently registered.', 'Save addresses')}
+            {candidateFormConfig.sections.address.enabled && sectionPanel(
+              'address',
+              MapPin,
+              'Current and permanent address',
+              'Enter the addresses where you currently live and where you are permanently registered.',
+              'Save addresses',
+              (candidateFormConfig.address.currentAddressEnabled || candidateFormConfig.address.permanentAddressEnabled) && (
+                <fieldset className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <legend className="px-1 text-sm font-semibold text-slate-800">Which address should be verified?</legend>
+                  <p className="mb-3 text-xs text-slate-600">Select one or both locations for address verification.</p>
+                  <div className="flex flex-wrap gap-x-6 gap-y-3">
+                    {([
+                      ['current', 'Current address', candidateFormConfig.address.currentAddressEnabled],
+                      ['permanent', 'Permanent address', candidateFormConfig.address.permanentAddressEnabled],
+                    ] as const).filter(([, , enabled]) => enabled).map(([location, label]) => (
+                      <label key={location} className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={getAddressVerificationLocations().includes(location)}
+                          onChange={(event) => {
+                            const selected = new Set((form.addressVerificationLocations ?? '').split(',').filter(Boolean));
+                            if (event.target.checked) selected.add(location);
+                            else selected.delete(location);
+                            setForm((previous) => ({ ...previous, addressVerificationLocations: [...selected].join(',') }));
+                          }}
+                          disabled={profileReadOnly}
+                          className="h-4 w-4 accent-[var(--accent)]"
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ),
+            )}
             <SectionCard icon={Camera} title="Address verification documents" description="Upload an accepted address proof such as Aadhaar, and a clear GPS-enabled photo of your current address when requested.">
               <div className="mb-4 flex flex-wrap gap-2">
                 {addressUploadTypes.map((type) => {
@@ -1763,7 +1818,7 @@ export default function CandidatePortalPage() {
 
         {currentTab === 'education' && (
           <div role="tabpanel" id="panel-education" aria-labelledby="tab-education" className="space-y-5">
-            <SectionCard icon={GraduationCap} title="Education history" description="Add each school, college or university qualification separately. Attach the matching certificate or marksheet to each record so it can be reviewed with the right qualification.">
+            <SectionCard icon={GraduationCap} title="Higher education" description="Add each qualification separately, up to five records. Attach the matching certificate or marksheet to each record so it can be reviewed with the right qualification.">
               <div className="space-y-4">
                 {educationRecords.map((record, index) => {
                   const documents = educationDocuments.filter((document) => document.documentNumber === record.id);
@@ -1811,12 +1866,18 @@ export default function CandidatePortalPage() {
                     </section>
                   );
                 })}
-                {educationRecords.length < 10 && (
+                {educationRecords.length < 5 && (
                   <button type="button" onClick={() => setEducationRecords((previous) => [...previous, emptyEducationRecord()])} disabled={profileReadOnly} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                     <Plus size={16} aria-hidden="true" /> Add education
                   </button>
                 )}
-                <p className="text-xs text-slate-500">{educationRecords.length} of 10 education records added. You can save a record before uploading its certificate.</p>
+                {educationRecords.length > 5 ? (
+                  <p role="alert" className="text-xs text-amber-700">
+                    {educationRecords.length} saved records exceed the five-record limit. Remove at least {educationRecords.length - 5} before saving changes.
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500">{educationRecords.length} of 5 higher education records added. You can save a record before uploading its certificate.</p>
+                )}
                 <SaveBar dirty={dirtyBySection.education} saving={saving} label="Save education history" onSave={() => saveSection('education')} readOnly={profileReadOnly} />
               </div>
             </SectionCard>

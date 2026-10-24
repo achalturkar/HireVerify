@@ -312,6 +312,9 @@ const createCandidateFormPdf = async (candidate) => {
   addFields([
     ['Current address', candidate.currentAddress],
     ['Permanent address', candidate.permanentAddress],
+    ['Selected for address verification', Array.isArray(candidate.addressVerificationLocations)
+      ? candidate.addressVerificationLocations.map((location) => location === 'current' ? 'Current address' : 'Permanent address').join(', ')
+      : ''],
   ]);
 
   addSection('Candidate notes');
