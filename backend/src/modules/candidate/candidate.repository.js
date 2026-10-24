@@ -37,7 +37,8 @@ const findById = (id, companyId, { includeDeleted = false } = {}) =>
   prisma.candidate.findFirst({
     where: { id, companyId, ...(includeDeleted ? {} : { isDeleted: false }) },
     include: {
-      client: { select: { id: true, name: true, clientCode: true, contactEmail: true, contactPhone: true, candidateFormConfig: true } },
+      client: { select: { id: true, name: true, clientCode: true, contactEmail: true, contactPhone: true, logoUrl: true, candidateFormConfig: true } },
+      company: { select: { name: true, logoUrl: true, primaryColor: true } },
       subclient: { select: { id: true, name: true, clientCode: true, serviceRates: true } },
       _count: { select: { bgvCases: true } },
       documents: true,

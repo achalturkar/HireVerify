@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, BriefcaseBusiness, Check, Copy, FileText, GraduationCap, Hash, Home, LayoutDashboard, Lock, Mail, Pencil, ShieldCheck, Unlock, Users, Save, X } from 'lucide-react';
+import { ArrowLeft, BriefcaseBusiness, Check, Copy, Download, FileText, GraduationCap, Hash, Home, LayoutDashboard, Loader2, Lock, Mail, Pencil, ShieldCheck, Unlock, Users, Save, X } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { ClientPortalApiError, getPortalCandidate, getPortalCandidateAccess, invitePortalCandidate, remindPortalCandidate, savePortalCandidate, setPortalCandidateAccess, type PortalCandidateAccess, type PortalCandidateDetail } from '@/src/lib/api/client-portal';
+import { ClientPortalApiError, downloadPortalCandidatePdf, getPortalCandidate, getPortalCandidateAccess, invitePortalCandidate, remindPortalCandidate, savePortalCandidate, setPortalCandidateAccess, type PortalCandidateAccess, type PortalCandidateDetail } from '@/src/lib/api/client-portal';
 import { hasPortalPermission } from '@/src/lib/api/client-portal';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import { CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
@@ -57,8 +57,10 @@ export default function ClientPortalCandidatePage() {
   const [activeTab, setActiveTab] = useState<CandidateTab>('summary');
   const [revealedIds, setRevealedIds] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const isPortalAdmin = user?.role.isCompanyAdmin ?? false;
   const canUpdate = hasPortalPermission(permissions, 'clientportal.candidates.update', isPortalAdmin);
+  const canDownloadPdf = hasPortalPermission(permissions, 'clientportal.candidates.pdf.download', isPortalAdmin);
   const canInvite = hasPortalPermission(permissions, 'clientportal.candidates.invite', isPortalAdmin) || hasPortalPermission(permissions, 'clientportal.candidates.create', isPortalAdmin);
   const canManagePortal = hasPortalPermission(permissions, 'clientportal.candidates.portal.manage', isPortalAdmin);
 
@@ -134,6 +136,26 @@ export default function ClientPortalCandidatePage() {
     }
   };
 
+  const downloadCandidatePdf = async () => {
+    setDownloadingPdf(true);
+    setError(null);
+    try {
+      const blob = await downloadPortalCandidatePdf(id, accessToken);
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `candidate-form-${candidate?.candidateCode || id}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (downloadError) {
+      setError(downloadError instanceof ClientPortalApiError ? downloadError.message : 'Could not download candidate PDF.');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const togglePortalLock = async () => {
     if (!portal) return;
     setInviting(true);
@@ -192,6 +214,7 @@ export default function ClientPortalCandidatePage() {
         <div className="flex items-center gap-4"><span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[var(--primary)]/10 text-lg font-semibold text-[var(--primary)]">{`${candidate.firstName[0] || ''}${candidate.lastName[0] || ''}`.toUpperCase()}</span><div><p className="font-mono text-[10px] text-[var(--muted)]">{candidate.candidateCode}</p><h2 className="mt-1 text-xl font-semibold">{formatCandidateName(candidate)}</h2><p className="mt-1 text-[12px] text-[var(--muted)]">{candidate.email || 'No email'} · {candidate.phone || 'No phone'}</p></div></div>
         <div className="flex flex-wrap gap-2">
           <span className="self-center rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-semibold">{candidate.status.replaceAll('_', ' ')}</span>
+          {canDownloadPdf && <button type="button" onClick={() => void downloadCandidatePdf()} disabled={downloadingPdf} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-medium hover:bg-[var(--surface-muted)] disabled:opacity-50">{downloadingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}{downloadingPdf ? 'Preparing PDF…' : 'Download candidate PDF'}</button>}
           {canInvite && <button type="button" onClick={() => void sendInvitation()} disabled={inviting || !candidate.email} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Mail size={14} />{inviting ? 'Sending…' : portal ? 'Resend invitation link' : 'Invite to candidate portal'}</button>}
           {canUpdate && !profileLocked && !editing && <button type="button" onClick={() => { setEditing(true); setMessage(null); }} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-medium hover:bg-[var(--surface-muted)]"><Pencil size={14} />Edit profile</button>}
           {editing && !profileLocked && <><button type="button" onClick={() => { setEditing(false); void load(); }} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px]"><X size={14} />Cancel</button><button type="button" onClick={() => void save()} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Save size={14} />{saving ? 'Saving…' : 'Save changes'}</button></>}

@@ -22,6 +22,7 @@ const getCandidate = asyncHandler(async (req, res) => {
 const downloadCandidateFormPdf = asyncHandler(async (req, res) => {
   const doc = await service.buildFormPdf({ id: req.params.id, companyId: req.user.companyId });
   const safeCode = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+  res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="candidate-form-${safeCode}.pdf"`);
   doc.pipe(res);

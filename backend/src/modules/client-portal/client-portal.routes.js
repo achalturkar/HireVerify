@@ -16,6 +16,7 @@ const COMPANY_ADMIN_PORTAL_PERMISSIONS = [
   'clientportal.reports.view',
   'clientportal.reports.download',
   'clientportal.candidates.view',
+  'clientportal.candidates.pdf.download',
   'clientportal.candidates.create',
   'clientportal.candidates.update',
   'clientportal.candidates.invite',
@@ -177,6 +178,7 @@ router.get('/candidates', authorize('clientportal.candidates.view'), validate(li
 router.post('/candidates', authorize('clientportal.candidates.create'), validate(createCandidateValidator), controller.createCandidate);
 router.put('/candidates/:id', authorize('clientportal.candidates.update'), validate(updateCandidateValidator), controller.updateCandidate);
 router.get('/candidates/:id', authorize('clientportal.candidates.view'), validate(candidateValidator), controller.getCandidate);
+router.get('/candidates/:id/form-pdf', authorize('clientportal.candidates.pdf.download'), validate(candidateValidator), controller.downloadCandidateFormPdf);
 router.post('/candidates/:id/invitation', authorize(['clientportal.candidates.invite', 'clientportal.candidates.create'], { any: true }), validate(invitationValidator), controller.inviteCandidate);
 router.post('/candidates/:id/invitation/remind', authorize(['clientportal.candidates.invite', 'clientportal.candidates.create'], { any: true }), validate(candidateValidator), controller.remindCandidate);
 router.get('/candidates/:id/portal-access', authorize(['clientportal.candidates.invite', 'clientportal.candidates.create', 'clientportal.candidates.portal.manage'], { any: true }), validate(candidateValidator), controller.getCandidatePortalAccess);

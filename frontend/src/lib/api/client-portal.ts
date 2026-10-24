@@ -372,6 +372,20 @@ export async function getPortalCandidate(id: string, token: string | null): Prom
   return result.data;
 }
 
+export async function downloadPortalCandidatePdf(id: string, token: string | null): Promise<Blob> {
+  const response = await fetch(`${API_BASE}/client-portal/candidates/${id}/form-pdf${scopedPortalQuery()}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message = typeof body?.message === 'string'
+      ? body.message
+      : body?.message?.message ?? `Could not download candidate PDF (${response.status})`;
+    throw new ClientPortalApiError(message, response.status);
+  }
+  return response.blob();
+}
+
 export async function invitePortalCandidate(id: string, token: string | null): Promise<{ emailSent: boolean; url: string | null; expiresAt: string }> {
   const result = await request<{ data: { emailSent: boolean; url: string | null; expiresAt: string } }>(`/candidates/${id}/invitation`, token, {
     method: 'POST',

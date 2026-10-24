@@ -267,6 +267,7 @@ export default function ClientFormModal({
           {/* Contact */}
           <div>
             <p className={sectionTitleClass}>Contact</p>
+            <p className="mb-3 text-[12px] leading-5 text-[var(--muted)]">This client contact email and phone number are shown to candidates in their verification portal for questions or corrections.</p>
             <div className="space-y-3">
               <div>
                 <label className={labelClass}>Contact name</label>

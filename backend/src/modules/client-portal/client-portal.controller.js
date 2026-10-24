@@ -547,6 +547,20 @@ const downloadReport = asyncHandler(async (req, res) => {
   doc.end();
 });
 
+const downloadCandidateFormPdf = asyncHandler(async (req, res) => {
+  const doc = await candidateService.buildFormPdf({
+    id: req.params.id,
+    companyId: req.user.companyId,
+    clientId: req.user.clientId,
+  });
+  const safeCode = req.params.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="candidate-form-${safeCode}.pdf"`);
+  doc.pipe(res);
+  doc.end();
+});
+
 const listInvoices = asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   const pagination = parsePagination(req.query);
@@ -621,4 +635,4 @@ const downloadInvoice = asyncHandler(async (req, res) => {
   res.send(pdf);
 });
 
-module.exports = { getCandidateFormConfig, listSubclients, createSubclient, updateSubclient, listSubclientUsers, inviteSubclientUser, updateSubclientUser, removeSubclientUser, getDashboard, listCandidates, createCandidate, updateCandidate, getCandidate, inviteCandidate, getCandidatePortalAccess, remindCandidate, updateCandidatePortalAccess, listCases, getCase, listReports, downloadReport, listInvoices, downloadInvoice };
+module.exports = { getCandidateFormConfig, listSubclients, createSubclient, updateSubclient, listSubclientUsers, inviteSubclientUser, updateSubclientUser, removeSubclientUser, getDashboard, listCandidates, createCandidate, updateCandidate, getCandidate, downloadCandidateFormPdf, inviteCandidate, getCandidatePortalAccess, remindCandidate, updateCandidatePortalAccess, listCases, getCase, listReports, downloadReport, listInvoices, downloadInvoice };

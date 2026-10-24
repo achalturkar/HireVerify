@@ -19,8 +19,10 @@ import {
   LayoutDashboard,
   Loader2,
   Lock,
+  Mail,
   MapPin,
   Paperclip,
+  Phone,
   Plus,
   Save,
   ShieldCheck,
@@ -38,7 +40,7 @@ import CandidateFormTemplateUpload from '@/src/components/candidate-portal/Candi
 import { formatCandidateName, splitCandidateName } from '@/src/lib/candidate-name';
 import { resolveLogoUrl } from '@/src/lib/logo';
 import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
-import type { CandidateCustomForm, CandidateFormConfig, CandidateIdentityFieldKey } from '@/src/types/client';
+import type { CandidateCustomForm, CandidateFormConfig, CandidateFormRequiredFieldKey, CandidateIdentityFieldKey } from '@/src/types/client';
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -63,6 +65,8 @@ type EmploymentRecord = {
   startDate: string | null;
   endDate: string | null;
   workLocation: string | null;
+  employerHrName?: string | null;
+  employerHrPhone?: string | null;
 };
 type PastEmploymentForm = {
   employerName: string;
@@ -73,14 +77,25 @@ type PastEmploymentForm = {
   startDate: string;
   endDate: string;
   workLocation: string;
+  employerHrName: string;
+  employerHrPhone: string;
+};
+type EducationRecord = {
+  id: string;
+  qualification: string;
+  courseName: string;
+  institutionName: string;
+  universityName: string;
+  yearOfPassing: string;
+  gradeOrPercentage: string;
 };
 
 type PendingItem = { key: string; label: string; type: string; documentType?: string; customFormId?: string; category?: string };
 
 type PortalData = {
-  candidate: Record<string, unknown> & { status?: string; employmentHistory?: EmploymentRecord[] };
+  candidate: Record<string, unknown> & { status?: string; employmentHistory?: EmploymentRecord[]; educationHistory?: EducationRecord[] };
   company: { name: string; logoUrl?: string | null; primaryColor?: string | null };
-  client?: { name: string } | null;
+  client?: { name: string; contactName?: string | null; contactEmail?: string | null; contactPhone?: string | null } | null;
   candidateFormConfig?: CandidateFormConfig;
   case: { id: string; caseNumber: string; status: string; checks?: string[] } | null;
   documents: PortalDocument[];
@@ -88,7 +103,7 @@ type PortalData = {
   progress: { pending: PendingItem[]; pendingCount: number; consentComplete: boolean; consentReady: boolean; formLocked: boolean; uploadsLocked: boolean; profileComplete: boolean };
 };
 
-type TabKey = 'overview' | 'details' | 'family' | 'identity' | 'address' | 'education' | 'employment' | 'policeVerification' | 'bgv' | 'otherChecks' | 'documents' | 'consent';
+type TabKey = 'overview' | 'details' | 'family' | 'identity' | 'address' | 'education' | 'employment' | 'policeVerification' | 'bgv' | 'cibil' | 'otherChecks' | 'documents' | 'consent';
 type SectionKey = 'details' | 'family' | 'identity' | 'education' | 'employment' | 'address';
 type FormState = Record<string, string>;
 
@@ -96,6 +111,7 @@ type FieldDef = {
   key: string;
   label: string;
   type?: 'text' | 'email' | 'tel' | 'date';
+  readOnly?: boolean;
   required?: boolean;
   multiline?: boolean;
   wide?: boolean;
@@ -119,7 +135,6 @@ type FieldDef = {
 const digitsOnly = (value: string) => value.replace(/\D/g, '');
 const upperAlnum = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const splitFullName = splitCandidateName;
 
@@ -129,11 +144,12 @@ const splitFullName = splitCandidateName;
 /* accepts. Rename them here if your backend uses different names.     */
 /* ------------------------------------------------------------------ */
 const DETAILS_FIELDS: FieldDef[] = [
-  { key: 'fullName', label: 'Full name', required: true, wide: true, validate: (value) => (splitFullName(value) ? null : 'Enter your first and last name.') },
-  { key: 'email', label: 'Email address', type: 'email', required: true, validate: (v) => (EMAIL_PATTERN.test(v) ? null : 'Enter a valid email address.') },
+  { key: 'fullName', label: 'Full name', readOnly: true, required: true, wide: true, hint: 'Provided by the inviting company. Contact them to request a correction.' },
+  { key: 'email', label: 'Email address', type: 'email', readOnly: true, required: true, hint: 'Provided by the inviting company. Contact them to request a correction.' },
   { key: 'phone', label: 'Mobile number', type: 'tel', required: true, validate: (v) => (/^[+()\-\s\d]{7,18}$/.test(v) ? null : 'Enter a valid phone number.') },
   { key: 'dateOfBirth', label: 'Date of birth', type: 'date', required: true, validate: (v) => (v > todayISO() ? 'Date of birth cannot be in the future.' : null) },
   { key: 'gender', label: 'Gender', suggestions: ['Male', 'Female', 'Other', 'Prefer not to say'] },
+  { key: 'candidateNotes', label: 'Notes for the verification team', multiline: true, wide: true, placeholder: 'Share any clarification that may help review your information, such as a name variation or an employment gap.', maxLength: 2000 },
 ];
 
 const ADDRESS_FIELDS: FieldDef[] = [
@@ -144,6 +160,9 @@ const ADDRESS_FIELDS: FieldDef[] = [
 const FAMILY_FIELDS: FieldDef[] = [
   { key: 'fatherName', label: "Father's name", maxLength: 255 },
   { key: 'motherName', label: "Mother's name", maxLength: 255 },
+  { key: 'maritalStatus', label: 'Marital status', options: ['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED'] },
+  { key: 'spouseName', label: 'Husband / spouse name', maxLength: 255 },
+  { key: 'childrenCount', label: 'Number of children', options: Array.from({ length: 21 }, (_, index) => String(index)) },
 ];
 
 const IDENTITY_FIELDS: FieldDef[] = [
@@ -196,6 +215,21 @@ const EDUCATION_FIELDS: FieldDef[] = [
   },
   { key: 'gradeOrPercentage', label: 'Percentage or CGPA', placeholder: 'For example 78% or 8.4 CGPA' },
 ];
+const EDUCATION_RECORD_FIELDS: FieldDef[] = [
+  { key: 'qualification', label: 'Qualification', suggestions: ['10th', '12th', 'Diploma', 'Graduate', 'Post graduate', 'Doctorate'] },
+  { key: 'courseName', label: 'Course or degree', placeholder: 'For example B.Tech Computer Science' },
+  { key: 'institutionName', label: 'College or school', wide: true },
+  { key: 'universityName', label: 'University or board' },
+  {
+    key: 'yearOfPassing', label: 'Year of passing', placeholder: '2021', maxLength: 4, inputMode: 'numeric',
+    format: (v) => digitsOnly(v).slice(0, 4),
+    validate: (v) => {
+      const year = Number(v);
+      return /^\d{4}$/.test(v) && year >= 1950 && year <= new Date().getFullYear() + 1 ? null : 'Enter a valid 4-digit year.';
+    },
+  },
+  { key: 'gradeOrPercentage', label: 'Percentage or CGPA', placeholder: 'For example 78% or 8.4 CGPA' },
+];
 
 const EMPLOYMENT_FIELDS: FieldDef[] = [
   { key: 'currentEmployer', label: 'Current employer', wide: true },
@@ -205,6 +239,8 @@ const EMPLOYMENT_FIELDS: FieldDef[] = [
   { key: 'employmentType', label: 'Employment type', options: ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERNSHIP', 'FREELANCE', 'CONSULTANT', 'OTHER'] },
   { key: 'joiningDate', label: 'Joining date', type: 'date' },
   { key: 'workLocation', label: 'Work location' },
+  { key: 'employerHrName', label: 'Employer HR contact name' },
+  { key: 'employerHrPhone', label: 'Employer HR contact number', type: 'tel', validate: (value) => (/^[+()\-\s\d]{7,18}$/.test(value) ? null : 'Enter a valid HR contact number.') },
 ];
 const PAST_EMPLOYMENT_FIELDS: FieldDef[] = [
   { key: 'employerName', label: 'Employer name', wide: true },
@@ -215,10 +251,45 @@ const PAST_EMPLOYMENT_FIELDS: FieldDef[] = [
   { key: 'startDate', label: 'Start date', type: 'date' },
   { key: 'endDate', label: 'End date', type: 'date' },
   { key: 'workLocation', label: 'Work location' },
+  { key: 'employerHrName', label: 'Employer HR contact name' },
+  { key: 'employerHrPhone', label: 'Employer HR contact number', type: 'tel', validate: (value) => (/^[+()\-\s\d]{7,18}$/.test(value) ? null : 'Enter a valid HR contact number.') },
 ];
 const emptyPastEmployment = (): PastEmploymentForm => ({
-  employerName: '', employeeId: '', designation: '', department: '', employmentType: '', startDate: '', endDate: '', workLocation: '',
+  employerName: '', employeeId: '', designation: '', department: '', employmentType: '', startDate: '', endDate: '', workLocation: '', employerHrName: '', employerHrPhone: '',
 });
+const emptyEducationRecord = (): EducationRecord => ({
+  id: crypto.randomUUID(),
+  qualification: '',
+  courseName: '',
+  institutionName: '',
+  universityName: '',
+  yearOfPassing: '',
+  gradeOrPercentage: '',
+});
+const toEducationRecords = (candidate: PortalData['candidate']): EducationRecord[] => {
+  const records = Array.isArray(candidate.educationHistory) ? candidate.educationHistory : [];
+  if (records.length) {
+    return records.map((record) => ({
+      id: record.id,
+      qualification: record.qualification ?? '',
+      courseName: record.courseName ?? '',
+      institutionName: record.institutionName ?? '',
+      universityName: record.universityName ?? '',
+      yearOfPassing: record.yearOfPassing ?? '',
+      gradeOrPercentage: record.gradeOrPercentage ?? '',
+    }));
+  }
+  const legacy: EducationRecord = {
+    id: 'legacy-education',
+    qualification: typeof candidate.highestQualification === 'string' ? candidate.highestQualification : '',
+    courseName: typeof candidate.courseName === 'string' ? candidate.courseName : '',
+    institutionName: typeof candidate.institutionName === 'string' ? candidate.institutionName : '',
+    universityName: typeof candidate.universityName === 'string' ? candidate.universityName : '',
+    yearOfPassing: typeof candidate.yearOfPassing === 'string' ? candidate.yearOfPassing : '',
+    gradeOrPercentage: typeof candidate.gradeOrPercentage === 'string' ? candidate.gradeOrPercentage : '',
+  };
+  return Object.values(legacy).some((value) => value !== '' && value !== 'legacy-education') ? [legacy] : [];
+};
 const toPastEmploymentForms = (records: EmploymentRecord[] = []): PastEmploymentForm[] => {
   const pastRecords = records.filter((record) => !record.isCurrent).map((record) => ({
     employerName: record.employerName ?? '',
@@ -229,6 +300,8 @@ const toPastEmploymentForms = (records: EmploymentRecord[] = []): PastEmployment
     startDate: record.startDate?.slice(0, 10) ?? '',
     endDate: record.endDate?.slice(0, 10) ?? '',
     workLocation: record.workLocation ?? '',
+    employerHrName: record.employerHrName ?? '',
+    employerHrPhone: record.employerHrPhone ?? '',
   }));
   return pastRecords.length ? pastRecords : [emptyPastEmployment()];
 };
@@ -259,12 +332,13 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: 'identity', label: 'ID numbers', icon: Hash },
   { key: 'address', label: 'Address', icon: MapPin },
   { key: 'bgv', label: 'BGV forms', icon: FileText },
+  { key: 'cibil', label: 'CIBIL', icon: FileCheck },
   { key: 'education', label: 'Education', icon: GraduationCap },
   { key: 'employment', label: 'Employment', icon: BriefcaseBusiness },
   { key: 'policeVerification', label: 'Police verification', icon: ShieldCheck },
   { key: 'otherChecks', label: 'Other checks', icon: FileCheck },
   { key: 'documents', label: 'Documents', icon: FileCheck },
-  { key: 'consent', label: 'Consent', icon: ShieldCheck },
+  { key: 'consent', label: 'Review & submit', icon: ShieldCheck },
 ];
 
 const EDUCATION_TYPES = ['EDUCATION_CERTIFICATE'];
@@ -287,10 +361,11 @@ const FORM_CHECKS: Record<CandidateCustomForm['category'], string[]> = {
   EDUCATION: ['EDUCATION', 'EDUCATION_VERIFICATION'],
   EMPLOYMENT: ['EMPLOYMENT', 'EMPLOYMENT_VERIFICATION', 'UAN'],
   POLICE_VERIFICATION: ['POLICE', 'POLICE_VERIFICATION', 'POLICE_RECORD', 'COURT'],
+  CIBIL: [],
   OTHER_CHECKS: [],
   OTHER: [],
 };
-const STANDARD_FORM_CHECKS = new Set(Object.values(FORM_CHECKS).flat());
+const STANDARD_FORM_CHECKS = new Set([...Object.values(FORM_CHECKS).flat(), 'CIBIL']);
 
 const DOCUMENT_GROUPS = [
   { title: 'Other documents', description: 'Anything else the verification team asked for.', types: ['OTHER'] },
@@ -351,7 +426,7 @@ const toForm = (candidate: Record<string, unknown>): FormState =>
         lastName: typeof candidate.lastName === 'string' ? candidate.lastName : null,
       })];
       const value = candidate[key];
-      if (typeof value !== 'string' || value === '') return [key, ''];
+      if ((typeof value !== 'string' && typeof value !== 'number') || value === '') return [key, ''];
       const text = DATE_KEYS.has(key) ? String(value).slice(0, 10) : String(value);
       const field = FIELD_BY_KEY[key];
       return [key, field.format ? field.format(text) : text];
@@ -361,6 +436,7 @@ const toForm = (candidate: Record<string, unknown>): FormState =>
 const validateFields = (form: FormState, fields: FieldDef[]): Record<string, string> => {
   const errors: Record<string, string> = {};
   fields.forEach((field) => {
+    if (field.readOnly) return;
     const raw = (form[field.key] ?? '').trim();
     if (!raw) {
       if (field.required) errors[field.key] = `${field.label} is required.`;
@@ -376,7 +452,10 @@ const tabForPending = (item: PendingItem): TabKey => {
   const text = `${item.type} ${item.key}`.toLowerCase();
   if (text.includes('consent')) return 'consent';
   if (item.category === 'POLICE_VERIFICATION') return 'policeVerification';
+  if (item.category === 'FAMILY') return 'family';
+  if (item.category === 'DETAILS') return 'details';
   if (item.category === 'BGV') return 'bgv';
+  if (item.category === 'CIBIL') return 'cibil';
   if (item.category === 'OTHER_CHECKS') return 'otherChecks';
   if (item.category === 'EDUCATION') return 'education';
   if (item.category === 'EMPLOYMENT') return 'employment';
@@ -404,7 +483,7 @@ const statusStyle = (status: string): { label: string; className: string; icon: 
 /* ------------------------------------------------------------------ */
 /* Presentational components                                           */
 /* ------------------------------------------------------------------ */
-function SectionCard({ icon: Icon, title, description, children }: { icon: LucideIcon; title: string; description?: string; children: ReactNode }) {
+function SectionCard({ icon: Icon, title, description, children, required = false }: { icon: LucideIcon; title: string; description?: string; children: ReactNode; required?: boolean }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
       <div className="mb-5 flex items-start gap-3">
@@ -412,7 +491,7 @@ function SectionCard({ icon: Icon, title, description, children }: { icon: Lucid
           <Icon size={18} aria-hidden="true" />
         </span>
         <div>
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+          <h2 className="text-base font-semibold text-slate-900">{title}{required && <RequiredMark />}</h2>
           {description && <p className="mt-0.5 text-sm text-slate-500">{description}</p>}
         </div>
       </div>
@@ -421,21 +500,62 @@ function SectionCard({ icon: Icon, title, description, children }: { icon: Lucid
   );
 }
 
+function RequiredMark() {
+  return (
+    <>
+      <span className="ml-1 font-bold text-red-600" aria-hidden="true">*</span>
+      <span className="sr-only"> required</span>
+    </>
+  );
+}
+
+function ClientContactCard({ client }: { client?: PortalData['client'] }) {
+  if (!client?.contactName && !client?.contactEmail && !client?.contactPhone) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-sm font-semibold text-slate-900">Questions or corrections?</h3>
+        <p className="mt-1 text-sm leading-5 text-slate-600">Please check that the information and documents in your preview are correct. For help or corrections, contact {client?.name || 'the company that invited you'} directly.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <h3 className="text-sm font-semibold text-slate-900">Questions or corrections?</h3>
+      <p className="mt-1 text-sm leading-5 text-slate-600">Please check that the information and documents in your preview are correct. Contact your client representative if you have a query or need to correct anything.</p>
+      {client.contactName && <p className="mt-3 text-sm font-medium text-slate-800">{client.contactName}</p>}
+      <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+        {client.contactEmail && (
+          <a href={`mailto:${client.contactEmail}`} className="inline-flex items-center gap-2 break-all text-sm font-medium hover:underline" style={{ color: 'var(--accent)' }}>
+            <Mail size={15} aria-hidden="true" />{client.contactEmail}
+          </a>
+        )}
+        {client.contactPhone && (
+          <a href={`tel:${client.contactPhone.replace(/[^\d+]/g, '')}`} className="inline-flex items-center gap-2 text-sm font-medium hover:underline" style={{ color: 'var(--accent)' }}>
+            <Phone size={15} aria-hidden="true" />{client.contactPhone}
+          </a>
+        )}
+        {!client.contactEmail && !client.contactPhone && <p className="mt-2 text-xs text-slate-500">Contact details are not available here. Please contact {client.name || 'the company that invited you'} directly.</p>}
+      </div>
+    </div>
+  );
+}
+
 function Field({ def, value, error, onChange, disabled = false }: { def: FieldDef; value: string; error?: string; onChange: (value: string) => void; disabled?: boolean }) {
   const id = `field-${def.key}`;
   const listId = def.suggestions ? `${id}-options` : undefined;
   const describedBy = [error ? `${id}-error` : null, def.hint ? `${id}-hint` : null].filter(Boolean).join(' ') || undefined;
-  const classes = `w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[var(--accent)] focus:ring-2 focus:ring-[color:var(--accent-ring)] ${error ? 'border-red-300' : 'border-slate-200'}`;
+  const isDisabled = disabled || def.readOnly === true;
+  const classes = `w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[var(--accent)] focus:ring-2 focus:ring-[color:var(--accent-ring)] disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 ${error ? 'border-red-300' : 'border-slate-200'}`;
   return (
     <div className={def.wide ? 'sm:col-span-2' : undefined}>
       <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-slate-700">
         {def.label}
-        {def.required && <span className="text-red-500" aria-hidden="true"> *</span>}
+        {def.required && <RequiredMark />}
       </label>
       {def.multiline ? (
-        <textarea id={id} value={value} rows={3} disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={describedBy} className={classes} onChange={(event) => onChange(event.target.value)} />
+        <textarea id={id} value={value} rows={3} disabled={isDisabled} aria-invalid={Boolean(error)} aria-describedby={describedBy} className={classes} onChange={(event) => onChange(event.target.value)} />
       ) : def.options ? (
-        <select id={id} value={value} required={def.required} disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={describedBy} className={classes} onChange={(event) => onChange(event.target.value)}>
+        <select id={id} value={value} required={def.required} disabled={isDisabled} aria-invalid={Boolean(error)} aria-describedby={describedBy} className={classes} onChange={(event) => onChange(event.target.value)}>
           <option value="">Select {def.label.toLowerCase()}</option>
           {def.options.map((option) => <option key={option} value={option}>{humanize(option)}</option>)}
         </select>
@@ -455,7 +575,7 @@ function Field({ def, value, error, onChange, disabled = false }: { def: FieldDe
           value={value}
           list={listId}
           required={def.required}
-          disabled={disabled}
+          disabled={isDisabled}
           placeholder={def.placeholder}
           maxLength={def.maxLength}
           inputMode={def.inputMode}
@@ -531,7 +651,7 @@ function DocumentList({ documents, emptyText, hideType = false }: { documents: P
                     <p className="truncate text-sm text-slate-600">{document.fileName}</p>
                   </>
                 )}
-                <p className="mt-0.5 text-xs text-slate-500">{document.documentNumber ? `Number ${document.documentNumber}, ` : ''}uploaded {formatDate(document.uploadedAt)}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{document.documentNumber && !/^[0-9a-f-]{36}$/i.test(document.documentNumber) ? `Number ${document.documentNumber}, ` : ''}uploaded {formatDate(document.uploadedAt)}</p>
                 {rejected && <p className="mt-1 text-xs text-red-600">This document was not accepted. Upload a clearer copy.</p>}
               </div>
             </div>
@@ -556,17 +676,18 @@ function DocumentList({ documents, emptyText, hideType = false }: { documents: P
 /* ------------------------------------------------------------------ */
 type QueuedFile = { id: string; file: File; documentType: string; status: 'queued' | 'uploading' | 'failed'; error?: string };
 
-function AttachmentUploader({ token, title = '', description = '', types, variant = 'card', documentNumber = '', onUploaded, readOnly = false, documentCategory }: {
+function AttachmentUploader({ token, title = '', description = '', types, requiredTypes = [], variant = 'card', documentNumber = '', onUploaded, readOnly = false, documentCategory }: {
   token: string;
   title?: string;
   description?: string;
   types: string[];
+  requiredTypes?: string[];
   variant?: 'card' | 'inline';
   /** Sent with each file, so an ID copy carries the number typed beside it. */
   documentNumber?: string;
   onUploaded: (count: number) => void | Promise<void>;
   readOnly?: boolean;
-  documentCategory?: 'EMPLOYMENT' | 'ADDRESS';
+  documentCategory?: 'EMPLOYMENT' | 'ADDRESS' | 'EDUCATION';
 }) {
   const inputId = useId();
   const [queue, setQueue] = useState<QueuedFile[]>([]);
@@ -631,11 +752,16 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
           >
             {types.map((type) => (
               <option key={type} value={type}>
-                {documentTypeLabel(type)}
+                {documentTypeLabel(type)}{requiredTypes.includes(type) ? ' *' : ''}
               </option>
             ))}
           </select>
         </label>
+      )}
+      {requiredTypes.length > 0 && (
+        <p className="mb-3 text-xs text-slate-600">
+          <RequiredMark /> Required upload{requiredTypes.length > 1 ? 's' : ''}: {requiredTypes.map(documentTypeLabel).join(', ')}.
+        </p>
       )}
       <label
         htmlFor={inputId}
@@ -678,7 +804,7 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
                       {types.map((type) => <option key={type} value={type}>{humanize(type)}</option>)}
                     </select>
                   ) : variant === 'inline' ? null : (
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{documentTypeLabel(item.documentType)}</span>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{documentTypeLabel(item.documentType)}{requiredTypes.includes(item.documentType) && <span className="ml-1 font-bold text-red-600">*</span>}</span>
                   )}
                   <button type="button" disabled={busy} onClick={() => setQueue((previous) => previous.filter((entry) => entry.id !== item.id))} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-40" aria-label={`Remove ${item.file.name}`}>
                     <Trash2 size={15} aria-hidden="true" />
@@ -700,13 +826,13 @@ function AttachmentUploader({ token, title = '', description = '', types, varian
     ? <p className="text-xs text-slate-500">Uploads are locked after the verification case is completed or cancelled.</p>
     : body;
   if (variant === 'inline') return content;
-  return <SectionCard icon={Paperclip} title={title} description={description}>{content}</SectionCard>;
+  return <SectionCard icon={Paperclip} title={title} description={description} required={requiredTypes.length > 0}>{content}</SectionCard>;
 }
 
 /* ------------------------------------------------------------------ */
 /* One card per ID: number field + upload + uploaded files             */
 /* ------------------------------------------------------------------ */
-function IdentityCard({ title, field, value, error, documents, token, onChange, onUploaded, readOnly = false, uploadReadOnly = false }: {
+function IdentityCard({ title, field, value, error, documents, token, onChange, onUploaded, documentRequired = false, readOnly = false, uploadReadOnly = false }: {
   title: string;
   field: FieldDef;
   value: string;
@@ -715,6 +841,7 @@ function IdentityCard({ title, field, value, error, documents, token, onChange, 
   token: string;
   onChange: (value: string) => void;
   onUploaded: (count: number) => void | Promise<void>;
+  documentRequired?: boolean;
   readOnly?: boolean;
   uploadReadOnly?: boolean;
 }) {
@@ -735,7 +862,7 @@ function IdentityCard({ title, field, value, error, documents, token, onChange, 
       <div className="grid gap-5 md:grid-cols-2">
         <Field def={field} value={value} error={error} disabled={readOnly} onChange={onChange} />
         <div>
-          <p className="mb-1.5 text-sm font-medium text-slate-700">Copy of {title}</p>
+          <p className="mb-1.5 text-sm font-medium text-slate-700">Copy of {title}{documentRequired && <RequiredMark />}</p>
           <AttachmentUploader variant="inline" token={token} types={[docType]} documentNumber={numberForFile} onUploaded={onUploaded} readOnly={uploadReadOnly} />
           {sorted.length > 0 && <div className="mt-3"><DocumentList documents={sorted} emptyText="" hideType /></div>}
         </div>
@@ -755,6 +882,8 @@ export default function CandidatePortalPage() {
   const [baseline, setBaseline] = useState<FormState>({});
   const [pastEmployments, setPastEmployments] = useState<PastEmploymentForm[]>([emptyPastEmployment()]);
   const [pastEmploymentBaseline, setPastEmploymentBaseline] = useState<PastEmploymentForm[]>([emptyPastEmployment()]);
+  const [educationRecords, setEducationRecords] = useState<EducationRecord[]>([]);
+  const [educationBaseline, setEducationBaseline] = useState<EducationRecord[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [consent, setConsent] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -781,10 +910,13 @@ export default function CandidatePortalPage() {
       if (syncForm) {
         const next = toForm(data.candidate);
         const nextPastEmployments = toPastEmploymentForms(data.candidate.employmentHistory);
+        const nextEducationRecords = toEducationRecords(data.candidate);
         setForm(next);
         setBaseline(next);
         setPastEmployments(nextPastEmployments);
         setPastEmploymentBaseline(nextPastEmployments);
+        setEducationRecords(nextEducationRecords);
+        setEducationBaseline(nextEducationRecords);
       }
     },
     [token],
@@ -821,6 +953,18 @@ export default function CandidatePortalPage() {
 
   const accent = useMemo(() => safeColor(portal?.company.primaryColor), [portal]);
   const candidateFormConfig = portal?.candidateFormConfig ?? DEFAULT_CANDIDATE_FORM_CONFIG;
+  const configuredField = useCallback((field: FieldDef, key: CandidateFormRequiredFieldKey = field.key as CandidateFormRequiredFieldKey): FieldDef => ({
+    ...field,
+    required: candidateFormConfig.fields?.[key]?.required ?? field.required ?? false,
+  }), [candidateFormConfig.fields]);
+  const employmentRequirementKey = useCallback((key: string): CandidateFormRequiredFieldKey => ({
+    currentEmployer: 'employerName',
+    employeeDesignation: 'designation',
+    employeeDepartment: 'department',
+    joiningDate: 'startDate',
+  }[key] ?? key) as CandidateFormRequiredFieldKey, []);
+  const educationRecordFields = EDUCATION_RECORD_FIELDS.map((field) => configuredField(field));
+  const pastEmploymentFields = PAST_EMPLOYMENT_FIELDS.map((field) => configuredField(field));
   const customForms = candidateFormConfig.customForms ?? [];
   const identityConfigFor = (key: string) => candidateFormConfig[key as CandidateIdentityFieldKey];
   const isCategoryRequested = (category: CandidateCustomForm['category']) => {
@@ -858,12 +1002,15 @@ export default function CandidatePortalPage() {
         && (isCategoryRequested('IDENTITY') || identityIsRequired);
     }
     if (key === 'family') return candidateFormConfig.sections.family.enabled;
-    if (key === 'education') return candidateFormConfig.sections.education.enabled && isCategoryRequested('EDUCATION');
-    if (key === 'employment') return candidateFormConfig.sections.employment.enabled && isCategoryRequested('EMPLOYMENT');
+    if (key === 'education') return candidateFormConfig.sections.education.enabled
+      && (isCategoryRequested('EDUCATION') || portal?.progress.pending.some((item) => item.category === 'EDUCATION'));
+    if (key === 'employment') return candidateFormConfig.sections.employment.enabled
+      && (isCategoryRequested('EMPLOYMENT') || portal?.progress.pending.some((item) => item.category === 'EMPLOYMENT'));
     if (key === 'policeVerification') return candidateFormConfig.sections.policeVerification.enabled
       && isCategoryRequested('POLICE_VERIFICATION')
       && customFormsFor('POLICE_VERIFICATION').length > 0;
     if (key === 'bgv') return customFormsFor('BGV').length > 0;
+    if (key === 'cibil') return customFormsFor('CIBIL').length > 0;
     if (key === 'otherChecks') return customFormsFor('OTHER_CHECKS').length > 0;
     return true;
   });
@@ -871,6 +1018,11 @@ export default function CandidatePortalPage() {
   const currentTab = visibleTabKeys.split('|').includes(activeTab) ? activeTab : 'overview';
   const effectiveSectionFields = useMemo(() => ({
     ...SECTION_FIELDS,
+    education: [],
+    details: DETAILS_FIELDS.map((field) => configuredField(field)),
+    family: FAMILY_FIELDS
+      .filter((field) => field.key !== 'spouseName' || form.maritalStatus === 'MARRIED')
+      .map((field) => configuredField(field)),
     identity: SECTION_FIELDS.identity
       .filter((field) => candidateFormConfig[field.key as CandidateIdentityFieldKey]?.enabled !== false)
       .map((field) => ({
@@ -887,7 +1039,8 @@ export default function CandidatePortalPage() {
           ? candidateFormConfig.address.currentAddressRequired
           : candidateFormConfig.address.permanentAddressRequired,
       })),
-  }), [candidateFormConfig]);
+    employment: EMPLOYMENT_FIELDS.map((field) => configuredField(field, employmentRequirementKey(field.key))),
+  }), [candidateFormConfig, configuredField, employmentRequirementKey, form.maritalStatus]);
 
   const dirtyBySection = useMemo(() => {
     const result = {} as Record<SectionKey, boolean>;
@@ -895,8 +1048,9 @@ export default function CandidatePortalPage() {
       result[section] = effectiveSectionFields[section].some((field) => (form[field.key] ?? '') !== (baseline[field.key] ?? ''));
     });
     result.employment = result.employment || JSON.stringify(pastEmployments) !== JSON.stringify(pastEmploymentBaseline);
+    result.education = JSON.stringify(educationRecords) !== JSON.stringify(educationBaseline);
     return result;
-  }, [form, baseline, effectiveSectionFields, pastEmployments, pastEmploymentBaseline]);
+  }, [form, baseline, effectiveSectionFields, pastEmployments, pastEmploymentBaseline, educationRecords, educationBaseline]);
   const anyDirty = SECTIONS.some((section) => dirtyBySection[section]);
 
   useEffect(() => {
@@ -907,7 +1061,7 @@ export default function CandidatePortalPage() {
   }, [anyDirty]);
 
   const pendingByTab = useMemo(() => {
-    const flags: Record<TabKey, boolean> = { overview: false, details: false, family: false, identity: false, address: false, education: false, employment: false, policeVerification: false, bgv: false, otherChecks: false, documents: false, consent: false };
+    const flags: Record<TabKey, boolean> = { overview: false, details: false, family: false, identity: false, address: false, education: false, employment: false, policeVerification: false, bgv: false, cibil: false, otherChecks: false, documents: false, consent: false };
     if (!portal) return flags;
     portal.progress.pending.forEach((item) => { flags[tabForPending(item)] = true; });
     if (!portal.progress.profileComplete) flags.details = true;
@@ -924,20 +1078,38 @@ export default function CandidatePortalPage() {
       .filter((item): item is PendingItem & { documentType: string } => item.category === 'ADDRESS' && Boolean(item.documentType))
       .map((item) => item.documentType),
   ]));
-  const otherDocuments = useMemo(
-    () => (portal?.documents ?? []).filter((document) => !IDENTITY_TYPES.includes(document.documentType) && !EDUCATION_TYPES.includes(document.documentType) && !EMPLOYMENT_TYPES.includes(document.documentType) && !ADDRESS_TYPES.includes(document.documentType)),
-    [portal],
+  const requiredAddressUploadTypes = Array.from(new Set([
+    ...candidateFormConfig.address.documents.filter((document) => document.enabled && document.required).map((document) => document.type),
+    ...(portal?.progress.pending ?? [])
+      .filter((item): item is PendingItem & { documentType: string } => item.category === 'ADDRESS' && Boolean(item.documentType))
+      .map((item) => item.documentType),
+  ]));
+  const employmentUploadTypes = Array.from(new Set([
+    ...candidateFormConfig.employmentDocuments.filter((document) => document.enabled).map((document) => document.type),
+    ...(portal?.progress.pending ?? [])
+      .filter((item): item is PendingItem & { documentType: string } => item.category === 'EMPLOYMENT' && Boolean(item.documentType))
+      .map((item) => item.documentType),
+  ]));
+  const requiredEmploymentUploadTypes = Array.from(new Set([
+    ...candidateFormConfig.employmentDocuments.filter((document) => document.enabled && document.required).map((document) => document.type),
+    ...(portal?.progress.pending ?? [])
+      .filter((item): item is PendingItem & { documentType: string } => item.category === 'EMPLOYMENT' && Boolean(item.documentType))
+      .map((item) => item.documentType),
+  ]));
+  const requiredEducationUploadTypes = (portal?.progress.pending ?? []).flatMap((item) =>
+    item.category === 'EDUCATION' && item.documentType ? [item.documentType] : [],
   );
-
-  const run = async (action: () => Promise<void>) => {
+  const run = async (action: () => Promise<void>): Promise<boolean> => {
     setSaving(true);
     setError('');
     setMessage('');
     try {
       await action();
       await fetchPortal(false);
+      return true;
     } catch (requestError: unknown) {
       setError(requestMessage(requestError, 'Something went wrong. Please try again.'));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -957,37 +1129,85 @@ export default function CandidatePortalPage() {
   // Each tab saves only its own fields, so one section can never block another.
   const saveSection = (section: SectionKey) => {
     const fields = effectiveSectionFields[section];
-    const found = validateFields(form, fields);
+    const found = section === 'education'
+      ? Object.fromEntries(educationRecords.flatMap((record) => educationRecordFields.flatMap((field) => {
+        const value = record[field.key as keyof EducationRecord];
+        const problem = !value.trim() && field.required
+          ? `${field.label} is required.`
+          : value.trim() ? field.validate?.(value.trim()) : null;
+        return problem ? [[`education_${record.id}_${field.key}`, problem]] : [];
+      })))
+      : validateFields(form, fields);
+    if (section === 'employment') {
+      pastEmployments.forEach((record, index) => {
+        const recordStarted = Object.values(record).some((value) => value.trim());
+        pastEmploymentFields.forEach((field) => {
+          const value = record[field.key as keyof PastEmploymentForm].trim();
+          const problem = !value && recordStarted && field.required
+            ? `${field.label} is required.`
+            : value ? field.validate?.(value) : null;
+          if (problem) found[`past_${index}_${field.key}`] = problem;
+        });
+      });
+    }
+    if (section === 'education' && educationRecords.length === 0 && educationRecordFields.some((field) => field.required)) {
+      found.education_required = 'Add at least one education record to complete the required education fields.';
+    }
     setFieldErrors((previous) => {
       const next = { ...previous };
       fields.forEach((field) => delete next[field.key]);
+      Object.keys(previous).filter((key) => key.startsWith('education_')).forEach((key) => delete next[key]);
+      if (section === 'employment') {
+        Object.keys(previous).filter((key) => key.startsWith('past_')).forEach((key) => delete next[key]);
+      }
       return { ...next, ...found };
     });
     if (Object.keys(found).length) {
       setMessage('');
       setError('Please correct the highlighted fields.');
-      setActiveTab(SECTION_OF_KEY[Object.keys(found)[0]]);
+      const firstError = Object.keys(found)[0];
+      setActiveTab(section === 'education' || firstError.startsWith('past_')
+        ? section
+        : SECTION_OF_KEY[firstError] ?? section);
       return;
     }
     const payload: Record<string, unknown> = {};
     const saved: FormState = {};
     fields.forEach((field) => {
+      if (field.readOnly) return;
       const raw = (form[field.key] ?? '').trim();
       saved[field.key] = raw;
-      if (field.key === 'fullName') {
-        const name = splitFullName(raw);
-        if (name) {
-          payload.fullName = name.fullName;
-          payload.firstName = name.firstName;
-          payload.middleName = name.middleName || '';
-          payload.lastName = name.lastName;
-        }
-        return;
-      }
       const value = field.normalize ? field.normalize(raw) : raw;
       if (value === '' && DATE_KEYS.has(field.key)) return;
-      payload[field.key] = value;
+      payload[field.key] = section === 'family' && field.key === 'childrenCount'
+        ? value === '' ? null : Number(value)
+        : value;
     });
+    if (section === 'family' && form.maritalStatus !== 'MARRIED') {
+      payload.spouseName = '';
+      saved.spouseName = '';
+      setForm((previous) => ({ ...previous, spouseName: '' }));
+    }
+    if (section === 'education') {
+      const records = educationRecords.filter((record) =>
+        Object.values(record).some((value) => value !== record.id && value.trim())
+        || educationDocuments.some((document) => document.documentNumber === record.id),
+      );
+      const first = records[0];
+      payload.educationHistory = records;
+      payload.highestQualification = first?.qualification || '';
+      payload.courseName = first?.courseName || '';
+      payload.institutionName = first?.institutionName || '';
+      payload.universityName = first?.universityName || '';
+      payload.yearOfPassing = first?.yearOfPassing || '';
+      payload.gradeOrPercentage = first?.gradeOrPercentage || '';
+      saved.highestQualification = first?.qualification || '';
+      saved.courseName = first?.courseName || '';
+      saved.institutionName = first?.institutionName || '';
+      saved.universityName = first?.universityName || '';
+      saved.yearOfPassing = first?.yearOfPassing || '';
+      saved.gradeOrPercentage = first?.gradeOrPercentage || '';
+    }
     if (section === 'employment') {
       const currentEmployer = {
         isCurrent: true,
@@ -999,6 +1219,8 @@ export default function CandidatePortalPage() {
         startDate: form.joiningDate?.trim() || null,
         endDate: null,
         workLocation: form.workLocation?.trim() || null,
+        employerHrName: form.employerHrName?.trim() || null,
+        employerHrPhone: form.employerHrPhone?.trim() || null,
       };
       const pastRecords = pastEmployments
         .filter((record) => Object.values(record).some((value) => value.trim()))
@@ -1010,12 +1232,128 @@ export default function CandidatePortalPage() {
       setBaseline((previous) => ({ ...previous, ...saved }));
       setForm((previous) => ({ ...previous, ...saved }));
       if (section === 'employment') setPastEmploymentBaseline(pastEmployments);
+      if (section === 'education') setEducationBaseline(educationRecords);
       setMessage(`${SECTION_LABEL[section]} saved.`);
     });
   };
 
-  const giveConsent = () =>
-    run(async () => {
+  const saveAndPreview = async () => {
+    const enabledSections = SECTIONS.filter((section) => (
+      section !== 'family' || candidateFormConfig.sections.family.enabled
+    ) && (
+      section !== 'education' || candidateFormConfig.sections.education.enabled
+    ) && (
+      section !== 'employment' || candidateFormConfig.sections.employment.enabled
+    ));
+    const fields = enabledSections.flatMap((section) => effectiveSectionFields[section]);
+    const found: Record<string, string> = validateFields(form, fields);
+    if (candidateFormConfig.sections.education.enabled) {
+      if (educationRecords.length === 0 && educationRecordFields.some((field) => field.required)) {
+        found.education_required = 'Add at least one education record to complete the required education fields.';
+      }
+      educationRecords.forEach((record) => {
+        educationRecordFields.forEach((field) => {
+          const value = record[field.key as keyof EducationRecord].trim();
+          const problem = !value && field.required
+            ? `${field.label} is required.`
+            : value ? field.validate?.(value) : null;
+          if (problem) found[`education_${record.id}_${field.key}`] = problem;
+        });
+      });
+    }
+    if (candidateFormConfig.sections.employment.enabled) {
+      pastEmployments.forEach((record, index) => {
+        const recordStarted = Object.values(record).some((value) => value.trim());
+        pastEmploymentFields.forEach((field) => {
+          const value = record[field.key as keyof PastEmploymentForm].trim();
+          const problem = !value && recordStarted && field.required
+            ? `${field.label} is required.`
+            : value ? field.validate?.(value) : null;
+          if (problem) found[`past_${index}_${field.key}`] = problem;
+        });
+      });
+    }
+    setFieldErrors(found);
+    if (Object.keys(found).length) {
+      setError('Please correct the highlighted fields before reviewing your submission.');
+      const firstKey = Object.keys(found)[0];
+      if (firstKey.startsWith('education_')) setActiveTab('education');
+      else if (firstKey.startsWith('past_')) setActiveTab('employment');
+      else setActiveTab(SECTION_OF_KEY[firstKey] ?? 'details');
+      return;
+    }
+
+    if (anyDirty) {
+      const payload: Record<string, unknown> = {};
+      fields.filter((field) => !field.readOnly).forEach((field) => {
+        const raw = (form[field.key] ?? '').trim();
+        const value = field.normalize ? field.normalize(raw) : raw;
+        payload[field.key] = field.key === 'childrenCount'
+          ? value === '' ? null : Number(value)
+          : value;
+      });
+      if (candidateFormConfig.sections.family.enabled && form.maritalStatus !== 'MARRIED') payload.spouseName = '';
+      if (candidateFormConfig.sections.education.enabled) {
+        const records = educationRecords.filter((record) =>
+          Object.values(record).some((value) => value !== record.id && value.trim())
+          || educationDocuments.some((document) => document.documentNumber === record.id),
+        );
+        const first = records[0];
+        payload.educationHistory = records;
+        payload.highestQualification = first?.qualification || '';
+        payload.courseName = first?.courseName || '';
+        payload.institutionName = first?.institutionName || '';
+        payload.universityName = first?.universityName || '';
+        payload.yearOfPassing = first?.yearOfPassing || '';
+        payload.gradeOrPercentage = first?.gradeOrPercentage || '';
+      }
+      if (candidateFormConfig.sections.employment.enabled) {
+        payload.employmentHistory = [{
+          isCurrent: true,
+          employerName: form.currentEmployer?.trim() || null,
+          employeeId: form.employeeId?.trim() || null,
+          designation: form.employeeDesignation?.trim() || null,
+          department: form.employeeDepartment?.trim() || null,
+          employmentType: form.employmentType?.trim() || null,
+          startDate: form.joiningDate?.trim() || null,
+          endDate: null,
+          workLocation: form.workLocation?.trim() || null,
+          employerHrName: form.employerHrName?.trim() || null,
+          employerHrPhone: form.employerHrPhone?.trim() || null,
+        }, ...pastEmployments
+          .filter((record) => Object.values(record).some((value) => value.trim()))
+          .map((record) => ({ ...record, isCurrent: false }))];
+      }
+      const saved = { ...form };
+      if (candidateFormConfig.sections.family.enabled && form.maritalStatus !== 'MARRIED') saved.spouseName = '';
+      const success = await run(async () => {
+        await api.patch(`/candidate-portal/${token}/profile`, payload);
+        setBaseline(saved);
+        setForm(saved);
+        setEducationBaseline(educationRecords);
+        setPastEmploymentBaseline(pastEmployments);
+      });
+      if (!success) return;
+    }
+    setConsent(false);
+    setActiveTab('consent');
+    setMessage('Your details are saved. Review the preview below before submitting consent.');
+  };
+
+  const giveConsent = async () => {
+    if (!progress.consentReady) {
+      const firstRequiredItem = progress.pending.find((item) => (
+        (item.type === 'profile' && item.key !== 'profile')
+        || (item.type === 'document' && Boolean(item.customFormId))
+      ));
+      setConsent(false);
+      setError('Consent is unavailable until all required information and client-required forms are complete. Complete the outstanding item(s) below first.');
+      setMessage('');
+      if (firstRequiredItem) setActiveTab(tabForPending(firstRequiredItem));
+      return;
+    }
+    await run(async () => {
+      if (anyDirty) throw new Error('Save your changes and review the preview before submitting consent.');
       await api.post(`/candidate-portal/${token}/consent`, {
         consentGiven: true,
         consentVersion: '1.1',
@@ -1023,6 +1361,7 @@ export default function CandidatePortalPage() {
       setConsent(false);
       setMessage('Your consent was recorded.');
     });
+  };
 
   const afterUpload = (count: number) => {
     setError('');
@@ -1052,40 +1391,44 @@ export default function CandidatePortalPage() {
 
   const theme = { '--accent': accent, '--accent-soft': `${accent}1a`, '--accent-ring': `${accent}33` } as CSSProperties;
   const { progress } = portal;
+  const requiredConsentItems = progress.pending.filter((item) => (
+    (item.type === 'profile' && item.key !== 'profile')
+    || (item.type === 'document' && Boolean(item.customFormId))
+  ));
+  const requiredCustomFormItems = requiredConsentItems.filter((item) => item.type === 'document' && item.customFormId);
   const nameParts = splitFullName(form.fullName || '');
   const firstName = nameParts?.firstName || (typeof portal.candidate.firstName === 'string' ? portal.candidate.firstName : 'there');
   const companyLogo = resolveLogoUrl(portal.company.logoUrl);
   const companyMonogram = portal.company.name.trim().split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase() || 'C';
   const requiredUploadItems = progress.pending.filter((item) => item.type === 'document' && !item.customFormId);
-  const overviewForms = (['BGV', 'IDENTITY', 'EDUCATION', 'EMPLOYMENT', 'POLICE_VERIFICATION', 'OTHER_CHECKS', 'OTHER'] as CandidateCustomForm['category'][])
+  const overviewForms = (['BGV', 'IDENTITY', 'EDUCATION', 'EMPLOYMENT', 'POLICE_VERIFICATION', 'CIBIL', 'OTHER_CHECKS', 'OTHER'] as CandidateCustomForm['category'][])
     .flatMap((category) => customFormsFor(category));
   const overviewInstructions: { tab: TabKey; title: string; description: string; details: string[] }[] = [
     {
       tab: 'details',
       title: 'Your details',
-      description: 'Enter your personal information exactly as it appears on your official documents.',
-      details: DETAILS_FIELDS.map((field) => `${field.label}${field.required ? ' (required)' : ''}`),
+      description: 'Your name and email address are provided by the inviting company and cannot be edited here. Contact the company to request a correction. Complete the remaining personal information.',
+      details: effectiveSectionFields.details.map((field) => `${field.label}${field.required ? ' (required)' : ''}`),
     },
   ];
   if (candidateFormConfig.sections.family.enabled) {
     overviewInstructions.push({
       tab: 'family',
       title: 'Family details',
-      description: 'Provide parent details where available.',
-      details: FAMILY_FIELDS.map((field) => field.label),
+      description: 'Add parent details, select your marital status, and provide spouse details if married.',
+      details: effectiveSectionFields.family.map((field) => `${field.label}${field.required ? ' (required)' : ''}`),
     });
   }
   if (visibleTabs.some(({ key }) => key === 'identity')) {
     const identityDetails = IDENTITY_ITEMS
       .filter((item) => identityConfigFor(item.fieldKey)?.enabled !== false)
-      .map((item) => {
+      .flatMap((item) => {
         const config = identityConfigFor(item.fieldKey);
         const field = FIELD_BY_KEY[item.fieldKey];
-        const requirements = [
-          config?.required ? 'number required' : 'number if available',
-          config?.documentRequired ? 'document copy required' : null,
-        ].filter(Boolean);
-        return `${field.label} (${requirements.join('; ')})`;
+        return [
+          `${field.label} number${config?.required ? ' (required)' : ''}`,
+          ...(config?.documentRequired ? [`${field.label} document copy (required)`] : []),
+        ];
       });
     overviewInstructions.push({
       tab: 'identity',
@@ -1114,12 +1457,23 @@ export default function CandidatePortalPage() {
       details: addressDetails,
     });
   }
+  if (visibleTabs.some(({ key }) => key === 'cibil')) {
+    overviewInstructions.push({
+      tab: 'cibil',
+      title: 'CIBIL form',
+      description: 'Download the CIBIL template configured by your client, complete it and upload the finished form.',
+      details: customFormsFor('CIBIL').map((form) => `${form.name}${form.required ? ' (required)' : ' (optional)'}`),
+    });
+  }
   if (visibleTabs.some(({ key }) => key === 'education')) {
     overviewInstructions.push({
       tab: 'education',
       title: 'Education history',
-      description: 'Enter your education details and prepare supporting records or any client-provided education form.',
-      details: [...effectiveSectionFields.education.map((field) => field.label), 'Education certificates or marksheets'],
+      description: 'Add each qualification as a separate record and attach its matching certificate or marksheet. Include any client-provided education form.',
+      details: [
+        ...educationRecordFields.map((field) => `${field.label}${field.required ? ' (required)' : ''}`),
+        `Separate certificate or marksheet for each record${requiredEducationUploadTypes.includes('EDUCATION_CERTIFICATE') ? ' (required)' : ''}`,
+      ],
     });
   }
   if (visibleTabs.some(({ key }) => key === 'employment')) {
@@ -1129,8 +1483,9 @@ export default function CandidatePortalPage() {
       title: 'Employment history',
       description: 'Enter your current employer first, then add past employers from most recent to oldest. You can enter up to 10 employers total.',
       details: [
-        'Current employer and role details',
+        ...effectiveSectionFields.employment.map((field) => `${field.label}${field.required ? ' (required)' : ''}`),
         'Past employer name, role and employment dates',
+        'Employer HR contact name and phone number',
         ...enabledEmploymentDocuments.map((document) => {
           const label = CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? humanize(document.type);
           return `${label}${document.required ? ' (required)' : ' (optional)'}`;
@@ -1142,8 +1497,15 @@ export default function CandidatePortalPage() {
     overviewInstructions.push({
       tab: 'consent',
       title: 'Review and give consent',
-      description: 'Review your information and give consent after completing the required details, documents and forms.',
-      details: ['Consent is needed before the requested verification checks can begin.'],
+      description: 'Check your saved personal, family, education and employment details and uploaded documents before giving consent.',
+      details: ['Consent is needed before the requested verification checks can begin.', 'Your profile details are locked after consent is submitted.'],
+    });
+  } else {
+    overviewInstructions.push({
+      tab: 'consent',
+      title: 'Review and submit',
+      description: 'Check the information and documents you entered before submitting your consent.',
+      details: ['Your profile details are locked after consent is submitted.'],
     });
   }
 
@@ -1152,7 +1514,15 @@ export default function CandidatePortalPage() {
   const sectionPanel = (section: SectionKey, icon: LucideIcon, title: string, description: string, saveLabel: string, extra?: ReactNode) => (
     <SectionCard icon={icon} title={title} description={description}>
       {extra}
-      <FieldGrid fields={effectiveSectionFields[section]} form={form} errors={fieldErrors} disabled={profileReadOnly} onChange={setField} />
+      <FieldGrid
+        fields={section === 'family'
+          ? effectiveSectionFields.family.filter((field) => field.key !== 'spouseName' || form.maritalStatus === 'MARRIED')
+          : effectiveSectionFields[section]}
+        form={form}
+        errors={fieldErrors}
+        disabled={profileReadOnly}
+        onChange={setField}
+      />
       <SaveBar dirty={dirtyBySection[section]} saving={saving} label={saveLabel} onSave={() => saveSection(section)} readOnly={profileReadOnly} />
     </SectionCard>
   );
@@ -1231,6 +1601,7 @@ export default function CandidatePortalPage() {
 
         {currentTab === 'overview' && (
           <div role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" className="space-y-5">
+            <ClientContactCard client={portal.client} />
             <SectionCard icon={FileCheck} title="What to fill in" description={`Follow these instructions for the checks and form settings${portal.client?.name ? ` configured by ${portal.client.name}` : ' configured for your verification'}.`}>
               <ol className="space-y-3">
                 {overviewInstructions.map((instruction, index) => (
@@ -1249,7 +1620,10 @@ export default function CandidatePortalPage() {
                         {instruction.details.map((detail) => (
                           <li key={detail} className="flex items-start gap-2">
                             <Check size={13} className="mt-0.5 shrink-0" style={{ color: 'var(--accent)' }} aria-hidden="true" />
-                            <span>{detail}</span>
+                            <span>
+                              {detail.replace(/\s+\(required\)$/, '')}
+                              {detail.endsWith(' (required)') && <RequiredMark />}
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -1269,7 +1643,7 @@ export default function CandidatePortalPage() {
                         <li key={item.key} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
                           <span className="flex items-center gap-2.5 text-sm text-slate-800">
                             <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
-                            {item.label}
+                            {item.label}<RequiredMark />
                           </span>
                           <button type="button" onClick={() => setActiveTab(tabForPending(item))} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
                             Go to upload
@@ -1321,7 +1695,7 @@ export default function CandidatePortalPage() {
 
         {currentTab === 'family' && (
           <div role="tabpanel" id="panel-family" aria-labelledby="tab-family">
-            {sectionPanel('family', Users, 'Family details', 'Add your parents’ names as they appear on your official documents.', 'Save family details')}
+            {sectionPanel('family', Users, 'Family details', 'Add parent details, select your marital status, and provide your spouse’s name when married. Select the number of children, including zero.', 'Save family details')}
           </div>
         )}
 
@@ -1343,6 +1717,7 @@ export default function CandidatePortalPage() {
                 token={token}
                 onChange={(value) => setField(item.fieldKey, value)}
                 onUploaded={afterUpload}
+                documentRequired={identityConfigFor(item.fieldKey)?.documentRequired}
                 readOnly={profileReadOnly}
                 uploadReadOnly={uploadReadOnly}
               />
@@ -1361,9 +1736,9 @@ export default function CandidatePortalPage() {
             {candidateFormConfig.sections.address.enabled && sectionPanel('address', MapPin, 'Current and permanent address', 'Enter the addresses where you currently live and where you are permanently registered.', 'Save addresses')}
             <SectionCard icon={Camera} title="Address verification documents" description="Upload an accepted address proof such as Aadhaar, and a clear GPS-enabled photo of your current address when requested.">
               <div className="mb-4 flex flex-wrap gap-2">
-                {candidateFormConfig.address.documents.filter((document) => document.enabled).map((document) => {
-                  const label = CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? humanize(document.type);
-                  return <span key={document.type} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{label}{document.required ? ' · required' : ''}</span>;
+                {addressUploadTypes.map((type) => {
+                  const label = CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === type)?.label ?? humanize(type);
+                  return <span key={type} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{label}{requiredAddressUploadTypes.includes(type) && <RequiredMark />}</span>;
                 })}
               </div>
               {addressUploadTypes.length > 0 ? (
@@ -1372,6 +1747,7 @@ export default function CandidatePortalPage() {
                   title="Upload address documents"
                   description="Choose the requested document type before adding your PDF or image."
                   types={addressUploadTypes}
+                  requiredTypes={requiredAddressUploadTypes}
                   documentCategory="ADDRESS"
                   onUploaded={afterUpload}
                   readOnly={uploadReadOnly}
@@ -1387,15 +1763,71 @@ export default function CandidatePortalPage() {
 
         {currentTab === 'education' && (
           <div role="tabpanel" id="panel-education" aria-labelledby="tab-education" className="space-y-5">
-            {sectionPanel('education', GraduationCap, 'Education details', 'Tell us about your highest completed qualification.', 'Save education details')}
-            <AttachmentUploader token={token} title="Education documents" description="Attach degree certificates, marksheets and other education records. Add as many files as you need." types={EDUCATION_TYPES} onUploaded={afterUpload} readOnly={uploadReadOnly} />
+            <SectionCard icon={GraduationCap} title="Education history" description="Add each school, college or university qualification separately. Attach the matching certificate or marksheet to each record so it can be reviewed with the right qualification.">
+              <div className="space-y-4">
+                {educationRecords.map((record, index) => {
+                  const documents = educationDocuments.filter((document) => document.documentNumber === record.id);
+                  return (
+                    <section key={record.id} className="rounded-xl border border-slate-200 p-4">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-semibold text-slate-900">Education record {index + 1}</h3>
+                          <p className="mt-1 text-xs text-slate-500">Enter the qualification as it appears on your certificate.</p>
+                        </div>
+                        <button type="button" onClick={() => setEducationRecords((previous) => previous.filter((item) => item.id !== record.id))} disabled={profileReadOnly} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
+                          <Trash2 size={14} aria-hidden="true" /> Remove
+                        </button>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        {educationRecordFields.map((field) => (
+                          <Field
+                            key={field.key}
+                            def={{ ...field, key: `education_${record.id}_${field.key}` }}
+                            value={record[field.key as keyof EducationRecord]}
+                            error={fieldErrors[`education_${record.id}_${field.key}`]}
+                            disabled={profileReadOnly}
+                            onChange={(value) => setEducationRecords((previous) => previous.map((item) => (
+                              item.id === record.id ? { ...item, [field.key]: field.format ? field.format(value) : value } : item
+                            )))}
+                          />
+                        ))}
+                      </div>
+                      <div className="mt-5">
+                        <h4 className="mb-2 text-sm font-medium text-slate-700">Certificate or marksheet for this qualification{requiredEducationUploadTypes.includes('EDUCATION_CERTIFICATE') && <RequiredMark />}</h4>
+                        <AttachmentUploader
+                          variant="inline"
+                          token={token}
+                          types={EDUCATION_TYPES}
+                          requiredTypes={requiredEducationUploadTypes}
+                          documentNumber={record.id}
+                          documentCategory="EDUCATION"
+                          onUploaded={afterUpload}
+                          readOnly={uploadReadOnly}
+                        />
+                        <div className="mt-3">
+                          <DocumentList documents={documents} emptyText="No document attached to this education record yet." />
+                        </div>
+                      </div>
+                    </section>
+                  );
+                })}
+                {educationRecords.length < 10 && (
+                  <button type="button" onClick={() => setEducationRecords((previous) => [...previous, emptyEducationRecord()])} disabled={profileReadOnly} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                    <Plus size={16} aria-hidden="true" /> Add education
+                  </button>
+                )}
+                <p className="text-xs text-slate-500">{educationRecords.length} of 10 education records added. You can save a record before uploading its certificate.</p>
+                <SaveBar dirty={dirtyBySection.education} saving={saving} label="Save education history" onSave={() => saveSection('education')} readOnly={profileReadOnly} />
+              </div>
+            </SectionCard>
+            {educationDocuments.some((document) => !educationRecords.some((record) => record.id === document.documentNumber)) && (
+              <SectionCard icon={Paperclip} title="Other education documents" description="Documents uploaded before the education records were added.">
+                <DocumentList documents={educationDocuments.filter((document) => !educationRecords.some((record) => record.id === document.documentNumber))} emptyText="No unassigned education documents." />
+              </SectionCard>
+            )}
             {customFormsFor('EDUCATION').map((form) => (
               <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
             ))}
-            <div className="px-1">
-              <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded education documents ({educationDocuments.length})</h3>
-              <DocumentList documents={educationDocuments} emptyText="No education documents uploaded yet." />
-            </div>
           </div>
         )}
 
@@ -1416,11 +1848,12 @@ export default function CandidatePortalPage() {
                         )}
                       </div>
                       <div className="grid gap-4 sm:grid-cols-2">
-                        {PAST_EMPLOYMENT_FIELDS.map((field) => (
+                        {pastEmploymentFields.map((field) => (
                           <Field
                             key={`${index}-${field.key}`}
-                            def={{ ...field, key: `past-${index}-${field.key}` }}
+                              def={{ ...field, required: Object.values(employment).some((value) => value.trim()) && field.required, key: `past-${index}-${field.key}` }}
                             value={employment[field.key as keyof PastEmploymentForm]}
+                            error={fieldErrors[`past_${index}_${field.key}`]}
                             disabled={profileReadOnly}
                             onChange={(value) => setPastEmployments((previous) => previous.map((item, itemIndex) => (
                               itemIndex === index ? { ...item, [field.key]: value } : item
@@ -1439,8 +1872,8 @@ export default function CandidatePortalPage() {
                 </div>
               </SectionCard>
             )}
-            {candidateFormConfig.sections.employment.enabled && candidateFormConfig.employmentDocuments.some((item) => item.enabled) ? (
-              <AttachmentUploader token={token} title="Employment documents" description="Select the document type first, then attach the matching file. You can upload multiple files for the selected type." types={candidateFormConfig.employmentDocuments.filter((item) => item.enabled).map((item) => item.type)} documentCategory="EMPLOYMENT" onUploaded={afterUpload} readOnly={uploadReadOnly} />
+            {candidateFormConfig.sections.employment.enabled && employmentUploadTypes.length > 0 ? (
+              <AttachmentUploader token={token} title="Employment documents" description="Select the document type first, then attach the matching file. Required document types are marked with a red asterisk." types={employmentUploadTypes} requiredTypes={requiredEmploymentUploadTypes} documentCategory="EMPLOYMENT" onUploaded={afterUpload} readOnly={uploadReadOnly} />
             ) : (
               <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">This client has not requested employment document uploads.</p>
             )}
@@ -1479,6 +1912,18 @@ export default function CandidatePortalPage() {
           </div>
         )}
 
+        {currentTab === 'cibil' && (
+          <div role="tabpanel" id="panel-cibil" aria-labelledby="tab-cibil" className="space-y-4">
+            <div className="px-1">
+              <h2 className="text-lg font-semibold">CIBIL form</h2>
+              <p className="mt-1 text-sm text-slate-600">Download the client-provided CIBIL form, complete it and upload the completed copy. Required forms are marked with a red asterisk.</p>
+            </div>
+            {customFormsFor('CIBIL').map((form) => (
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
+            ))}
+          </div>
+        )}
+
         {currentTab === 'otherChecks' && (
           <div role="tabpanel" id="panel-otherChecks" aria-labelledby="tab-otherChecks" className="space-y-4">
             <div className="px-1">
@@ -1494,8 +1939,8 @@ export default function CandidatePortalPage() {
         {currentTab === 'documents' && (
           <div role="tabpanel" id="panel-documents" aria-labelledby="tab-documents" className="space-y-4">
             <div className="px-1">
-              <h2 className="text-lg font-semibold">Other documents</h2>
-              <p className="mt-1 text-sm text-slate-600">ID copies are on the ID numbers tab, and education and employment files are on their own tabs. Use PDF, JPG or PNG files where every corner and number is readable.</p>
+              <h2 className="text-lg font-semibold">All uploaded documents</h2>
+              <p className="mt-1 text-sm text-slate-600">This list includes every document you have uploaded, including identity, address, education, employment and completed forms.</p>
             </div>
             {DOCUMENT_GROUPS.map((group) => (
               <CandidateDocumentUpload key={group.title} token={token} accent={accent} title={group.title} description={group.description} types={group.types} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
@@ -1504,14 +1949,172 @@ export default function CandidatePortalPage() {
               <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
             ))}
             <div className="px-1 pt-2">
-              <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded documents ({otherDocuments.length})</h3>
-              <DocumentList documents={otherDocuments} emptyText="Nothing uploaded yet. Documents you add above will appear here." />
+              <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded documents ({portal.documents.length})</h3>
+              <DocumentList documents={portal.documents} emptyText="Nothing uploaded yet. Documents you add above will appear here." />
             </div>
           </div>
         )}
 
         {currentTab === 'consent' && (
           <div role="tabpanel" id="panel-consent" aria-labelledby="tab-consent">
+            <div className="mb-5 space-y-5">
+              <SectionCard icon={FileCheck} title="Review your information" description="Check every section and uploaded document before you submit. Use the edit buttons to return to a section and correct anything that is missing or inaccurate.">
+                <div className="mb-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{anyDirty ? 'You have unsaved changes' : 'Preview is up to date'}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-600">
+                      {anyDirty ? 'Save your latest edits to refresh this preview. Consent is unavailable until the changes are saved.' : 'Your saved details and uploaded documents are shown below.'}
+                    </p>
+                  </div>
+                  {anyDirty && (
+                    <button type="button" onClick={() => void saveAndPreview()} disabled={saving || profileReadOnly} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" style={{ backgroundColor: 'var(--accent)' }}>
+                      {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Save size={15} aria-hidden="true" />}
+                      Save changes and refresh preview
+                    </button>
+                  )}
+                </div>
+
+                <ClientContactCard client={portal.client} />
+
+                <div className="space-y-5">
+                  <section>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-slate-900">Personal and family details</h3>
+                      <div className="flex gap-3">
+                        <button type="button" onClick={() => setActiveTab('details')} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Edit details</button>
+                        {candidateFormConfig.sections.family.enabled && <button type="button" onClick={() => setActiveTab('family')} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Edit family</button>}
+                      </div>
+                    </div>
+                    <dl className="grid gap-3 rounded-xl border border-slate-200 p-4 sm:grid-cols-2">
+                      {[
+                        { label: 'Full name', value: form.fullName, required: true },
+                        { label: 'Email address', value: form.email, required: true },
+                        { label: 'Mobile number', value: form.phone, required: candidateFormConfig.fields.phone.required },
+                        { label: 'Date of birth', value: form.dateOfBirth ? formatDate(form.dateOfBirth) : '', required: candidateFormConfig.fields.dateOfBirth.required },
+                        { label: 'Gender', value: form.gender, required: candidateFormConfig.fields.gender.required },
+                        { label: "Father's name", value: form.fatherName, required: candidateFormConfig.fields.fatherName.required },
+                        { label: "Mother's name", value: form.motherName, required: candidateFormConfig.fields.motherName.required },
+                        { label: 'Marital status', value: form.maritalStatus ? humanize(form.maritalStatus) : '', required: candidateFormConfig.fields.maritalStatus.required },
+                        ...(form.maritalStatus === 'MARRIED' ? [{ label: 'Husband / spouse name', value: form.spouseName, required: candidateFormConfig.fields.spouseName.required }] : []),
+                        { label: 'Number of children', value: form.childrenCount, required: candidateFormConfig.fields.childrenCount.required },
+                        { label: 'Current address', value: form.currentAddress, required: candidateFormConfig.address.currentAddressRequired },
+                        { label: 'Permanent address', value: form.permanentAddress, required: candidateFormConfig.address.permanentAddressRequired },
+                        { label: 'Notes for the verification team', value: form.candidateNotes, required: candidateFormConfig.fields.candidateNotes.required },
+                      ].map(({ label, value, required }) => (
+                        <div key={label} className="min-w-0">
+                          <dt className="text-xs font-medium text-slate-500">{label}{required && <span className="ml-1 font-bold text-red-600" aria-hidden="true">*</span>}</dt>
+                          <dd className="mt-1 break-words whitespace-pre-wrap text-sm text-slate-900">{value || 'Not provided'}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+
+                  {visibleTabs.some(({ key }) => key === 'identity') && (
+                    <section>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-semibold text-slate-900">Identity information</h3>
+                        <button type="button" onClick={() => setActiveTab('identity')} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Edit ID numbers</button>
+                      </div>
+                      <dl className="grid gap-3 rounded-xl border border-slate-200 p-4 sm:grid-cols-2">
+                        {IDENTITY_ITEMS.filter((item) => identityConfigFor(item.fieldKey)?.enabled !== false).map((item) => {
+                          const field = FIELD_BY_KEY[item.fieldKey];
+                          const config = identityConfigFor(item.fieldKey);
+                          const documents = portal.documents.filter((document) => document.documentType === item.docType);
+                          return (
+                            <div key={item.fieldKey}>
+                              <dt className="text-xs font-medium text-slate-500">{field.label}{config?.required && <RequiredMark />}</dt>
+                              <dd className="mt-1 break-words text-sm text-slate-900">{form[item.fieldKey] || 'Not provided'}</dd>
+                              {config?.documentRequired && (
+                                <div className="mt-2">
+                                  <dt className="text-xs font-medium text-slate-500">Copy of {field.label}<RequiredMark /></dt>
+                                  <dd className="mt-1 break-words text-sm text-slate-900">{documents.map((document) => document.fileName).join(', ') || 'Not uploaded'}</dd>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </dl>
+                    </section>
+                  )}
+
+                  <section>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-slate-900">Education</h3>
+                      <button type="button" onClick={() => setActiveTab('education')} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Edit education</button>
+                    </div>
+                    {educationRecords.length ? (
+                      <div className="space-y-3">
+                        {educationRecords.map((record, index) => (
+                          <div key={record.id} className="rounded-xl border border-slate-200 p-4">
+                            <h4 className="mb-3 text-sm font-medium text-slate-800">Education record {index + 1}</h4>
+                            <dl className="grid gap-3 sm:grid-cols-2">
+                              {educationRecordFields.map((field) => (
+                                <div key={field.key}>
+                                  <dt className="text-xs font-medium text-slate-500">{field.label}{field.required && <span className="ml-1 font-bold text-red-600" aria-hidden="true">*</span>}</dt>
+                                  <dd className="mt-1 break-words text-sm text-slate-900">{record[field.key as keyof EducationRecord] || 'Not provided'}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                            <div className="mt-4">
+                              <p className="mb-2 text-xs font-medium text-slate-500">Attached documents</p>
+                              <DocumentList documents={educationDocuments.filter((document) => document.documentNumber === record.id)} emptyText="No document attached to this record." />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">No education records provided.</p>}
+                  </section>
+
+                  <section>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-slate-900">Employment history</h3>
+                      <button type="button" onClick={() => setActiveTab('employment')} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>Edit employment</button>
+                    </div>
+                    {[{
+                      employerName: form.currentEmployer,
+                      employeeId: form.employeeId,
+                      designation: form.employeeDesignation,
+                      department: form.employeeDepartment,
+                      employmentType: form.employmentType,
+                      startDate: form.joiningDate,
+                      endDate: '',
+                      workLocation: form.workLocation,
+                      employerHrName: form.employerHrName,
+                      employerHrPhone: form.employerHrPhone,
+                    }, ...pastEmployments.filter((record) => Object.values(record).some((value) => value.trim()))].map((record, index) => (
+                      <dl key={`review-employment-${index}`} className="mb-3 grid gap-3 rounded-xl border border-slate-200 p-4 sm:grid-cols-2">
+                        <div className="sm:col-span-2"><h4 className="text-sm font-medium text-slate-800">{index === 0 ? 'Current employer' : `Past employer ${index}`}</h4></div>
+                        {[
+                          { key: 'employerName', label: 'Employer', value: record.employerName, required: candidateFormConfig.fields.employerName.required },
+                          { key: 'employeeId', label: 'Employee ID', value: record.employeeId, required: candidateFormConfig.fields.employeeId.required },
+                          { key: 'designation', label: 'Designation', value: record.designation, required: candidateFormConfig.fields.designation.required },
+                          { key: 'department', label: 'Department', value: record.department, required: candidateFormConfig.fields.department.required },
+                          { key: 'employmentType', label: 'Employment type', value: record.employmentType ? humanize(record.employmentType) : '', required: candidateFormConfig.fields.employmentType.required },
+                          { key: 'startDate', label: 'Start date', value: record.startDate ? formatDate(record.startDate) : '', required: candidateFormConfig.fields.startDate.required },
+                          { key: 'endDate', label: 'End date', value: index === 0 || !record.endDate ? '' : formatDate(record.endDate), required: index > 0 && candidateFormConfig.fields.endDate.required },
+                          { key: 'workLocation', label: 'Work location', value: record.workLocation, required: candidateFormConfig.fields.workLocation.required },
+                          { key: 'employerHrName', label: 'Employer HR contact name', value: record.employerHrName, required: candidateFormConfig.fields.employerHrName.required },
+                          { key: 'employerHrPhone', label: 'Employer HR contact number', value: record.employerHrPhone, required: candidateFormConfig.fields.employerHrPhone.required },
+                        ].map(({ key, label, value, required }) => (
+                          <div key={key}>
+                            <dt className="text-xs font-medium text-slate-500">{label}{required && <span className="ml-1 font-bold text-red-600" aria-hidden="true">*</span>}</dt>
+                            <dd className="mt-1 break-words text-sm text-slate-900">{value || 'Not provided'}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ))}
+                  </section>
+
+                  <section>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-slate-900">Uploaded documents</h3>
+                      <button type="button" onClick={() => setActiveTab('documents')} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>View documents</button>
+                    </div>
+                    <DocumentList documents={portal.documents} emptyText="No documents uploaded yet." />
+                  </section>
+                </div>
+              </SectionCard>
+            </div>
             {progress.consentComplete ? (
               <section className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
                 <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-600" size={20} aria-hidden="true" />
@@ -1520,9 +2123,40 @@ export default function CandidatePortalPage() {
                   <p className="mt-1 text-sm text-emerald-800">You have authorised the background verification checks. You can continue uploading any outstanding documents; profile details can no longer be edited.</p>
                 </div>
               </section>
-            ) : !progress.consentReady ? (
+            ) : portal.case && ['COMPLETED', 'CANCELLED'].includes(portal.case.status) ? (
               <SectionCard icon={ShieldCheck} title="Consent" description="Consent is unavailable for a finalized verification case.">
                 <p className="text-sm text-slate-600">This verification case is completed or cancelled. Contact {portal.company.name} if you need help.</p>
+              </SectionCard>
+            ) : !progress.consentReady ? (
+              <SectionCard icon={ShieldCheck} title="Complete required items before consent" description="Consent will be available after required profile fields and client-required forms are complete.">
+                <p className="text-sm leading-6 text-slate-700">
+                  Please complete every outstanding item below.
+                  {requiredCustomFormItems.length > 0 && ' Client-required forms must be downloaded, completed, and uploaded before consent. This includes any required BGV or police verification (PCC) forms configured for your case.'}
+                </p>
+                {requiredConsentItems.length > 0 ? (
+                  <ul className="mt-4 space-y-2">
+                    {requiredConsentItems.map((item) => (
+                      <li key={item.key} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+                        <span className="flex items-center gap-2.5 text-sm text-amber-950">
+                          <AlertCircle size={16} className="shrink-0 text-amber-700" aria-hidden="true" />
+                          {item.label}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab(tabForPending(item))}
+                          className="shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-white"
+                          style={{ backgroundColor: 'var(--accent)' }}
+                        >
+                          {item.customFormId ? 'Complete this form' : 'Complete this section'}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                    One or more required profile fields or forms still need attention. Return to the overview checklist and complete every item marked with a red asterisk.
+                  </p>
+                )}
               </SectionCard>
             ) : (
               <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-6">
@@ -1533,10 +2167,11 @@ export default function CandidatePortalPage() {
                 <p className="text-sm leading-6 text-amber-900">{consentTextFor(portal.company.name, portal.client?.name)}</p>
                 {!portal.case && <p className="mt-2 text-sm text-amber-900">You can submit consent now. It will be linked to your verification case when one is created.</p>}
                 <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-amber-300 bg-white/70 p-3 text-sm text-amber-950">
-                  <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-amber-700" />
+                  <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} disabled={anyDirty} className="mt-0.5 h-4 w-4 shrink-0 accent-amber-700 disabled:opacity-50" />
                   <span>I have read and understood the statement above. I voluntarily agree to the background verification and authorize the use of my information for this purpose.</span>
                 </label>
-                <button type="button" onClick={giveConsent} disabled={!consent || saving} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50">
+                {anyDirty && <p className="mt-3 text-sm font-medium text-amber-900">Save your changes and review the refreshed preview before you can submit consent.</p>}
+                <button type="button" onClick={giveConsent} disabled={!consent || saving || anyDirty} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50">
                   {saving && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}
                   Submit consent
                 </button>

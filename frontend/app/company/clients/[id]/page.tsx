@@ -19,13 +19,15 @@ import ClientFormModal from '@/src/components/layout/company/client/ClientFormMo
 import ClientConfirmDialog from '@/src/components/layout/company/client/ClientConfirmDialog';
 import ClientAnalyticsPanel from '@/src/components/layout/company/client/ClientAnalyticsPanel';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
-import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
+import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, CANDIDATE_FORM_REQUIRED_FIELD_GROUPS, CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
 import { setClientPortalScope } from '@/src/lib/api/client-portal';
-import type { CandidateFormConfig, CandidateIdentityFieldKey, Client, ClientFormValues, ClientPortalAccountMethod, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
+import type { CandidateFormConfig, CandidateFormRequiredFieldKey, CandidateIdentityFieldKey, Client, ClientFormValues, ClientPortalAccountMethod, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
 import type { Candidate, CandidateFormValues, CandidateStatus, PaginationMeta } from '@/src/types/candidate';
 
 const PAGE_SIZE = 10;
 const CANDIDATE_STATUSES: CandidateStatus[] = ['PENDING', 'INVITED', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'ON_HOLD'];
+const candidateRequiredFieldsFor = (key: typeof CANDIDATE_FORM_REQUIRED_FIELD_GROUPS[number]['key']) =>
+  CANDIDATE_FORM_REQUIRED_FIELD_GROUPS.find((group) => group.key === key)?.fields ?? [];
 type TabKey = 'overview' | 'analytics' | 'billing' | 'subclients' | 'candidates' | 'cases' | 'reports' | 'invoices' | 'report-branding' | 'candidate-form' | 'portal-access' | 'client-portal';
 const TABS: { key: TabKey; label: string; icon: typeof Users }[] = [
   { key: 'overview', label: 'Overview', icon: Users },
@@ -59,7 +61,15 @@ function CandidateFormPreviewFields({ title, fields }: { title: string; fields: 
       <p className="mb-2 text-xs font-semibold">{title}</p>
       {fields.length ? (
         <div className="grid gap-2 sm:grid-cols-2">
-          {fields.map((field) => <div key={field} className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-[10px] text-[var(--muted)]">{field}</div>)}
+          {fields.map((field) => {
+            const required = field.endsWith(' *') || field.endsWith(' · required');
+            const label = required ? field.replace(/(?: \*| · required)$/, '') : field;
+            return (
+              <div key={field} className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-[10px] text-[var(--muted)]">
+                {label}{required && <><span className="ml-1 font-bold text-red-600">*</span><span className="sr-only"> required</span></>}
+              </div>
+            );
+          })}
         </div>
       ) : (
         <p className="rounded-lg border border-dashed border-[var(--border)] bg-white p-3 text-xs text-[var(--muted)]">No fields or forms are enabled in this section.</p>
@@ -70,6 +80,7 @@ function CandidateFormPreviewFields({ title, fields }: { title: string; fields: 
 
 const PORTAL_PERMISSION_OPTIONS: { key: ClientPortalPermission; label: string; description: string }[] = [
   { key: 'clientportal.candidates.view', label: 'View candidates', description: 'View candidate names, references and contact details.' },
+  { key: 'clientportal.candidates.pdf.download', label: 'Download candidate PDFs', description: 'Download candidate profiles and their uploaded document register. Also enables candidate viewing.' },
   { key: 'clientportal.candidates.create', label: 'Create candidates', description: 'Add candidate records. Also enables candidate viewing.' },
   { key: 'clientportal.candidates.update', label: 'Update candidates', description: 'Edit candidate contact details. Also enables candidate viewing.' },
   { key: 'clientportal.candidates.invite', label: 'Invite candidates', description: 'Send candidates a secure link to complete their profile. Also enables candidate viewing.' },
@@ -90,13 +101,14 @@ function togglePermissionSelection(current: ClientPortalPermission[], permission
       removed.add('clientportal.candidates.update');
       removed.add('clientportal.candidates.invite');
       removed.add('clientportal.candidates.portal.manage');
+      removed.add('clientportal.candidates.pdf.download');
     }
     if (permission === 'clientportal.reports.view') removed.add('clientportal.reports.download');
     if (permission === 'clientportal.subclients.view') removed.add('clientportal.subclients.manage');
     return current.filter((item) => !removed.has(item));
   }
   const next = [...current, permission];
-  if (permission === 'clientportal.candidates.create' || permission === 'clientportal.candidates.update' || permission === 'clientportal.candidates.invite' || permission === 'clientportal.candidates.portal.manage') {
+  if (permission === 'clientportal.candidates.create' || permission === 'clientportal.candidates.update' || permission === 'clientportal.candidates.invite' || permission === 'clientportal.candidates.portal.manage' || permission === 'clientportal.candidates.pdf.download') {
     next.push('clientportal.candidates.view');
   }
   if (permission === 'clientportal.reports.download') next.push('clientportal.reports.view');
@@ -321,6 +333,14 @@ export default function ClientDetailPage() {
   const updateCandidateFormSection = (key: keyof CandidateFormConfig['sections'], enabled: boolean) => {
     setCandidateFormSaved(false);
     setCandidateFormConfig((current) => ({ ...current, sections: { ...current.sections, [key]: { enabled } } }));
+  };
+
+  const updateCandidateFieldRequirement = (key: CandidateFormRequiredFieldKey, required: boolean) => {
+    setCandidateFormSaved(false);
+    setCandidateFormConfig((current) => ({
+      ...current,
+      fields: { ...current.fields, [key]: { required } },
+    }));
   };
 
   const updateCandidateAddressField = (key: 'currentAddressEnabled' | 'currentAddressRequired' | 'permanentAddressEnabled' | 'permanentAddressRequired', value: boolean) => {
@@ -1163,7 +1183,27 @@ export default function ClientDetailPage() {
               ))}
             </select>
           </div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+          <nav aria-label="Candidate form settings" className="sticky top-2 z-20 mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)]/95 p-2 shadow-sm backdrop-blur">
+            <div className="flex items-center gap-2 overflow-x-auto">
+              {[
+                ['candidate-section-settings', 'Sections'],
+                ['candidate-required-fields', 'Required fields'],
+                ['candidate-address-settings', 'Address'],
+                ['candidate-identity-settings', 'Identity'],
+                ['candidate-employment-document-settings', 'Employment docs'],
+                ['candidate-custom-form-settings', 'Templates'],
+                ['candidate-live-preview', 'Preview'],
+              ].map(([target, label]) => (
+                <button key={target} type="button" onClick={() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="shrink-0 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-semibold text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]">
+                  {label}
+                </button>
+              ))}
+              <button type="button" onClick={() => void saveCandidateForm()} disabled={!canManageAccess || candidateFormSaving} className="ml-auto shrink-0 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50">
+                {candidateFormSaving ? 'Saving…' : 'Save form'}
+              </button>
+            </div>
+          </nav>
+          <div id="candidate-live-preview" className="mt-4 scroll-mt-24 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3">
             <div>
               <p className="text-[12px] font-semibold">Candidate portal preview</p>
               <p className="mt-0.5 text-[11px] text-[var(--muted)]">Preview updates immediately as you change the client-specific form settings.</p>
@@ -1180,6 +1220,7 @@ export default function ClientDetailPage() {
               { key: 'identity', label: 'Identity', enabled: CANDIDATE_IDENTITY_FIELDS.some((field) => candidateFormConfig[field.key].enabled) },
               { key: 'address', label: 'Address', enabled: candidateFormConfig.sections.address.enabled && (candidateFormConfig.address.currentAddressEnabled || candidateFormConfig.address.permanentAddressEnabled || candidateFormConfig.address.documents.some((document) => document.enabled)) },
               { key: 'bgv', label: 'BGV forms', enabled: candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'BGV') },
+              { key: 'cibil', label: 'CIBIL', enabled: candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'CIBIL') },
               { key: 'education', label: 'Education', enabled: candidateFormConfig.sections.education.enabled || candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'EDUCATION') },
               { key: 'employment', label: 'Employment', enabled: candidateFormConfig.sections.employment.enabled && (candidateFormConfig.employmentDocuments.some((document) => document.enabled) || candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'EMPLOYMENT')) },
               { key: 'police', label: 'Police verification', enabled: candidateFormConfig.sections.policeVerification.enabled && candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'POLICE_VERIFICATION') },
@@ -1190,6 +1231,7 @@ export default function ClientDetailPage() {
             const selectedPreviewTab = previewTabs.some((item) => item.key === candidatePreviewTab) ? candidatePreviewTab : 'overview';
             const previewForms = candidateFormConfig.customForms.filter((form) => form.enabled && (
               (selectedPreviewTab === 'bgv' && form.category === 'BGV')
+              || (selectedPreviewTab === 'cibil' && form.category === 'CIBIL')
               || (selectedPreviewTab === 'otherChecks' && form.category === 'OTHER_CHECKS')
               || (selectedPreviewTab === 'police' && form.category === 'POLICE_VERIFICATION')
               || (selectedPreviewTab === 'education' && form.category === 'EDUCATION')
@@ -1203,6 +1245,7 @@ export default function ClientDetailPage() {
                 <div className="border-b border-[var(--border)] bg-white px-4 py-3">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--primary)]">Candidate verification portal</p>
                   <p className="mt-1 text-sm font-semibold">{client.name}</p>
+                  <p className="mt-1 text-[10px] text-[var(--muted)]"><span className="font-bold text-red-600">*</span> Required fields, uploads and forms</p>
                 </div>
                 <div className="flex gap-1 overflow-x-auto border-b border-[var(--border)] bg-white p-2">
                   {previewTabs.map((item) => (
@@ -1212,19 +1255,57 @@ export default function ClientDetailPage() {
                   ))}
                 </div>
                 <div className="min-h-36 space-y-3 p-4">
-                  {selectedPreviewTab === 'overview' && <div><p className="text-sm font-semibold">Hello, let&apos;s complete your verification</p><p className="mt-1 text-xs text-[var(--muted)]">The candidate sees only enabled sections and forms configured for this client.</p><p className="mt-3 rounded-lg border border-[var(--border)] bg-white p-3 text-xs">Profile details · Documents · Consent as the final step</p></div>}
-                  {selectedPreviewTab === 'details' && <div><p className="mb-2 text-xs font-semibold">Your details</p><div className="grid gap-2 sm:grid-cols-2">{['Full name *', 'Email address *', 'Mobile number *', 'Date of birth *'].map((field) => <div key={field} className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-[10px] text-[var(--muted)]">{field}</div>)}</div></div>}
-                  {selectedPreviewTab === 'family' && <CandidateFormPreviewFields title="Family details" fields={['Father’s name', 'Mother’s name']} />}
-                  {selectedPreviewTab === 'identity' && <CandidateFormPreviewFields title="Identity fields" fields={CANDIDATE_IDENTITY_FIELDS.filter((field) => candidateFormConfig[field.key].enabled).map((field) => `${field.label}${candidateFormConfig[field.key].required ? ' *' : ''}`)} />}
+                  {selectedPreviewTab === 'overview' && (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm font-semibold">Hello, let&apos;s complete your verification</p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">The candidate sees only enabled sections and forms configured for this client.</p>
+                        <p className="mt-3 rounded-lg border border-[var(--border)] bg-white p-3 text-xs">Profile details · Documents · Consent as the final step</p>
+                      </div>
+                      <div className="rounded-lg border border-[var(--border)] bg-white p-3">
+                        <p className="text-xs font-semibold">Questions or corrections?</p>
+                        <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Please check that the information and documents in your preview are correct. Contact your client representative if you have a query or need to correct anything.</p>
+                        {client.contactName && <p className="mt-2 text-[10px] font-medium">{client.contactName}</p>}
+                        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
+                          {client.contactEmail
+                            ? <a href={`mailto:${client.contactEmail}`} className="text-[var(--primary)] hover:underline">{client.contactEmail}</a>
+                            : <span className="text-amber-700">Contact email not provided</span>}
+                          {client.contactPhone
+                            ? <a href={`tel:${client.contactPhone.replace(/[^\d+]/g, '')}`} className="text-[var(--primary)] hover:underline">{client.contactPhone}</a>
+                            : <span className="text-amber-700">Contact phone not provided</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {selectedPreviewTab === 'details' && <CandidateFormPreviewFields title="Your details" fields={[
+                    'Full name *',
+                    'Email address *',
+                    ...candidateRequiredFieldsFor('details').map((field) => `${field.label}${candidateFormConfig.fields[field.key]?.required ? ' *' : ''}`),
+                  ]} />}
+                  {selectedPreviewTab === 'family' && <CandidateFormPreviewFields title="Family details" fields={[
+                    ...candidateRequiredFieldsFor('family').map((field) => `${field.label}${candidateFormConfig.fields[field.key]?.required ? ' *' : ''}`),
+                  ]} />}
+                  {selectedPreviewTab === 'identity' && <CandidateFormPreviewFields title="Identity fields" fields={CANDIDATE_IDENTITY_FIELDS.filter((field) => candidateFormConfig[field.key].enabled).flatMap((field) => [
+                    `${field.label}${candidateFormConfig[field.key].required ? ' *' : ''}`,
+                    ...(candidateFormConfig[field.key].documentRequired ? [`${field.label} document copy *`] : []),
+                  ])} />}
                   {selectedPreviewTab === 'address' && <CandidateFormPreviewFields title="Address details and requested documents" fields={[
                     ...(candidateFormConfig.address.currentAddressEnabled ? [`Current address${candidateFormConfig.address.currentAddressRequired ? ' *' : ''}`] : []),
                     ...(candidateFormConfig.address.permanentAddressEnabled ? [`Permanent address${candidateFormConfig.address.permanentAddressRequired ? ' *' : ''}`] : []),
-                    ...addressDocs.map((document) => `${CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? document.type}${document.required ? ' · required' : ''}`),
+                    ...addressDocs.map((document) => `${CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? document.type}${document.required ? ' *' : ''}`),
                   ]} />}
-                  {selectedPreviewTab === 'education' && <CandidateFormPreviewFields title="Education details and requested forms" fields={['Highest qualification', 'Course', 'Institution', 'University', 'Year of passing', ...previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)]} />}
-                  {selectedPreviewTab === 'employment' && <CandidateFormPreviewFields title="Employment details and upload types" fields={['Employer', 'Designation', 'Department', ...employmentDocs.map((document) => `${CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? document.type}${document.required ? ' · required' : ''}`), ...previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)]} />}
+                  {selectedPreviewTab === 'education' && <CandidateFormPreviewFields title="Education details and requested forms" fields={[
+                    ...candidateRequiredFieldsFor('education').map((field) => `${field.label}${candidateFormConfig.fields[field.key]?.required ? ' *' : ''}`),
+                    ...previewForms.map((form) => `${form.name}${form.required ? ' *' : ''}`),
+                  ]} />}
+                  {selectedPreviewTab === 'employment' && <CandidateFormPreviewFields title="Employment details and upload types" fields={[
+                    ...candidateRequiredFieldsFor('employment').map((field) => `${field.label}${candidateFormConfig.fields[field.key]?.required ? ' *' : ''}`),
+                    ...employmentDocs.map((document) => `${CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? document.type}${document.required ? ' *' : ''}`),
+                    ...previewForms.map((form) => `${form.name}${form.required ? ' *' : ''}`),
+                  ]} />}
                   {selectedPreviewTab === 'police' && <CandidateFormPreviewFields title="Police verification forms" fields={previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)} />}
                   {selectedPreviewTab === 'bgv' && <CandidateFormPreviewFields title="BGV forms" fields={previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)} />}
+                  {selectedPreviewTab === 'cibil' && <CandidateFormPreviewFields title="CIBIL forms" fields={previewForms.map((form) => `${form.name}${form.required ? ' *' : ''}`)} />}
                   {selectedPreviewTab === 'otherChecks' && <CandidateFormPreviewFields title="Other checks" fields={previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)} />}
                   {selectedPreviewTab === 'documents' && <CandidateFormPreviewFields title="Documents" fields={['Other documents', ...candidateFormConfig.customForms.filter((form) => form.enabled && form.category === 'OTHER').map((form) => form.name)]} />}
                   {selectedPreviewTab === 'consent' && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Consent appears after required profile details, documents, and forms are complete.</p>}
@@ -1232,7 +1313,7 @@ export default function ClientDetailPage() {
               </div>
             );
           })()}
-          <div className="mt-5 rounded-xl border border-[var(--border)] p-4">
+          <div id="candidate-section-settings" className="mt-5 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <h3 className="text-[13px] font-semibold">Portal sections</h3>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {([
@@ -1250,7 +1331,40 @@ export default function ClientDetailPage() {
             </div>
             <p className="mt-2 text-[11px] text-[var(--muted)]">Disabled sections are hidden from candidates for this client. Details, consent and requested documents remain available when needed.</p>
           </div>
-          <div className="mt-5 rounded-xl border border-[var(--border)] p-4">
+          <section id="candidate-required-fields" className="mt-5 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h3 className="text-[13px] font-semibold">Required candidate fields</h3>
+                <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Choose which profile fields candidates must complete. Required fields are marked with a red asterisk and must be complete before consent. Name and email are always required and cannot be changed by candidates.</p>
+              </div>
+              <span className="shrink-0 text-[11px] font-medium text-[var(--muted)]"><span className="font-bold text-red-600">*</span> Required</span>
+            </div>
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              {CANDIDATE_FORM_REQUIRED_FIELD_GROUPS.map((group) => {
+                const enabled = group.key === 'details' || candidateFormConfig.sections[group.key as keyof CandidateFormConfig['sections']].enabled;
+                return (
+                  <section key={group.key} className={`rounded-xl border border-[var(--border)] p-3 ${enabled ? 'bg-[var(--surface)]' : 'bg-[var(--surface-muted)] opacity-60'}`}>
+                    <h4 className="text-[12px] font-semibold">{group.label}</h4>
+                    <div className="mt-2 space-y-1.5">
+                      {group.fields.map((field) => {
+                        const required = candidateFormConfig.fields?.[field.key]?.required ?? field.defaultRequired;
+                        return (
+                          <label key={field.key} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-[11px] hover:bg-[var(--surface-muted)]">
+                            <span className="font-medium">{field.label}{required && <span className="ml-1 font-bold text-red-600" aria-hidden="true">*</span>}</span>
+                            <span className="flex shrink-0 items-center gap-2">
+                              <span className="text-[var(--muted)]">{required ? 'Required' : 'Optional'}</span>
+                              <input type="checkbox" aria-label={`${field.label} required`} checked={required} onChange={(event) => updateCandidateFieldRequirement(field.key, event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !enabled} className="h-4 w-4 accent-[var(--primary)]" />
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </section>
+          <div id="candidate-address-settings" className="mt-5 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <h3 className="text-[13px] font-semibold">Address details and verification</h3>
             <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Choose which address fields and address documents this client requests. Required items block consent until completed.</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1263,7 +1377,7 @@ export default function ClientDetailPage() {
                   <div key={key} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] p-3">
                     <label className="flex items-center gap-2 text-[12px] font-medium">
                       <input type="checkbox" checked={candidateFormConfig.address[key]} onChange={(event) => updateCandidateAddressField(key, event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.address.enabled} className="accent-[var(--primary)]" />
-                      {label}
+                      {label}{candidateFormConfig.address[requiredKey] && <span className="font-bold text-red-600" aria-hidden="true">*</span>}
                     </label>
                     <label className={`flex items-center gap-2 text-[11px] ${!candidateFormConfig.address[key] ? 'opacity-50' : ''}`}>
                       <input type="checkbox" checked={candidateFormConfig.address[requiredKey]} onChange={(event) => updateCandidateAddressField(requiredKey, event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.address.enabled || !candidateFormConfig.address[key]} className="accent-[var(--primary)]" />
@@ -1282,7 +1396,7 @@ export default function ClientDetailPage() {
                   <div key={type} className="grid gap-3 rounded-lg border border-[var(--border)] p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
                     <label className="flex items-center gap-2 text-[12px] font-medium">
                       <input type="checkbox" checked={enabled} onChange={(event) => updateAddressDocument(type, 'enabled', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.address.enabled} className="accent-[var(--primary)]" />
-                      {label}
+                      {label}{required && <span className="font-bold text-red-600" aria-hidden="true">*</span>}
                     </label>
                     <label className={`flex items-center gap-2 text-[11px] ${!enabled ? 'opacity-50' : ''}`}>
                       <input type="checkbox" checked={required} onChange={(event) => updateAddressDocument(type, 'required', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.address.enabled || !enabled} className="accent-[var(--primary)]" />
@@ -1293,14 +1407,14 @@ export default function ClientDetailPage() {
               })}
             </div>
           </div>
-          <div className="mt-5 space-y-3">
+          <div id="candidate-identity-settings" className="mt-5 scroll-mt-24 space-y-3">
             {CANDIDATE_IDENTITY_FIELDS.map((field) => {
               const config = candidateFormConfig[field.key];
               return (
                 <div key={field.key} className="grid gap-3 rounded-xl border border-[var(--border)] p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
                   <label className="flex items-start gap-3">
                     <input type="checkbox" checked={config.enabled} onChange={(event) => updateCandidateFormField(field.key, 'enabled', event.target.checked)} disabled={!canManageAccess || candidateFormSaving} className="mt-1 accent-[var(--primary)]" />
-                    <span><span className="block text-[13px] font-semibold">{field.label}</span><span className="mt-0.5 block text-[11px] text-[var(--muted)]">Candidate number field and {field.documentType.replaceAll('_', ' ').toLowerCase()} upload</span></span>
+                    <span><span className="block text-[13px] font-semibold">{field.label}{(config.required || config.documentRequired) && <span className="ml-1 text-red-600" aria-hidden="true">*</span>}</span><span className="mt-0.5 block text-[11px] text-[var(--muted)]">Candidate number field and {field.documentType.replaceAll('_', ' ').toLowerCase()} upload</span></span>
                   </label>
                   <label className={`flex items-center gap-2 text-[12px] ${!config.enabled ? 'opacity-50' : ''}`}><input type="checkbox" checked={config.required} onChange={(event) => updateCandidateFormField(field.key, 'required', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !config.enabled} className="accent-[var(--primary)]" />Number required</label>
                   <label className={`flex items-center gap-2 text-[12px] ${!config.enabled ? 'opacity-50' : ''}`}><input type="checkbox" checked={config.documentRequired} onChange={(event) => updateCandidateFormField(field.key, 'documentRequired', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !config.enabled} className="accent-[var(--primary)]" />Document required</label>
@@ -1308,7 +1422,7 @@ export default function ClientDetailPage() {
               );
             })}
           </div>
-          <div className="mt-6 rounded-xl border border-[var(--border)] p-4">
+          <div id="candidate-employment-document-settings" className="mt-6 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <h3 className="text-[13px] font-semibold">Employment document uploads</h3>
             <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Choose which document types this client accepts. Candidates select a type first, then upload its file in the Employment tab.</p>
             <div className="mt-3 space-y-2">
@@ -1320,7 +1434,7 @@ export default function ClientDetailPage() {
                   <div key={type} className="grid gap-3 rounded-lg border border-[var(--border)] p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
                     <label className="flex items-center gap-2 text-[12px] font-medium">
                       <input type="checkbox" checked={enabled} onChange={(event) => updateEmploymentDocument(type, 'enabled', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.employment.enabled} className="accent-[var(--primary)]" />
-                      {label}
+                      {label}{required && <span className="font-bold text-red-600" aria-hidden="true">*</span>}
                     </label>
                     <label className={`flex items-center gap-2 text-[11px] ${!enabled ? 'opacity-50' : ''}`}>
                       <input type="checkbox" checked={required} onChange={(event) => updateEmploymentDocument(type, 'required', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !enabled} className="accent-[var(--primary)]" />
@@ -1331,7 +1445,7 @@ export default function ClientDetailPage() {
               })}
             </div>
           </div>
-          <div className="mt-6 rounded-xl border border-[var(--border)] p-4">
+          <div id="candidate-custom-form-settings" className="mt-6 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <h3 className="text-[13px] font-semibold">Client-specific candidate forms</h3>
             <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Upload a PDF or Microsoft Word (DOC/DOCX) template for candidates to download, complete and upload back. Templates are scoped to this client and limited to 10 MB each.</p>
             {candidateFormConfig.customForms.length > 0 && (
@@ -1339,7 +1453,7 @@ export default function ClientDetailPage() {
                 {candidateFormConfig.customForms.map((form) => (
                   <div key={form.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--border)] p-3">
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12px] font-semibold">{form.name}</span>
+                      <span className="block truncate text-[12px] font-semibold">{form.name}{form.required && <span className="ml-1 text-red-600" aria-hidden="true">*</span>}</span>
                       <span className="block text-[10px] text-[var(--muted)]">{form.category.replaceAll('_', ' ').toLowerCase()} · {form.fileName}</span>
                     </span>
                     <button type="button" onClick={() => void downloadCandidateTemplate(form.id, form.fileName)} disabled={!canManageAccess || candidateTemplateDownloading === form.id} className="text-[11px] font-medium text-[var(--primary)] disabled:opacity-50">{candidateTemplateDownloading === form.id ? 'Downloading…' : 'Download template'}</button>
@@ -1363,6 +1477,7 @@ export default function ClientDetailPage() {
               <label className="text-[11px] font-medium">Portal section
                 <select value={candidateTemplateCategory} onChange={(event) => setCandidateTemplateCategory(event.target.value)} disabled={!canManageAccess || candidateFormSaving} className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-[12px]">
                   <option value="BGV">BGV form</option>
+                  <option value="CIBIL">CIBIL</option>
                   <option value="POLICE_VERIFICATION">Police verification</option>
                   <option value="OTHER_CHECKS">Other checks</option>
                   <option value="IDENTITY">Identity</option>

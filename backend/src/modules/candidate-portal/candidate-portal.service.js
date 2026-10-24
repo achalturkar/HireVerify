@@ -10,7 +10,6 @@ const { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } = req
 const { parseDateValue } = require('../../utils/date');
 const { IDENTITY_FIELDS, EMPLOYMENT_DOCUMENT_TYPES, ADDRESS_DOCUMENT_TYPES, normalizeConfig, normalizeIdentityValue, validateIdentityValues } = require('../client/candidate-intake-config');
 const { findTemplatePath } = require('../client/candidate-form-storage');
-const { normalizeCandidateName, hasCandidateName } = require('../../utils/candidate-name');
 
 const MAX_INVITATION_DAYS = 30;
 const portalTokenKey = crypto.createHash('sha256').update(`candidate-portal:${config.jwt.accessSecret}`).digest();
@@ -22,6 +21,16 @@ const EMPLOYMENT_HISTORY_FIELDS = {
   department: 120,
   employmentType: 50,
   workLocation: 150,
+  employerHrName: 255,
+  employerHrPhone: 50,
+};
+const EDUCATION_HISTORY_FIELDS = {
+  qualification: 120,
+  courseName: 180,
+  institutionName: 255,
+  universityName: 255,
+  yearOfPassing: 4,
+  gradeOrPercentage: 50,
 };
 const CHECKS_FOR_FORM_CATEGORY = {
   IDENTITY: new Set(['IDENTITY', 'IDENTITY_VERIFICATION', 'PAN', 'AADHAAR', 'UAN', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID', 'DOCUMENT', 'DOCUMENT_FORGERY']),
@@ -29,7 +38,7 @@ const CHECKS_FOR_FORM_CATEGORY = {
   EMPLOYMENT: new Set(['EMPLOYMENT', 'EMPLOYMENT_VERIFICATION', 'UAN']),
   POLICE_VERIFICATION: new Set(['POLICE', 'POLICE_VERIFICATION', 'POLICE_RECORD', 'COURT']),
 };
-const STANDARD_FORM_CHECKS = new Set(Object.values(CHECKS_FOR_FORM_CATEGORY).flatMap((types) => [...types]));
+const STANDARD_FORM_CHECKS = new Set([...Object.values(CHECKS_FOR_FORM_CATEGORY).flatMap((types) => [...types]), 'CIBIL']);
 
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 const createToken = () => crypto.randomBytes(32).toString('hex');
@@ -75,7 +84,7 @@ const invitationInclude = {
   candidate: {
     include: {
       company: { select: { name: true, primaryColor: true, logoUrl: true } },
-      client: { select: { id: true, name: true, candidateFormConfig: true } },
+      client: { select: { id: true, name: true, contactName: true, contactEmail: true, contactPhone: true, candidateFormConfig: true } },
       documents: true,
       consents: {
         where: { consentType: 'BGV_CONSENT' },
@@ -171,6 +180,26 @@ const pendingFor = (candidate) => {
   }
 
   const addressConfig = candidateFormConfig.address;
+  const requiredFields = candidateFormConfig.fields;
+  const requiredProfileFields = [
+    ['phone', 'phone', 'mobile number', 'details'],
+    ['dateOfBirth', 'dateOfBirth', 'date of birth', 'details'],
+    ['gender', 'gender', 'gender', 'details'],
+    ['candidateNotes', 'candidateNotes', 'notes for the verification team', 'details'],
+    ['fatherName', 'fatherName', "father's name", 'family'],
+    ['motherName', 'motherName', "mother's name", 'family'],
+    ['maritalStatus', 'maritalStatus', 'marital status', 'family'],
+    ['spouseName', 'spouseName', 'husband / spouse name', 'family'],
+    ['childrenCount', 'childrenCount', 'number of children', 'family'],
+  ];
+  for (const [configKey, candidateKey, label, section] of requiredProfileFields) {
+    if (!requiredFields[configKey]?.required || !candidateFormConfig.sections[section]?.enabled) continue;
+    if (configKey === 'spouseName' && candidate.maritalStatus !== 'MARRIED') continue;
+    const value = candidate[candidateKey];
+    if (value === null || value === undefined || value === '') {
+      pending.push({ key: `field-${candidateKey}`, label: `Provide your ${label}`, type: 'profile', category: section === 'family' ? 'FAMILY' : 'DETAILS' });
+    }
+  }
   if (candidateFormConfig.sections.address.enabled) {
     for (const field of [
       { key: 'currentAddress', label: 'current address', required: addressConfig.currentAddressRequired },
@@ -198,6 +227,30 @@ const pendingFor = (candidate) => {
   const employmentRequested = !activeCase || selectedChecks.length === 0
     || selectedChecks.some((type) => CHECKS_FOR_FORM_CATEGORY.EMPLOYMENT.has(type));
   if (candidateFormConfig.sections.employment.enabled && employmentRequested) {
+    const currentEmploymentValues = {
+      employerName: candidate.currentEmployer,
+      employeeId: candidate.employeeId,
+      designation: candidate.employeeDesignation,
+      department: candidate.employeeDepartment,
+      employmentType: candidate.employmentType,
+      startDate: candidate.joiningDate,
+      workLocation: candidate.workLocation,
+      employerHrName: candidate.employerHrName,
+      employerHrPhone: candidate.employerHrPhone,
+    };
+    for (const [field, value] of Object.entries(currentEmploymentValues)) {
+      if (requiredFields[field]?.required && (value === null || value === undefined || value === '')) {
+        pending.push({ key: `field-current-employment-${field}`, label: `Provide your current employer ${field.replaceAll(/([A-Z])/g, ' $1').toLowerCase()}`, type: 'profile', category: 'EMPLOYMENT' });
+      }
+    }
+    const storedEmploymentHistory = Array.isArray(candidate.employmentHistory) ? candidate.employmentHistory : [];
+    storedEmploymentHistory.filter((record) => record && record.isCurrent !== true
+      && Object.values(record).some((value) => value !== null && value !== undefined && value !== '')).forEach((record, index) => {
+      for (const [field, value] of Object.entries(record)) {
+        if (field === 'isCurrent' || field === 'id' || !requiredFields[field]?.required || (value !== null && value !== undefined && value !== '')) continue;
+        pending.push({ key: `field-past-employment-${index}-${field}`, label: `Provide ${field.replaceAll(/([A-Z])/g, ' $1').toLowerCase()} for past employer ${index + 1}`, type: 'profile', category: 'EMPLOYMENT' });
+      }
+    });
     for (const document of candidateFormConfig.employmentDocuments) {
       if (!document.enabled || !document.required) continue;
       if (!existingDocuments.some((item) => item.documentType === document.type)) {
@@ -210,6 +263,36 @@ const pendingFor = (candidate) => {
         });
       }
     }
+  }
+
+  if (candidateFormConfig.sections.education.enabled) {
+    const storedEducationHistory = Array.isArray(candidate.educationHistory) ? candidate.educationHistory : [];
+    const legacyEducation = [candidate.highestQualification, candidate.courseName, candidate.institutionName, candidate.universityName, candidate.yearOfPassing, candidate.gradeOrPercentage]
+      .some(Boolean)
+      ? [{
+        qualification: candidate.highestQualification,
+        courseName: candidate.courseName,
+        institutionName: candidate.institutionName,
+        universityName: candidate.universityName,
+        yearOfPassing: candidate.yearOfPassing,
+        gradeOrPercentage: candidate.gradeOrPercentage,
+      }]
+      : [];
+    const educationRecords = storedEducationHistory.length ? storedEducationHistory : legacyEducation;
+    const requiredEducationFields = Object.keys(requiredFields).filter((field) => (
+      ['qualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage'].includes(field)
+      && requiredFields[field]?.required
+    ));
+    if (requiredEducationFields.length && educationRecords.length === 0) {
+      pending.push({ key: 'field-education-record', label: 'Add at least one education record', type: 'profile', category: 'EDUCATION' });
+    }
+    educationRecords.forEach((record, index) => {
+      for (const field of requiredEducationFields) {
+        if (record[field] === null || record[field] === undefined || record[field] === '') {
+          pending.push({ key: `field-education-${index}-${field}`, label: `Provide ${field.replaceAll(/([A-Z])/g, ' $1').toLowerCase()} for education record ${index + 1}`, type: 'profile', category: 'EDUCATION' });
+        }
+      }
+    });
   }
 
   for (const form of candidateFormConfig.customForms) {
@@ -226,13 +309,12 @@ const pendingFor = (candidate) => {
     }
   }
 
-  const addressComplete = !candidateFormConfig.sections.address.enabled
-    || ((!candidateFormConfig.address.currentAddressRequired || Boolean(candidate.currentAddress))
-      && (!candidateFormConfig.address.permanentAddressRequired || Boolean(candidate.permanentAddress)));
-  const profileComplete = Boolean(candidate.firstName && candidate.lastName && candidate.email && candidate.phone && candidate.dateOfBirth && addressComplete)
-    && IDENTITY_FIELDS.every((field) => !candidateFormConfig[field.key].required || Boolean(candidate[field.key]));
+  const profileComplete = Boolean(candidate.firstName && candidate.lastName && candidate.email)
+    && !pending.some((item) => item.type === 'profile');
+  const requiredFormsComplete = !pending.some((item) => item.type === 'document' && item.customFormId);
   if (!profileComplete) pending.push({ key: 'profile', label: 'Review and complete your details', type: 'profile' });
-  const consentReady = !consentComplete && (!activeCase || !['COMPLETED', 'CANCELLED'].includes(activeCase.status));
+  const consentReady = !consentComplete && profileComplete && requiredFormsComplete
+    && (!activeCase || !['COMPLETED', 'CANCELLED'].includes(activeCase.status));
   if (!consentComplete) pending.push({ key: 'consent', label: 'Give background verification consent', type: 'consent' });
   return { activeCase, pending, consentComplete, consentReady, formLocked, uploadsLocked, profileComplete };
 };
@@ -252,7 +334,24 @@ const toDto = (invitation) => {
     startDate: candidate.joiningDate,
     endDate: null,
     workLocation: candidate.workLocation,
+    employerHrName: candidate.employerHrName,
+    employerHrPhone: candidate.employerHrPhone,
   };
+  const storedEducationHistory = Array.isArray(candidate.educationHistory) ? candidate.educationHistory : [];
+  const educationHistory = storedEducationHistory.length > 0 ? storedEducationHistory : (
+    [candidate.highestQualification, candidate.courseName, candidate.institutionName, candidate.universityName, candidate.yearOfPassing, candidate.gradeOrPercentage]
+      .some(Boolean)
+      ? [{
+        id: 'legacy-education',
+        qualification: candidate.highestQualification,
+        courseName: candidate.courseName,
+        institutionName: candidate.institutionName,
+        universityName: candidate.universityName,
+        yearOfPassing: candidate.yearOfPassing,
+        gradeOrPercentage: candidate.gradeOrPercentage,
+      }]
+      : []
+  );
   return {
     candidate: {
       id: candidate.id,
@@ -267,6 +366,10 @@ const toDto = (invitation) => {
       gender: candidate.gender,
       fatherName: candidate.fatherName,
       motherName: candidate.motherName,
+      maritalStatus: candidate.maritalStatus,
+      spouseName: candidate.spouseName,
+      childrenCount: candidate.childrenCount,
+      candidateNotes: candidate.candidateNotes,
       aadhaarNumber: candidate.aadhaarNumber,
       panNumber: candidate.panNumber,
       uanNumber: candidate.uanNumber,
@@ -279,6 +382,7 @@ const toDto = (invitation) => {
       universityName: candidate.universityName,
       yearOfPassing: candidate.yearOfPassing,
       gradeOrPercentage: candidate.gradeOrPercentage,
+      educationHistory,
       employeeId: candidate.employeeId,
       employeeDesignation: candidate.employeeDesignation,
       employeeDepartment: candidate.employeeDepartment,
@@ -286,12 +390,19 @@ const toDto = (invitation) => {
       joiningDate: candidate.joiningDate,
       workLocation: candidate.workLocation,
       currentEmployer: candidate.currentEmployer,
+      employerHrName: candidate.employerHrName,
+      employerHrPhone: candidate.employerHrPhone,
       employmentHistory: [currentEmployment, ...storedEmploymentHistory.filter((item) => item && item.isCurrent !== true)],
       currentAddress: candidate.currentAddress,
       permanentAddress: candidate.permanentAddress,
     },
     company: candidate.company,
-    client: candidate.client ? { name: candidate.client.name } : null,
+    client: candidate.client ? {
+      name: candidate.client.name,
+      contactName: candidate.client.contactName,
+      contactEmail: candidate.client.contactEmail,
+      contactPhone: candidate.client.contactPhone,
+    } : null,
     candidateFormConfig,
     case: activeCase ? { id: activeCase.id, caseNumber: activeCase.caseNumber, status: activeCase.status, checks: activeCase.checks.map((check) => check.type) } : null,
     documents: (candidate.documents || []).map((document) => ({ id: document.id, documentType: document.documentType, documentNumber: document.documentNumber, fileName: document.fileName, fileUrl: document.fileUrl, verificationStatus: document.verificationStatus, uploadedAt: document.uploadedAt })),
@@ -408,12 +519,15 @@ const updateProfile = async (token, payload) => {
   if (isPortalLocked(invitation.candidate)) {
     throw new ConflictError('Candidate details cannot be changed after consent or case completion.');
   }
-  const allowed = ['fullName', 'firstName', 'middleName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress'];
+  const immutableFields = ['fullName', 'firstName', 'middleName', 'lastName', 'email'];
+  if (immutableFields.some((field) => Object.prototype.hasOwnProperty.call(payload, field))) {
+    throw new BadRequestError('Name and email address cannot be changed from the candidate portal. Contact the inviting company to request a correction.');
+  }
+  const allowed = ['phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount', 'candidateNotes', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'educationHistory', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'currentAddress', 'permanentAddress'];
   const data = {};
   for (const field of allowed) {
-    if (payload[field] !== undefined) data[field] = field === 'email' ? (payload[field]?.trim().toLowerCase() || null) : payload[field];
+    if (payload[field] !== undefined) data[field] = payload[field];
   }
-  if (hasCandidateName(data)) Object.assign(data, normalizeCandidateName(data, invitation.candidate));
   const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);
   const addressConfig = candidateFormConfig.address;
   if (!candidateFormConfig.sections.address.enabled
@@ -432,14 +546,84 @@ const updateProfile = async (token, payload) => {
     }
   }
   const disabledSectionFields = {
-    family: ['fatherName', 'motherName'],
+    family: ['fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount'],
     education: ['highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage'],
-    employment: ['employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer'],
+    employment: ['employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone'],
   };
   for (const [section, fields] of Object.entries(disabledSectionFields)) {
     if (!candidateFormConfig.sections[section].enabled && fields.some((field) => data[field] !== undefined)) {
       throw new BadRequestError(`${section} details are not enabled for this client’s candidate form.`);
     }
+  }
+  if (data.maritalStatus !== undefined) {
+    const allowedStatuses = new Set(['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']);
+    data.maritalStatus = typeof data.maritalStatus === 'string' ? data.maritalStatus.trim().toUpperCase() : '';
+    if (data.maritalStatus && !allowedStatuses.has(data.maritalStatus)) {
+      throw new BadRequestError('Marital status is invalid.');
+    }
+    if (!data.maritalStatus) data.maritalStatus = null;
+  }
+  if (data.spouseName !== undefined) {
+    if (typeof data.spouseName !== 'string') throw new BadRequestError('Spouse name must be text.');
+    data.spouseName = data.spouseName.trim() || null;
+    if (data.spouseName?.length > 255) throw new BadRequestError('Spouse name cannot exceed 255 characters.');
+  }
+  if ((data.maritalStatus ?? invitation.candidate.maritalStatus) !== 'MARRIED' && data.spouseName !== undefined) {
+    data.spouseName = null;
+  }
+  if (data.childrenCount !== undefined) {
+    if (data.childrenCount === '' || data.childrenCount === null) {
+      data.childrenCount = null;
+    } else if (!Number.isInteger(data.childrenCount) || data.childrenCount < 0 || data.childrenCount > 20) {
+      throw new BadRequestError('Number of children must be between 0 and 20.');
+    }
+  }
+  if (data.candidateNotes !== undefined) {
+    if (typeof data.candidateNotes !== 'string') throw new BadRequestError('Notes must be text.');
+    data.candidateNotes = data.candidateNotes.trim() || null;
+    if (data.candidateNotes?.length > 2000) throw new BadRequestError('Notes cannot exceed 2,000 characters.');
+  }
+  if (payload.educationHistory !== undefined) {
+    if (!candidateFormConfig.sections.education.enabled) {
+      throw new BadRequestError('Education details are not enabled for this client’s candidate form.');
+    }
+    if (!Array.isArray(payload.educationHistory) || payload.educationHistory.length > 10) {
+      throw new BadRequestError('Provide up to 10 education records.');
+    }
+    data.educationHistory = payload.educationHistory.map((record) => {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) {
+        throw new BadRequestError('Each education record must be an object.');
+      }
+      const id = typeof record.id === 'string' ? record.id.trim() : '';
+      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(id)) throw new BadRequestError('Each education record must have a valid ID.');
+      const normalized = { id };
+      for (const [field, maxLength] of Object.entries(EDUCATION_HISTORY_FIELDS)) {
+        const value = record[field];
+        if (value !== undefined && value !== null && typeof value !== 'string') {
+          throw new BadRequestError(`${field} must be text.`);
+        }
+        const text = typeof value === 'string' ? value.trim() : '';
+        if (text.length > maxLength) throw new BadRequestError(`${field} cannot exceed ${maxLength} characters.`);
+        normalized[field] = text || null;
+      }
+      if (normalized.yearOfPassing) {
+        const year = Number(normalized.yearOfPassing);
+        if (!/^\d{4}$/.test(normalized.yearOfPassing) || year < 1950 || year > new Date().getFullYear() + 1) {
+          throw new BadRequestError('Enter a valid 4-digit year of passing.');
+        }
+      }
+      return normalized;
+    });
+    if (new Set(data.educationHistory.map((record) => record.id)).size !== data.educationHistory.length) {
+      throw new BadRequestError('Education record IDs must be unique.');
+    }
+    const highest = data.educationHistory[0] || {};
+    data.highestQualification = highest.qualification || null;
+    data.courseName = highest.courseName || null;
+    data.institutionName = highest.institutionName || null;
+    data.universityName = highest.universityName || null;
+    data.yearOfPassing = highest.yearOfPassing || null;
+    data.gradeOrPercentage = highest.gradeOrPercentage || null;
   }
   if (payload.employmentHistory !== undefined) {
     if (!candidateFormConfig.sections.employment.enabled) {
@@ -464,6 +648,9 @@ const updateProfile = async (token, payload) => {
       }
       const startDate = record.startDate ? parseDateValue(record.startDate, 'Employment start date') : null;
       const endDate = record.endDate ? parseDateValue(record.endDate, 'Employment end date') : null;
+      if (normalized.employerHrPhone && !/^[+()\-\s\d]{7,18}$/.test(normalized.employerHrPhone)) {
+        throw new BadRequestError('Enter a valid employer HR contact number.');
+      }
       if (index === 0 && endDate) throw new BadRequestError('Current employment cannot have an end date.');
       if (startDate && endDate && endDate < startDate) {
         throw new BadRequestError('Employment end date cannot be before the start date.');
@@ -480,6 +667,8 @@ const updateProfile = async (token, payload) => {
     data.employmentType = current.employmentType;
     data.joiningDate = current.startDate ? parseDateValue(current.startDate, 'Employment start date') : null;
     data.workLocation = current.workLocation;
+    data.employerHrName = current.employerHrName;
+    data.employerHrPhone = current.employerHrPhone;
   }
   validateIdentityValues(data);
   for (const field of IDENTITY_FIELDS) {
@@ -513,6 +702,10 @@ const recordConsent = async (token, payload, request) => {
   if (existing?.consentGiven && !existing.revokedAt) {
     throw new ConflictError('Consent has already been recorded.');
   }
+  const progress = pendingFor(invitation.candidate);
+  if (!progress.consentReady) {
+    throw new BadRequestError('Complete all required profile fields and upload every required client form before submitting consent.');
+  }
   const data = {
     consentGiven: true,
     consentVersion: '1.1',
@@ -540,7 +733,7 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
   }
   if (!file) throw new BadRequestError('Choose a document to upload.');
   if (!DOCUMENT_TYPES.has(documentType)) await rejectDocumentUpload(file, 'Document type is invalid.');
-  if (documentCategory !== undefined && !['EMPLOYMENT', 'ADDRESS'].includes(documentCategory)) {
+  if (documentCategory !== undefined && !['EMPLOYMENT', 'ADDRESS', 'EDUCATION'].includes(documentCategory)) {
     await rejectDocumentUpload(file, 'Document category is invalid.');
   }
   if (documentCategory === 'ADDRESS') {
@@ -555,6 +748,11 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
     const employmentDocument = candidateFormConfig.employmentDocuments.find((item) => item.type === documentType && item.enabled);
     if (!candidateFormConfig.sections.employment.enabled || !employmentDocument) {
       await rejectDocumentUpload(file, 'This employment document type is not enabled for this client.');
+    }
+  } else if (documentCategory === 'EDUCATION') {
+    const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);
+    if (!candidateFormConfig.sections.education.enabled || documentType !== 'EDUCATION_CERTIFICATE') {
+      await rejectDocumentUpload(file, 'This education document type is not enabled for this client.');
     }
   } else if (ADDRESS_DOCUMENT_TYPES.includes(documentType)) {
     const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);

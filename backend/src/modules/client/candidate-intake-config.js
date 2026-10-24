@@ -38,7 +38,34 @@ const EMPLOYMENT_DOCUMENT_TYPES = [
   'EMPLOYMENT_CONTRACT',
   'OTHER',
 ];
-const CUSTOM_FORM_CATEGORIES = ['BGV', 'IDENTITY', 'EDUCATION', 'EMPLOYMENT', 'POLICE_VERIFICATION', 'OTHER_CHECKS', 'OTHER'];
+const CUSTOM_FORM_CATEGORIES = ['BGV', 'IDENTITY', 'EDUCATION', 'EMPLOYMENT', 'POLICE_VERIFICATION', 'CIBIL', 'OTHER_CHECKS', 'OTHER'];
+const CANDIDATE_FORM_REQUIRED_FIELDS = {
+  phone: true,
+  dateOfBirth: true,
+  gender: false,
+  candidateNotes: false,
+  fatherName: false,
+  motherName: false,
+  maritalStatus: false,
+  spouseName: false,
+  childrenCount: false,
+  qualification: false,
+  courseName: false,
+  institutionName: false,
+  universityName: false,
+  yearOfPassing: false,
+  gradeOrPercentage: false,
+  employerName: false,
+  employeeId: false,
+  designation: false,
+  department: false,
+  employmentType: false,
+  startDate: false,
+  endDate: false,
+  workLocation: false,
+  employerHrName: false,
+  employerHrPhone: false,
+};
 const DEFAULT_SECTION_CONFIG = Object.fromEntries(
   CANDIDATE_FORM_SECTIONS.map((key) => [key, { enabled: key !== 'policeVerification' }]),
 );
@@ -59,6 +86,9 @@ DEFAULT_CANDIDATE_FORM_CONFIG.employmentDocuments = EMPLOYMENT_DOCUMENT_TYPES.ma
   enabled: true,
   required: false,
 }));
+DEFAULT_CANDIDATE_FORM_CONFIG.fields = Object.fromEntries(
+  Object.entries(CANDIDATE_FORM_REQUIRED_FIELDS).map(([key, required]) => [key, { required }]),
+);
 const normalizeConfig = (value) => {
   const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   const invitationExpiryDays = Number.isInteger(source.invitationExpiryDays)
@@ -66,6 +96,13 @@ const normalizeConfig = (value) => {
     && source.invitationExpiryDays <= 30
     ? source.invitationExpiryDays
     : 2;
+  const sourceFields = source.fields && typeof source.fields === 'object' && !Array.isArray(source.fields)
+    ? source.fields
+    : {};
+  const fields = Object.fromEntries(Object.entries(CANDIDATE_FORM_REQUIRED_FIELDS).map(([key, defaultRequired]) => {
+    const field = sourceFields[key] && typeof sourceFields[key] === 'object' ? sourceFields[key] : {};
+    return [key, { required: typeof field.required === 'boolean' ? field.required : defaultRequired }];
+  }));
   const identities = Object.fromEntries(IDENTITY_FIELDS.map(({ key }) => {
     const field = source[key] && typeof source[key] === 'object' ? source[key] : {};
     const enabled = typeof field.enabled === 'boolean' ? field.enabled : true;
@@ -111,14 +148,14 @@ const normalizeConfig = (value) => {
       return { type, enabled, required: enabled && document?.required === true };
     }),
   };
-  return { ...identities, invitationExpiryDays, sections, address, customForms, employmentDocuments };
+  return { ...identities, invitationExpiryDays, fields, sections, address, customForms, employmentDocuments };
 };
 
 const validateConfig = (value, clientId) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new BadRequestError('Candidate form configuration must be an object.');
   }
-  const allowedKeys = new Set([...IDENTITY_FIELDS.map(({ key }) => key), 'invitationExpiryDays', 'sections', 'address', 'customForms', 'employmentDocuments']);
+  const allowedKeys = new Set([...IDENTITY_FIELDS.map(({ key }) => key), 'invitationExpiryDays', 'fields', 'sections', 'address', 'customForms', 'employmentDocuments']);
   for (const [key, field] of Object.entries(value)) {
     if (key === 'invitationExpiryDays') {
       if (!Number.isInteger(field) || field < 1 || field > 30) {
@@ -134,6 +171,20 @@ const validateConfig = (value, clientId) => {
         if (!CANDIDATE_FORM_SECTIONS.includes(sectionKey) || !section || typeof section !== 'object' || Array.isArray(section)
           || Object.keys(section).some((property) => property !== 'enabled' || typeof section[property] !== 'boolean')) {
           throw new BadRequestError(`Invalid candidate form section: ${sectionKey}.`);
+        }
+      }
+      continue;
+    }
+    if (key === 'fields') {
+      if (!field || typeof field !== 'object' || Array.isArray(field)) {
+        throw new BadRequestError('Candidate field requirements must be an object.');
+      }
+      for (const [fieldKey, requirement] of Object.entries(field)) {
+        if (!Object.prototype.hasOwnProperty.call(CANDIDATE_FORM_REQUIRED_FIELDS, fieldKey)
+          || !requirement || typeof requirement !== 'object' || Array.isArray(requirement)
+          || typeof requirement.required !== 'boolean'
+          || Object.keys(requirement).some((property) => property !== 'required')) {
+          throw new BadRequestError(`Invalid required setting for candidate field: ${fieldKey}.`);
         }
       }
       continue;
@@ -267,6 +318,7 @@ module.exports = {
   IDENTITY_FIELDS,
   CANDIDATE_FORM_SECTIONS,
   EMPLOYMENT_DOCUMENT_TYPES,
+  CANDIDATE_FORM_REQUIRED_FIELDS,
   CUSTOM_FORM_CATEGORIES,
   ADDRESS_DOCUMENT_TYPES,
   DEFAULT_CANDIDATE_FORM_CONFIG,

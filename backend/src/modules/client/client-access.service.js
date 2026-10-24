@@ -15,6 +15,7 @@ const CLIENT_PERMISSIONS = [
   'clientportal.reports.view',
   'clientportal.reports.download',
   'clientportal.candidates.view',
+  'clientportal.candidates.pdf.download',
   'clientportal.candidates.create',
   'clientportal.candidates.update',
   'clientportal.candidates.invite',
@@ -59,7 +60,8 @@ const validatePermissions = (permissions, { allowEmpty = false } = {}) => {
       uniquePermissions.includes('clientportal.candidates.create') ||
       uniquePermissions.includes('clientportal.candidates.update') ||
       uniquePermissions.includes('clientportal.candidates.invite') ||
-      uniquePermissions.includes('clientportal.candidates.portal.manage')
+      uniquePermissions.includes('clientportal.candidates.portal.manage') ||
+      uniquePermissions.includes('clientportal.candidates.pdf.download')
     ) &&
     !uniquePermissions.includes('clientportal.candidates.view')
   ) {

@@ -11,7 +11,59 @@ export const CANDIDATE_IDENTITY_FIELDS = [
 
 export type CandidateIdentityFieldKey = typeof CANDIDATE_IDENTITY_FIELDS[number]['key'];
 export type CandidateFormSectionKey = 'family' | 'education' | 'employment' | 'policeVerification' | 'address';
-export type CandidateCustomFormCategory = 'BGV' | 'IDENTITY' | 'EDUCATION' | 'EMPLOYMENT' | 'POLICE_VERIFICATION' | 'OTHER_CHECKS' | 'OTHER';
+export type CandidateCustomFormCategory = 'BGV' | 'IDENTITY' | 'EDUCATION' | 'EMPLOYMENT' | 'POLICE_VERIFICATION' | 'CIBIL' | 'OTHER_CHECKS' | 'OTHER';
+export const CANDIDATE_FORM_REQUIRED_FIELD_GROUPS = [
+  {
+    key: 'details',
+    label: 'Personal details',
+    fields: [
+      { key: 'phone', label: 'Mobile number', defaultRequired: true },
+      { key: 'dateOfBirth', label: 'Date of birth', defaultRequired: true },
+      { key: 'gender', label: 'Gender', defaultRequired: false },
+      { key: 'candidateNotes', label: 'Notes for the verification team', defaultRequired: false },
+    ],
+  },
+  {
+    key: 'family',
+    label: 'Family details',
+    fields: [
+      { key: 'fatherName', label: "Father's name", defaultRequired: false },
+      { key: 'motherName', label: "Mother's name", defaultRequired: false },
+      { key: 'maritalStatus', label: 'Marital status', defaultRequired: false },
+      { key: 'spouseName', label: 'Husband / spouse name (when married)', defaultRequired: false },
+      { key: 'childrenCount', label: 'Number of children', defaultRequired: false },
+    ],
+  },
+  {
+    key: 'education',
+    label: 'Education record',
+    fields: [
+      { key: 'qualification', label: 'Qualification', defaultRequired: false },
+      { key: 'courseName', label: 'Course or degree', defaultRequired: false },
+      { key: 'institutionName', label: 'College or school', defaultRequired: false },
+      { key: 'universityName', label: 'University or board', defaultRequired: false },
+      { key: 'yearOfPassing', label: 'Year of passing', defaultRequired: false },
+      { key: 'gradeOrPercentage', label: 'Percentage or CGPA', defaultRequired: false },
+    ],
+  },
+  {
+    key: 'employment',
+    label: 'Current and past employment records',
+    fields: [
+      { key: 'employerName', label: 'Employer name', defaultRequired: false },
+      { key: 'employeeId', label: 'Employee ID', defaultRequired: false },
+      { key: 'designation', label: 'Designation', defaultRequired: false },
+      { key: 'department', label: 'Department', defaultRequired: false },
+      { key: 'employmentType', label: 'Employment type', defaultRequired: false },
+      { key: 'startDate', label: 'Start or joining date', defaultRequired: false },
+      { key: 'endDate', label: 'End date (past employment)', defaultRequired: false },
+      { key: 'workLocation', label: 'Work location', defaultRequired: false },
+      { key: 'employerHrName', label: 'Employer HR contact name', defaultRequired: false },
+      { key: 'employerHrPhone', label: 'Employer HR contact number', defaultRequired: false },
+    ],
+  },
+] as const;
+export type CandidateFormRequiredFieldKey = typeof CANDIDATE_FORM_REQUIRED_FIELD_GROUPS[number]['fields'][number]['key'];
 export const CANDIDATE_ADDRESS_DOCUMENT_TYPES = [
   { type: 'ADDRESS_PROOF', label: 'Address proof' },
   { type: 'AADHAAR', label: 'Aadhaar card (address proof)' },
@@ -59,6 +111,7 @@ export type CandidateFormConfig = Record<CandidateIdentityFieldKey, {
   documentRequired: boolean;
 }> & {
   invitationExpiryDays: number;
+  fields: Record<CandidateFormRequiredFieldKey, { required: boolean }>;
   sections: Record<CandidateFormSectionKey, { enabled: boolean }>;
   address: {
     currentAddressEnabled: boolean;
@@ -73,6 +126,9 @@ export type CandidateFormConfig = Record<CandidateIdentityFieldKey, {
 
 export const DEFAULT_CANDIDATE_FORM_CONFIG: CandidateFormConfig = {
   invitationExpiryDays: 2,
+  fields: Object.fromEntries(CANDIDATE_FORM_REQUIRED_FIELD_GROUPS.flatMap((group) =>
+    group.fields.map((field) => [field.key, { required: field.defaultRequired }]),
+  )) as CandidateFormConfig['fields'],
   aadhaarNumber: { enabled: true, required: false, documentRequired: false },
   panNumber: { enabled: true, required: false, documentRequired: false },
   uanNumber: { enabled: true, required: false, documentRequired: false },
@@ -209,6 +265,7 @@ export type ClientPortalPermission =
   | 'clientportal.reports.view'
   | 'clientportal.reports.download'
   | 'clientportal.candidates.view'
+  | 'clientportal.candidates.pdf.download'
   | 'clientportal.candidates.create'
   | 'clientportal.candidates.update'
   | 'clientportal.candidates.invite'

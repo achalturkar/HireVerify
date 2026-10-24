@@ -111,7 +111,7 @@ export default function CandidateFormTemplateUpload({ token, accent, form, docum
     return (
       <li className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-900">{form.name}</p>
+          <p className="truncate text-sm font-semibold text-slate-900">{form.name}{form.required && <><span className="ml-1 text-red-600">*</span><span className="sr-only"> required</span></>}</p>
           <p className="mt-0.5 text-xs text-slate-500">
             {completedDocument ? `Uploaded: ${completedDocument.fileName}` : form.required ? 'Required: download, complete and upload this form.' : 'Optional: download and return this form if requested.'}
           </p>

@@ -19,6 +19,12 @@ const toDto = (candidate) => ({
     clientCode: candidate.client.clientCode,
     contactEmail: candidate.client.contactEmail,
     contactPhone: candidate.client.contactPhone,
+    logoUrl: candidate.client.logoUrl,
+  } : null,
+  company: candidate.company ? {
+    name: candidate.company.name,
+    logoUrl: candidate.company.logoUrl,
+    primaryColor: candidate.company.primaryColor,
   } : null,
   subclientId: candidate.subclientId || null,
   subclient: candidate.subclient || null,
@@ -34,6 +40,10 @@ const toDto = (candidate) => ({
   gender: candidate.gender,
   fatherName: candidate.fatherName,
   motherName: candidate.motherName,
+  maritalStatus: candidate.maritalStatus,
+  spouseName: candidate.spouseName,
+  childrenCount: candidate.childrenCount,
+  candidateNotes: candidate.candidateNotes,
   aadhaarNumber: candidate.aadhaarNumber,
   panNumber: candidate.panNumber,
   uanNumber: candidate.uanNumber,
@@ -46,6 +56,7 @@ const toDto = (candidate) => ({
   universityName: candidate.universityName,
   yearOfPassing: candidate.yearOfPassing,
   gradeOrPercentage: candidate.gradeOrPercentage,
+  educationHistory: candidate.educationHistory || [],
   employeeId: candidate.employeeId,
   employeeDesignation: candidate.employeeDesignation,
   employeeDepartment: candidate.employeeDepartment,
@@ -53,6 +64,8 @@ const toDto = (candidate) => ({
   joiningDate: candidate.joiningDate,
   workLocation: candidate.workLocation,
   currentEmployer: candidate.currentEmployer,
+  employerHrName: candidate.employerHrName,
+  employerHrPhone: candidate.employerHrPhone,
   employmentHistory: candidate.employmentHistory || [],
   currentAddress: candidate.currentAddress,
   permanentAddress: candidate.permanentAddress,
@@ -169,9 +182,9 @@ const getById = async ({ id, companyId }) => {
   return toDto(candidate);
 };
 
-const buildFormPdf = async ({ id, companyId }) => {
+const buildFormPdf = async ({ id, companyId, clientId }) => {
   const candidate = await repo.findById(id, companyId);
-  if (!candidate) throw new NotFoundError('Candidate not found');
+  if (!candidate || (clientId && candidate.clientId !== clientId)) throw new NotFoundError('Candidate not found');
   return createCandidateFormPdf(toDto(candidate));
 };
 
