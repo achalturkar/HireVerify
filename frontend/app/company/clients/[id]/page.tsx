@@ -4,12 +4,12 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
-  ArrowLeft, BarChart3, ChevronLeft, ChevronRight, Download, FileCheck2, FileText, Globe, Mail, Pencil, Phone, Receipt, Users, MapPin, Power, PowerOff, ShieldCheck, UserPlus, Trash2, Building2, SlidersHorizontal, Plus, Check, X, Search,
+  ArrowLeft, BarChart3, ChevronLeft, ChevronRight, Download, Eye, FileCheck2, FileText, Globe, Mail, Pencil, Phone, Receipt, Users, MapPin, Power, PowerOff, ShieldCheck, UserPlus, Trash2, Building2, SlidersHorizontal, Plus, Check, X, Search,
 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getReportVerificationStatus, getVerificationStatus } from '@/src/lib/verification-status';
 import { formatCandidateName } from '@/src/lib/candidate-name';
-import { getClient, updateClient, uploadCandidateFormTemplate, removeCandidateFormTemplate, downloadCandidateFormTemplate, activateClient, inactivateClient, listClientPortalUsers, inviteClientPortalUser, updateClientPortalUser, revokeClientPortalUser, listSubclients, createSubclient, updateSubclient, deleteSubclient, ApiError as ClientApiError } from '@/src/lib/api/clients';
+import { getClient, updateClient, uploadCandidateFormTemplate, updateCandidateFormTemplate, removeCandidateFormTemplate, downloadCandidateFormTemplate, activateClient, inactivateClient, listClientPortalUsers, inviteClientPortalUser, updateClientPortalUser, revokeClientPortalUser, listSubclients, createSubclient, updateSubclient, deleteSubclient, ApiError as ClientApiError } from '@/src/lib/api/clients';
 import { listCandidates, exportCandidates, createCandidate, sendCandidatePortalLink, ApiError as CandidateApiError } from '@/src/lib/api/candidates';
 import { ApiError as BGVApiError, downloadBGVReport, listBGVCases, listVerificationCheckTypes } from '@/src/lib/api/bgv';
 import type { BGVCase, VerificationCheckType, VerificationType } from '@/src/types/bgv';
@@ -21,7 +21,7 @@ import ClientAnalyticsPanel from '@/src/components/layout/company/client/ClientA
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
 import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, CANDIDATE_FORM_REQUIRED_FIELD_GROUPS, CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
 import { setClientPortalScope } from '@/src/lib/api/client-portal';
-import type { CandidateFormConfig, CandidateFormRequiredFieldKey, CandidateIdentityFieldKey, Client, ClientFormValues, ClientPortalAccountMethod, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
+import type { CandidateCustomForm, CandidateCustomFormCategory, CandidateFormConfig, CandidateFormRequiredFieldKey, CandidateIdentityFieldKey, Client, ClientFormValues, ClientPortalAccountMethod, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
 import type { Candidate, CandidateFormValues, CandidateStatus, PaginationMeta } from '@/src/types/candidate';
 
 const PAGE_SIZE = 10;
@@ -232,6 +232,11 @@ export default function ClientDetailPage() {
   const [candidateTemplateFile, setCandidateTemplateFile] = useState<File | null>(null);
   const candidateTemplateFileRef = useRef<HTMLInputElement>(null);
   const [candidateTemplateDownloading, setCandidateTemplateDownloading] = useState<string | null>(null);
+  const [candidateTemplateViewing, setCandidateTemplateViewing] = useState<string | null>(null);
+  const [candidateTemplateEditing, setCandidateTemplateEditing] = useState<CandidateCustomForm | null>(null);
+  const [candidateTemplateEditName, setCandidateTemplateEditName] = useState('');
+  const [candidateTemplateEditCategory, setCandidateTemplateEditCategory] = useState<CandidateCustomFormCategory>('BGV');
+  const [candidateTemplateEditFile, setCandidateTemplateEditFile] = useState<File | null>(null);
 
   const loadClient = useCallback(async () => {
     if (!id) return;
@@ -484,6 +489,73 @@ export default function ClientDetailPage() {
       setCandidateFormError(downloadError instanceof ClientApiError ? downloadError.message : 'Could not download the form template.');
     } finally {
       setCandidateTemplateDownloading(null);
+    }
+  };
+
+  const viewCandidateTemplate = async (formId: string) => {
+    if (!client) return;
+    const target = candidateFormTargetId
+      ? subclients.find((subclient) => subclient.id === candidateFormTargetId)
+      : client;
+    if (!target) return;
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      setCandidateFormError('Allow pop-ups to view the candidate form template.');
+      return;
+    }
+    previewWindow.opener = null;
+    setCandidateTemplateViewing(formId);
+    setCandidateFormError(null);
+    try {
+      const blob = await downloadCandidateFormTemplate(target.id, formId, accessToken);
+      const url = URL.createObjectURL(blob);
+      previewWindow.location.replace(url);
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (viewError) {
+      previewWindow.close();
+      setCandidateFormError(viewError instanceof ClientApiError ? viewError.message : 'Could not view the form template.');
+    } finally {
+      setCandidateTemplateViewing(null);
+    }
+  };
+
+  const startCandidateTemplateEdit = (form: CandidateCustomForm) => {
+    setCandidateTemplateEditing(form);
+    setCandidateTemplateEditName(form.name);
+    setCandidateTemplateEditCategory(form.category);
+    setCandidateTemplateEditFile(null);
+    setCandidateFormError(null);
+  };
+
+  const saveCandidateTemplateEdit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!client || !candidateTemplateEditing) return;
+    const target = candidateFormTargetId
+      ? subclients.find((subclient) => subclient.id === candidateFormTargetId)
+      : client;
+    if (!target) return;
+    setCandidateFormSaving(true);
+    setCandidateFormError(null);
+    setCandidateFormSaved(false);
+    try {
+      const updated = await updateCandidateFormTemplate(target.id, candidateTemplateEditing.id, {
+        name: candidateTemplateEditName,
+        category: candidateTemplateEditCategory,
+        ...(candidateTemplateEditFile ? { file: candidateTemplateEditFile } : {}),
+      }, accessToken);
+      if (candidateFormTargetId) {
+        setSubclients((current) => current.map((subclient) => subclient.id === updated.id ? updated : subclient));
+      } else {
+        setClient(updated);
+      }
+      setCandidateFormConfig(updated.candidateFormConfig);
+      setCandidateTemplateEditing(null);
+      setCandidateTemplateEditFile(null);
+      setCandidateFormSaved(true);
+    } catch (saveError) {
+      setCandidateFormError(saveError instanceof ClientApiError ? saveError.message : 'Could not update the candidate form template.');
+    } finally {
+      setCandidateFormSaving(false);
     }
   };
 
@@ -1512,7 +1584,13 @@ export default function ClientDetailPage() {
                       <span className="block truncate text-[12px] font-semibold">{form.name}{form.required && <span className="ml-1 text-red-600" aria-hidden="true">*</span>}</span>
                       <span className="block text-[10px] text-[var(--muted)]">{form.category.replaceAll('_', ' ').toLowerCase()} · {form.fileName}</span>
                     </span>
+                    <button type="button" onClick={() => void viewCandidateTemplate(form.id)} disabled={!canManageAccess || candidateTemplateViewing === form.id} className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--primary)] disabled:opacity-50">
+                      <Eye size={14} />{candidateTemplateViewing === form.id ? 'Opening…' : 'View'}
+                    </button>
                     <button type="button" onClick={() => void downloadCandidateTemplate(form.id, form.fileName)} disabled={!canManageAccess || candidateTemplateDownloading === form.id} className="text-[11px] font-medium text-[var(--primary)] disabled:opacity-50">{candidateTemplateDownloading === form.id ? 'Downloading…' : 'Download template'}</button>
+                    <button type="button" onClick={() => startCandidateTemplateEdit(form)} disabled={!canManageAccess || candidateFormSaving} aria-label={`Edit ${form.name}`} className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-medium text-[var(--foreground)] hover:border-[var(--primary)] disabled:opacity-50">
+                      <Pencil size={13} />Edit
+                    </button>
                     <label className="flex items-center gap-1.5 text-[11px]">
                       <input type="checkbox" checked={form.enabled} onChange={(event) => updateCustomForm(form.id, 'enabled', event.target.checked)} disabled={!canManageAccess || candidateFormSaving} className="accent-[var(--primary)]" />
                       Send
@@ -1551,6 +1629,44 @@ export default function ClientDetailPage() {
               </label>
               <button type="submit" disabled={!canManageAccess || candidateFormSaving || !candidateTemplateFile} className="rounded-lg bg-[var(--primary)] px-4 py-2.5 text-[12px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50 sm:col-span-2">{candidateFormSaving ? 'Saving…' : 'Upload form template'}</button>
             </form>
+            {candidateTemplateEditing && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation">
+                <section role="dialog" aria-modal="true" aria-labelledby="edit-candidate-template-title" className="w-full max-w-lg rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xl">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 id="edit-candidate-template-title" className="text-[15px] font-semibold">Edit candidate form</h3>
+                      <p className="mt-1 text-[11px] text-[var(--muted)]">Change its details or replace the uploaded template file.</p>
+                    </div>
+                    <button type="button" onClick={() => setCandidateTemplateEditing(null)} aria-label="Close edit form" className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--surface-muted)]"><X size={18} /></button>
+                  </div>
+                  <form onSubmit={saveCandidateTemplateEdit} className="mt-4 space-y-3">
+                    <label className="block text-[11px] font-medium">Form name
+                      <input required maxLength={100} value={candidateTemplateEditName} onChange={(event) => setCandidateTemplateEditName(event.target.value)} disabled={candidateFormSaving} className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-[12px]" />
+                    </label>
+                    <label className="block text-[11px] font-medium">Portal section
+                      <select value={candidateTemplateEditCategory} onChange={(event) => setCandidateTemplateEditCategory(event.target.value as CandidateCustomFormCategory)} disabled={candidateFormSaving} className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-[12px]">
+                        <option value="BGV">BGV form</option>
+                        <option value="CIBIL">CIBIL</option>
+                        <option value="POLICE_VERIFICATION">Police verification</option>
+                        <option value="OTHER_CHECKS">Other checks</option>
+                        <option value="IDENTITY">Identity</option>
+                        <option value="EDUCATION">Education</option>
+                        <option value="EMPLOYMENT">Employment</option>
+                        <option value="OTHER">Other documents</option>
+                      </select>
+                    </label>
+                    <label className="block text-[11px] font-medium">Replace template (optional)
+                      <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.ms-word,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setCandidateTemplateEditFile(event.target.files?.[0] ?? null)} disabled={candidateFormSaving} className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-[12px]" />
+                      <span className="mt-1 block font-normal text-[var(--muted)]">Leave empty to keep the current file. Maximum size: 10 MB.</span>
+                    </label>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button type="button" onClick={() => setCandidateTemplateEditing(null)} disabled={candidateFormSaving} className="rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-semibold disabled:opacity-50">Cancel</button>
+                      <button type="submit" disabled={candidateFormSaving} className="rounded-lg bg-[var(--primary)] px-4 py-2 text-[11px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50">{candidateFormSaving ? 'Saving…' : 'Save changes'}</button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            )}
           </div>
           {candidateFormError && <p role="alert" className="mt-3 text-[12px] text-[#FF6B6B]">{candidateFormError}</p>}
           {candidateFormSaved && <p role="status" className="mt-3 text-[12px] text-emerald-700">Candidate form settings saved.</p>}

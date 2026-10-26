@@ -348,6 +348,23 @@ export async function uploadCandidateFormTemplate(
   return res.data.data;
 }
 
+export async function updateCandidateFormTemplate(
+  id: string,
+  formId: string,
+  payload: { name: string; category: string; file?: File },
+  accessToken: string | null,
+): Promise<Client> {
+  const body = new FormData();
+  body.append('name', payload.name);
+  body.append('category', payload.category);
+  if (payload.file) body.append('file', payload.file);
+  const res = await request<Envelope<Client>>(`/clients/${id}/candidate-form-templates/${formId}`, accessToken, {
+    method: 'PUT',
+    body,
+  });
+  return res.data.data;
+}
+
 export async function removeCandidateFormTemplate(
   id: string,
   formId: string,

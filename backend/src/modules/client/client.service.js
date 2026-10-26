@@ -2,6 +2,7 @@
 
 const fs = require('fs/promises');
 const path = require('path');
+const { randomUUID } = require('crypto');
 const { prisma } = require('../../common/prisma');
 const repo = require('./client.repository');
 const { normalizeConfig, validateConfig, CUSTOM_FORM_CATEGORIES } = require('./candidate-intake-config');
@@ -459,6 +460,32 @@ const update = async ({
   return toDto(updated);
 };
 
+const validateCandidateFormUpload = async (id, file, fallbackName = 'candidate-form') => {
+  if (!file) throw new BadRequestError('Choose a PDF, DOC, or DOCX form template to upload.');
+  const signature = await fs.readFile(file.path);
+  const extension = path.extname(file.originalname).toLowerCase();
+  const formId = path.basename(file.filename, extension);
+  if (!TEMPLATE_EXTENSIONS.has(extension) || !/^[0-9a-f-]{36}$/i.test(formId) || path.resolve(file.path) !== getTemplatePath(id, formId, file.filename)) {
+    throw new BadRequestError('The candidate form template upload path is invalid.');
+  }
+  const validSignature = extension === '.pdf'
+    ? file.mimetype === 'application/pdf' && signature.subarray(0, 5).toString() === '%PDF-'
+    : extension === '.doc'
+      ? ['application/msword', 'application/vnd.ms-word'].includes(file.mimetype)
+        && signature.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))
+      : extension === '.docx'
+        ? file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          && signature.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
+        : false;
+  if (!validSignature) {
+    throw new BadRequestError('The uploaded file must be a valid PDF, DOC, or DOCX document.');
+  }
+  return {
+    extension,
+    fileName: path.basename(file.originalname.replace(/\\/g, '/')).replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 255) || `${fallbackName}${extension}`,
+  };
+};
+
 const addCandidateFormTemplate = async ({ id, companyId, userId, file, name, category, required }) => {
   try {
     if (!file) throw new BadRequestError('Choose a PDF, DOC, or DOCX form template to upload.');
@@ -468,25 +495,8 @@ const addCandidateFormTemplate = async ({ id, companyId, userId, file, name, cat
     if (!label || label.length > 100) throw new BadRequestError('Form name must be between 1 and 100 characters.');
     if (!CUSTOM_FORM_CATEGORIES.includes(category)) throw new BadRequestError('Choose a valid form category.');
     if (!['true', 'false', true, false].includes(required)) throw new BadRequestError('Form required setting is invalid.');
-
-    const signature = await fs.readFile(file.path);
-    const extension = path.extname(file.originalname).toLowerCase();
-    const validSignature = extension === '.pdf'
-      ? file.mimetype === 'application/pdf' && signature.subarray(0, 5).toString() === '%PDF-'
-      : extension === '.doc'
-        ? ['application/msword', 'application/vnd.ms-word'].includes(file.mimetype)
-          && signature.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))
-        : extension === '.docx'
-          ? file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            && signature.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
-          : false;
-    if (!validSignature) {
-      throw new BadRequestError('The uploaded file must be a valid PDF, DOC, or DOCX document.');
-    }
-    const formId = path.basename(file.filename, extension);
-    if (!TEMPLATE_EXTENSIONS.has(extension) || !/^[0-9a-f-]{36}$/i.test(formId) || path.resolve(file.path) !== getTemplatePath(id, formId, file.filename)) {
-      throw new BadRequestError('The candidate form template upload path is invalid.');
-    }
+    const { fileName } = await validateCandidateFormUpload(id, file, label);
+    const formId = path.basename(file.filename, path.extname(file.originalname).toLowerCase());
     const config = normalizeConfig(client.candidateFormConfig);
     if (config.customForms.length >= 20) throw new BadRequestError('A client can have at most 20 candidate form templates.');
     if (category === 'POLICE_VERIFICATION') config.sections.policeVerification.enabled = true;
@@ -496,13 +506,92 @@ const addCandidateFormTemplate = async ({ id, companyId, userId, file, name, cat
       category,
       enabled: true,
       required: required === 'true' || required === true,
-      fileName: path.basename(file.originalname.replace(/\\/g, '/')).replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 255) || `${label}${extension}`,
+      fileName,
     });
     const updated = await repo.update(id, {
       candidateFormConfig: validateConfig(config),
       updatedById: userId || null,
     });
     return toDto(updated);
+  } catch (error) {
+    if (file?.path) {
+      try {
+        await fs.unlink(file.path);
+      } catch (cleanupError) {
+        if (cleanupError.code !== 'ENOENT') throw cleanupError;
+      }
+    }
+    throw error;
+  }
+};
+
+const updateCandidateFormTemplate = async ({ id, companyId, userId, formId, file, name, category }) => {
+  try {
+    const client = await repo.findById(id, companyId);
+    if (!client) throw new NotFoundError('Client not found');
+    const config = validateConfig(client.candidateFormConfig, id);
+    const form = config.customForms.find((item) => item.id === formId);
+    if (!form) throw new NotFoundError('Candidate form template not found.');
+
+    const label = String(name || '').trim();
+    if (!label || label.length > 100) throw new BadRequestError('Form name must be between 1 and 100 characters.');
+    if (!CUSTOM_FORM_CATEGORIES.includes(category)) throw new BadRequestError('Choose a valid form category.');
+
+    const uploadedFile = file ? await validateCandidateFormUpload(id, file, label) : null;
+    const previousConfig = client.candidateFormConfig;
+    const legacyFileUrl = previousConfig?.customForms?.find((item) => item.id === formId)?.fileUrl;
+    form.name = label;
+    form.category = category;
+    if (category === 'POLICE_VERIFICATION') config.sections.policeVerification.enabled = true;
+    if (uploadedFile) form.fileName = uploadedFile.fileName;
+
+    const backups = [];
+    let replacementPath = null;
+    let persisted = false;
+    try {
+      if (file) {
+        const targetPath = getTemplatePath(id, formId, file.originalname);
+        const existingPaths = [
+          ...[...TEMPLATE_EXTENSIONS].map((extension) => getTemplatePath(id, formId, `${formId}${extension}`)),
+          getLegacyTemplatePath(id, formId),
+          getLegacyTemplatePathFromUrl(id, legacyFileUrl),
+        ].filter((filePath, index, paths) => filePath && paths.indexOf(filePath) === index);
+        for (const existingPath of existingPaths) {
+          try {
+            await fs.access(existingPath);
+            const backupPath = `${existingPath}.backup-${randomUUID()}`;
+            await fs.rename(existingPath, backupPath);
+            backups.push({ existingPath, backupPath });
+          } catch (error) {
+            if (error.code !== 'ENOENT') throw error;
+          }
+        }
+        await fs.rename(file.path, targetPath);
+        replacementPath = targetPath;
+      }
+
+      const updated = await repo.update(id, {
+        candidateFormConfig: validateConfig(config, id),
+        updatedById: userId || null,
+      });
+      persisted = true;
+      for (const { backupPath } of backups) await fs.unlink(backupPath);
+      return toDto(updated);
+    } catch (error) {
+      if (!persisted && replacementPath) {
+        try {
+          await fs.unlink(replacementPath);
+        } catch (cleanupError) {
+          if (cleanupError.code !== 'ENOENT') throw cleanupError;
+        }
+      }
+      if (!persisted) {
+        for (const { existingPath, backupPath } of backups.reverse()) {
+          await fs.rename(backupPath, existingPath);
+        }
+      }
+      throw error;
+    }
   } catch (error) {
     if (file?.path) {
       try {
@@ -644,6 +733,7 @@ module.exports = {
   updateSubclient,
   removeSubclient,
   addCandidateFormTemplate,
+  updateCandidateFormTemplate,
   removeCandidateFormTemplate,
   getCandidateFormTemplate,
   update,

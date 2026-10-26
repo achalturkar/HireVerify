@@ -187,6 +187,26 @@ const addCandidateFormTemplate = asyncHandler(async (req, res) => {
   return created(res, { message: 'Candidate form template uploaded.', data });
 });
 
+const updateCandidateFormTemplate = asyncHandler(async (req, res) => {
+  const data = await service.updateCandidateFormTemplate({
+    id: req.params.id,
+    companyId: req.user.companyId,
+    userId: req.user.id,
+    formId: req.params.formId,
+    file: req.file,
+    name: req.body.name,
+    category: req.body.category,
+  });
+  await writeAudit({
+    req,
+    action: 'client.candidate_form_template.update',
+    entity: 'Client',
+    entityId: req.params.id,
+    metadata: { formId: req.params.formId, fileReplaced: Boolean(req.file) },
+  });
+  return success(res, { message: 'Candidate form template updated.', data });
+});
+
 const verifyCandidateFormTemplateClient = asyncHandler(async (req, _res, next) => {
   await service.getById({ id: req.params.id, companyId: req.user.companyId });
   next();
@@ -349,6 +369,7 @@ module.exports = {
   deleteSubclient,
   updateClient,
   addCandidateFormTemplate,
+  updateCandidateFormTemplate,
   verifyCandidateFormTemplateClient,
   removeCandidateFormTemplate,
   downloadCandidateFormTemplate,

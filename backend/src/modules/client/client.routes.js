@@ -301,6 +301,14 @@ router.post(
     uploadCandidateForm,
     controller.addCandidateFormTemplate
 );
+router.put(
+    '/:id/candidate-form-templates/:formId',
+    authorize('client.update'),
+    validate([param('id').isUUID(), param('formId').isUUID()]),
+    controller.verifyCandidateFormTemplateClient,
+    uploadCandidateForm,
+    controller.updateCandidateFormTemplate
+);
 router.get(
     '/:id/candidate-form-templates/:formId/download',
     authorize('client.update'),
