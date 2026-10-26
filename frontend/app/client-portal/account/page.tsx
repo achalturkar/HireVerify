@@ -98,11 +98,10 @@ export default function ClientPortalAccountPage() {
     { label: 'Client code', value: client?.clientCode },
     { label: 'Industry', value: client?.industry },
     { label: 'Website', value: client?.website },
-    { label: 'Primary contact', value: client?.contactName },
-    { label: 'Contact email', value: client?.contactEmail },
-    { label: 'Contact phone', value: client?.contactPhone },
+    { label: 'Support email', value: client?.supportEmail },
+    { label: 'Support phone', value: client?.supportPhone },
     { label: 'Business address', value: address },
-  ], [address, client?.clientCode, client?.contactEmail, client?.contactName, client?.contactPhone, client?.industry, client?.name, client?.website]);
+  ], [address, client?.clientCode, client?.industry, client?.name, client?.supportEmail, client?.supportPhone, client?.website]);
   const completedOrganizationFields = organizationFields.filter((field) => Boolean(field.value?.trim())).length;
   const organizationProgress = organizationFields.length
     ? Math.round((completedOrganizationFields / organizationFields.length) * 100)
@@ -187,7 +186,7 @@ export default function ClientPortalAccountPage() {
   }
 
   const initials = `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase();
-  const updateRequest = `mailto:${client?.contactEmail || ''}?${new URLSearchParams({
+  const updateRequest = `mailto:${client?.supportEmail || ''}?${new URLSearchParams({
     subject: `Update ${client?.name || 'client'} organization details`,
     body: `Hello,\n\nPlease help us update the organization details shown in our client portal.\n\nClient: ${client?.name || 'Not available'}\nRequested by: ${user.firstName} ${user.lastName}\n\nDetails to update:\n`,
   }).toString()}`;
@@ -327,7 +326,7 @@ export default function ClientPortalAccountPage() {
             <p className="mt-1.5 text-[10px] leading-4 text-[var(--muted)]">Last sign-in: {formatLastLogin(user.lastLoginAt)}</p>
             {organizationProgress < 100 && (
               <div className="mt-3 rounded-lg bg-amber-500/5 p-3 text-[10px] leading-4 text-[var(--muted)]">
-                Some organization details are missing. Ask your account contact to update them so your records stay accurate.
+                Some organization details are missing. Contact support if you need help updating them.
               </div>
             )}
           </div>
@@ -343,7 +342,7 @@ export default function ClientPortalAccountPage() {
               <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">These details are used to identify your organization and support your BGV records.</p>
             </div>
           </div>
-          {client?.contactEmail && (
+          {client?.supportEmail && (
             <a href={updateRequest} className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-semibold hover:bg-[var(--surface-muted)]">
               <Mail size={13} /> Request an update
             </a>
@@ -356,19 +355,18 @@ export default function ClientPortalAccountPage() {
             <InfoField label="Client code" value={client.clientCode} />
             <InfoField label="Industry" value={client.industry} />
             <InfoField label="Website" value={client.website} icon={<Globe2 size={12} />} href={client.website ? (client.website.startsWith('http') ? client.website : `https://${client.website}`) : undefined} />
-            <InfoField label="Primary contact" value={client.contactName} icon={<UserRound size={12} />} />
-            <InfoField label="Contact email" value={client.contactEmail} icon={<Mail size={12} />} href={client.contactEmail ? `mailto:${client.contactEmail}` : undefined} />
-            <InfoField label="Contact phone" value={client.contactPhone} icon={<Phone size={12} />} href={client.contactPhone ? `tel:${client.contactPhone}` : undefined} />
+            <InfoField label="Support email" value={client.supportEmail} icon={<Mail size={12} />} href={client.supportEmail ? `mailto:${client.supportEmail}` : undefined} />
+            <InfoField label="Support phone" value={client.supportPhone} icon={<Phone size={12} />} href={client.supportPhone ? `tel:${client.supportPhone.replace(/[^\d+]/g, '')}` : undefined} />
             <InfoField label="Business address" value={address} icon={<MapPin size={12} />} />
           </dl>
         ) : (
           <p className="mt-5 border-t border-[var(--border)] pt-5 text-[12px] text-[var(--muted)]">No organization is currently linked to this account. Contact your administrator for help.</p>
         )}
 
-        {client && !client.contactEmail && (
+        {client && !client.supportEmail && !client.supportPhone && (
           <p className="mt-4 flex items-start gap-2 rounded-lg bg-amber-500/5 px-3 py-2.5 text-[11px] leading-5 text-[var(--muted)]">
             <CircleAlert size={14} className="mt-0.5 shrink-0 text-amber-600" />
-            To change organization details, contact your verification provider or account administrator.
+            Support contact details are not available.
           </p>
         )}
       </section>

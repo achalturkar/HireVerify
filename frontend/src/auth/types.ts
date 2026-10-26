@@ -51,6 +51,8 @@ export interface User {
         contactName?: string | null;
         contactEmail?: string | null;
         contactPhone?: string | null;
+        supportEmail?: string | null;
+        supportPhone?: string | null;
         addressLine1?: string | null;
         addressLine2?: string | null;
         city?: string | null;
@@ -80,6 +82,7 @@ export interface LoginSession {
     accessToken: string;
 
     refreshToken: string;
+    refreshExpiresAt?: string;
     impersonation?: {
         sessionId: string;
         companyId: string;

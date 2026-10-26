@@ -84,7 +84,8 @@ const invitationInclude = {
   candidate: {
     include: {
       company: { select: { name: true, primaryColor: true, logoUrl: true } },
-      client: { select: { id: true, name: true, contactName: true, contactEmail: true, contactPhone: true, candidateFormConfig: true } },
+      client: { select: { id: true, name: true, supportEmail: true, supportPhone: true, candidateFormConfig: true } },
+      subclient: { select: { id: true, supportEmail: true, supportPhone: true, candidateFormConfig: true } },
       documents: true,
       consents: {
         where: { consentType: 'BGV_CONSENT' },
@@ -139,9 +140,12 @@ const areUploadsLocked = (candidate) => {
     || (!activeCase && candidate.status === 'VERIFICATION_IN_PROGRESS');
 };
 
+const getCandidateFormConfig = (candidate) =>
+  normalizeConfig(candidate.subclient?.candidateFormConfig ?? candidate.client?.candidateFormConfig);
+
 const pendingFor = (candidate) => {
   const activeCase = candidate.bgvCases[0];
-  const candidateFormConfig = normalizeConfig(candidate.client?.candidateFormConfig);
+  const candidateFormConfig = getCandidateFormConfig(candidate);
   const existingDocuments = [
     ...(candidate.documents || []),
     ...(activeCase?.checks || []).flatMap((check) => check.documents || []),
@@ -321,7 +325,7 @@ const pendingFor = (candidate) => {
 
 const toDto = (invitation) => {
   const candidate = invitation.candidate;
-  const candidateFormConfig = normalizeConfig(candidate.client?.candidateFormConfig);
+  const candidateFormConfig = getCandidateFormConfig(candidate);
   const { activeCase, pending, consentComplete, consentReady, formLocked, uploadsLocked, profileComplete } = pendingFor(candidate);
   const storedEmploymentHistory = Array.isArray(candidate.employmentHistory) ? candidate.employmentHistory : [];
   const currentEmployment = {
@@ -400,9 +404,8 @@ const toDto = (invitation) => {
     company: candidate.company,
     client: candidate.client ? {
       name: candidate.client.name,
-      contactName: candidate.client.contactName,
-      contactEmail: candidate.client.contactEmail,
-      contactPhone: candidate.client.contactPhone,
+      supportEmail: candidate.subclient?.supportEmail || candidate.client.supportEmail,
+      supportPhone: candidate.subclient?.supportPhone || candidate.client.supportPhone,
     } : null,
     candidateFormConfig,
     case: activeCase ? { id: activeCase.id, caseNumber: activeCase.caseNumber, status: activeCase.status, checks: activeCase.checks.map((check) => check.type) } : null,
@@ -425,10 +428,10 @@ const sendInvitationEmail = async ({ candidate, token, reminder, pendingCount })
 };
 
 const issue = async ({ candidateId, companyId, expiresInDays }) => {
-  const candidate = await prisma.candidate.findFirst({ where: { id: candidateId, ...(companyId ? { companyId } : {}), isDeleted: false }, include: { company: true, client: { select: { id: true, name: true, candidateFormConfig: true } }, bgvCases: { orderBy: { createdAt: 'desc' }, take: 1, include: { checks: { include: { documents: true } }, consents: true } } } });
+  const candidate = await prisma.candidate.findFirst({ where: { id: candidateId, ...(companyId ? { companyId } : {}), isDeleted: false }, include: { company: true, client: { select: { id: true, name: true, supportEmail: true, supportPhone: true, candidateFormConfig: true } }, subclient: { select: { id: true, supportEmail: true, supportPhone: true, candidateFormConfig: true } }, bgvCases: { orderBy: { createdAt: 'desc' }, take: 1, include: { checks: { include: { documents: true } }, consents: true } } } });
   if (!candidate) throw new NotFoundError('Candidate not found');
   if (!candidate.email) throw new BadRequestError('Candidate email is required before sending a portal link.');
-  const clientExpiryDays = normalizeConfig(candidate.client?.candidateFormConfig).invitationExpiryDays;
+  const clientExpiryDays = getCandidateFormConfig(candidate).invitationExpiryDays;
   const days = Number(expiresInDays ?? clientExpiryDays);
   if (!Number.isInteger(days) || days < 1 || days > MAX_INVITATION_DAYS) throw new BadRequestError(`Link expiry must be between 1 and ${MAX_INVITATION_DAYS} days.`);
 
@@ -453,7 +456,7 @@ const issue = async ({ candidateId, companyId, expiresInDays }) => {
 const remind = async ({ candidateId, companyId, clientId }) => {
   const candidate = await prisma.candidate.findFirst({
     where: { id: candidateId, companyId, ...(clientId ? { clientId } : {}), isDeleted: false },
-    include: { company: true, client: { select: { id: true, name: true, candidateFormConfig: true } }, bgvCases: { orderBy: { createdAt: 'desc' }, take: 1, include: { checks: { include: { documents: true } }, consents: true } } },
+    include: { company: true, client: { select: { id: true, name: true, supportEmail: true, supportPhone: true, candidateFormConfig: true } }, subclient: { select: { id: true, supportEmail: true, supportPhone: true, candidateFormConfig: true } }, bgvCases: { orderBy: { createdAt: 'desc' }, take: 1, include: { checks: { include: { documents: true } }, consents: true } } },
   });
   if (!candidate) throw new NotFoundError('Candidate not found');
   if (!candidate.email) throw new BadRequestError('Candidate email is required before sending a reminder.');
@@ -498,13 +501,14 @@ const getPortal = async (token) => toDto(await findInvitation(token));
 const getCandidateFormTemplate = async (token, formId) => {
   const invitation = await findInvitation(token);
   if (!/^[0-9a-f-]{36}$/i.test(formId || '')) throw new NotFoundError('Form template is not available.');
-  const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);
+  const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
   const form = candidateFormConfig.customForms.find((item) =>
     item.id === formId && isCustomFormEnabled(item, candidateFormConfig, invitation.candidate.bgvCases[0]),
   );
   if (!form) throw new NotFoundError('Form template is not available.');
-  const legacyFileUrl = invitation.candidate.client.candidateFormConfig?.customForms?.find((item) => item.id === formId)?.fileUrl;
-  const filePath = await findTemplatePath(invitation.candidate.client.id, formId, legacyFileUrl, form.fileName);
+  const formOwner = invitation.candidate.subclient || invitation.candidate.client;
+  const legacyFileUrl = formOwner.candidateFormConfig?.customForms?.find((item) => item.id === formId)?.fileUrl;
+  const filePath = await findTemplatePath(formOwner.id, formId, legacyFileUrl, form.fileName);
   if (!filePath) throw new NotFoundError('Form template is not available.');
   return { filePath, fileName: form.fileName };
 };
@@ -529,7 +533,7 @@ const updateProfile = async (token, payload) => {
   for (const field of allowed) {
     if (payload[field] !== undefined) data[field] = payload[field];
   }
-  const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);
+  const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
   const addressConfig = candidateFormConfig.address;
   if (!candidateFormConfig.sections.address.enabled
     && (data.currentAddress !== undefined || data.permanentAddress !== undefined)) {
@@ -752,32 +756,32 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
     await rejectDocumentUpload(file, 'Document category is invalid.');
   }
   if (documentCategory === 'ADDRESS') {
-    const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);
+    const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
     const addressDocument = candidateFormConfig.address.documents.find((item) => item.type === documentType && item.enabled);
     const requestedByCase = invitation.candidate.bgvCases[0]?.checks.some((check) => check.type === documentType);
     if ((!candidateFormConfig.sections.address.enabled || !addressDocument) && !requestedByCase) {
       await rejectDocumentUpload(file, 'This address document type is not enabled for this client.');
     }
   } else if (documentCategory === 'EMPLOYMENT') {
-    const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);
+    const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
     const employmentDocument = candidateFormConfig.employmentDocuments.find((item) => item.type === documentType && item.enabled);
     if (!candidateFormConfig.sections.employment.enabled || !employmentDocument) {
       await rejectDocumentUpload(file, 'This employment document type is not enabled for this client.');
     }
   } else if (documentCategory === 'EDUCATION') {
-    const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);
+    const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
     if (!candidateFormConfig.sections.education.enabled || documentType !== 'EDUCATION_CERTIFICATE') {
       await rejectDocumentUpload(file, 'This education document type is not enabled for this client.');
     }
   } else if (ADDRESS_DOCUMENT_TYPES.includes(documentType)) {
-    const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);
+    const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
     const addressDocument = candidateFormConfig.address.documents.find((item) => item.type === documentType && item.enabled);
     const requestedByCase = invitation.candidate.bgvCases[0]?.checks.some((check) => check.type === documentType);
     if ((!candidateFormConfig.sections.address.enabled || !addressDocument) && !requestedByCase) {
       await rejectDocumentUpload(file, 'This address document type is not enabled for this client.');
     }
   } else if (EMPLOYMENT_DOCUMENT_TYPES.includes(documentType) && documentType !== 'OTHER') {
-    const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);
+    const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
     if (!candidateFormConfig.employmentDocuments.some((item) => item.type === documentType && item.enabled)) {
       await rejectDocumentUpload(file, 'This employment document type is not enabled for this client.');
     }
@@ -785,7 +789,7 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
   let storedDocumentNumber = documentNumber?.trim() || null;
   let customForm = null;
   if (customFormId) {
-    const candidateFormConfig = normalizeConfig(invitation.candidate.client?.candidateFormConfig);
+    const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
     customForm = candidateFormConfig.customForms
       .find((item) => item.id === customFormId && isCustomFormEnabled(item, candidateFormConfig, invitation.candidate.bgvCases[0]));
     if (!customForm) await rejectDocumentUpload(file, 'This form is not enabled for this client.');
@@ -798,7 +802,7 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
   }
   const identityField = IDENTITY_FIELDS.find((field) => field.documentType === documentType);
   if (identityField && documentCategory !== 'ADDRESS' && !ADDRESS_DOCUMENT_TYPES.includes(documentType)
-    && !normalizeConfig(invitation.candidate.client?.candidateFormConfig)[identityField.key].enabled) {
+    && !getCandidateFormConfig(invitation.candidate)[identityField.key].enabled) {
     await rejectDocumentUpload(file, `${identityField.label} documents are not enabled for this client’s candidate form.`);
   }
   const signature = await fs.readFile(file.path);

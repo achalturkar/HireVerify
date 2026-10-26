@@ -229,6 +229,8 @@ export default function ClientsPage() {
       if (values.contactName.trim()) payload.append('contactName', values.contactName.trim());
       if (values.contactEmail.trim()) payload.append('contactEmail', values.contactEmail.trim());
       if (values.contactPhone.trim()) payload.append('contactPhone', values.contactPhone.trim());
+      payload.append('supportEmail', values.supportEmail.trim());
+      payload.append('supportPhone', values.supportPhone.trim());
       if (values.gstNumber.trim()) payload.append('gstNumber', values.gstNumber.trim());
       if (values.panNumber.trim()) payload.append('panNumber', values.panNumber.trim());
       if (values.addressLine1.trim()) payload.append('addressLine1', values.addressLine1.trim());

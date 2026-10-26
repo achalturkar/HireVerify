@@ -72,6 +72,7 @@ interface DraftLine {
   unitPrice: string | number;
   discountPercent: string | number;
   taxPercent: string | number;
+  isPeriodSummary?: boolean;
 }
 
 interface ClientBillingDraft {
@@ -350,6 +351,9 @@ export default function InvoicesPage() {
   const [bulkRate, setBulkRate] = useState('');
   const [bulkDiscountPercent, setBulkDiscountPercent] = useState('0');
   const [bulkTaxPercent, setBulkTaxPercent] = useState('0');
+  const [billingMode, setBillingMode] = useState<'itemized' | 'summary'>('itemized');
+  const [summaryCountMode, setSummaryCountMode] = useState<'automatic' | 'manual'>('automatic');
+  const [manualCaseCount, setManualCaseCount] = useState('');
   const [formError, setFormError] = useState('');
   const [form, setForm] = useState({ clientId: '', invoiceDate: today(), dueDate: datePlusDays(30), currency: 'INR', placeOfSupply: '', purchaseOrderNumber: '', notes: '', terms: 'Payment due within 30 days.' });
   const [lines, setLines] = useState<DraftLine[]>([]);
@@ -479,6 +483,9 @@ export default function InvoicesPage() {
     setCompletedCases([]);
     setCompletedCaseSearch('');
     setSelectedCompletedCaseIds([]);
+    if (billingMode === 'summary' && summaryCountMode === 'automatic') {
+      setLines((current) => current.filter((line) => !line.isPeriodSummary));
+    }
     setCompletedSearchDone(false);
     setCompletedLoading(false);
   };
@@ -501,11 +508,19 @@ export default function InvoicesPage() {
     setCompletedCaseSearch('');
     setSelectedCompletedCaseIds([]);
     try {
-      const result = await listCompletedInvoiceCases(clientId, completedFrom, completedTo, accessToken);
+      const fetchedCases = await listCompletedInvoiceCases(clientId, completedFrom, completedTo, accessToken);
       if (completedSearchRef.current !== searchId || selectedClientIdRef.current !== clientId) return;
+      const result = editingId
+        ? fetchedCases.map((item) => ({
+          ...item,
+          isBilled: selectedCompletedCaseIds.includes(item.id) ? false : item.isBilled,
+        }))
+        : fetchedCases;
       setCompletedCases(result);
       setCompletedSearchDone(true);
-      setSelectedCompletedCaseIds(result.filter((item) => lines.some((line) => line.caseId === item.id)).map((item) => item.id));
+      setSelectedCompletedCaseIds(result.filter((item) => billingMode === 'summary'
+        ? selectedCompletedCaseIds.includes(item.id)
+        : lines.some((line) => line.caseId === item.id)).map((item) => item.id));
       if (!result.length) setNotice('No completed cases were found for this client and date range.');
     } catch (cause) {
       if (completedSearchRef.current === searchId && selectedClientIdRef.current === clientId) {
@@ -518,6 +533,10 @@ export default function InvoicesPage() {
 
   const updateCompletedCaseSelection = (caseIds: string[]) => {
     const selectedIds = new Set(caseIds);
+    if (billingMode === 'summary' && completedCases.some((item) => selectedIds.has(item.id) && item.isBilled)) {
+      setFormError('Period summaries can only include unbilled cases.');
+      return;
+    }
     const candidateIds = new Set<string>();
     for (const item of completedCases.filter((candidateCase) => selectedIds.has(candidateCase.id))) {
       if (candidateIds.has(item.candidateId)) {
@@ -531,6 +550,20 @@ export default function InvoicesPage() {
         setFormError('This candidate is already included on another invoice line.');
         return;
       }
+    }
+    if (billingMode === 'summary') {
+      setSelectedCompletedCaseIds(caseIds);
+      setLines((current) => caseIds.length
+        ? current.map((line) => line.isPeriodSummary
+          ? {
+            ...line,
+            quantity: caseIds.length,
+            description: `Background verification services (${dateLabel(completedFrom)} to ${dateLabel(completedTo)})`,
+          }
+          : line)
+        : current.filter((line) => !line.isPeriodSummary));
+      setFormError('');
+      return;
     }
     const existingCaseIds = new Set(lines.map((line) => line.caseId).filter(Boolean));
     const additions = completedCases.filter((item) => selectedIds.has(item.id) && !existingCaseIds.has(item.id));
@@ -619,6 +652,69 @@ export default function InvoicesPage() {
     setNotice('Rate, discount, and tax have been applied to all line items.');
   };
 
+  const addPeriodSummaryLine = () => {
+    const selectedCases = completedCases.filter((item) => selectedCompletedCaseIds.includes(item.id));
+    const count = summaryCountMode === 'manual' ? Number(manualCaseCount) : selectedCases.length;
+    if (summaryCountMode === 'automatic' && (!completedSearchDone || !selectedCases.length)) {
+      setFormError('Find completed cases and select at least one unbilled case first.');
+      return;
+    }
+    if (!completedFrom || !completedTo || completedFrom > completedTo) {
+      setFormError('Enter a valid completion date range.');
+      return;
+    }
+    if (!Number.isInteger(count) || count < 1 || count > 100000) {
+      setFormError('Enter a whole completed-case count between 1 and 100,000.');
+      return;
+    }
+    if (!bulkRate.trim() || !Number.isFinite(Number(bulkRate)) || Number(bulkRate) < 0 || Number(bulkRate) > 100000000
+      || ![bulkDiscountPercent, bulkTaxPercent].every((value) => Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100)) {
+      setFormError('Enter a valid rate and discount/GST percentages between 0 and 100.');
+      return;
+    }
+    const description = `Background verification services (${dateLabel(completedFrom)} to ${dateLabel(completedTo)})`;
+    const summaryLine: DraftLine = {
+      caseId: '',
+      description,
+      candidateName: '',
+      serviceCode: '',
+      quantity: count,
+      unitPrice: bulkRate,
+      discountPercent: bulkDiscountPercent,
+      taxPercent: bulkTaxPercent,
+      isPeriodSummary: true,
+    };
+    setLines((current) => [...current.filter((line) => !line.isPeriodSummary), summaryLine]);
+    setFormError('');
+    setManualCaseCount(String(count));
+    setNotice(`${count} completed cases added as one summarized invoice line.`);
+  };
+
+  const changeBillingMode = (mode: 'itemized' | 'summary') => {
+    setBillingMode(mode);
+    setSummaryCountMode('automatic');
+    setManualCaseCount('');
+    setSelectedCompletedCaseIds([]);
+    setLines((current) => current.filter((line) => (
+      mode === 'summary' ? !line.caseId && !line.isPeriodSummary : !line.isPeriodSummary
+    )));
+    setFormError('');
+  };
+
+  const changeSummaryCountMode = (mode: 'automatic' | 'manual') => {
+    setSummaryCountMode(mode);
+    if (mode === 'manual') {
+      const currentSummaryLine = lines.find((line) => line.isPeriodSummary);
+      setManualCaseCount(currentSummaryLine
+        ? String(currentSummaryLine.quantity)
+        : selectedCompletedCaseIds.length ? String(selectedCompletedCaseIds.length) : '');
+      setSelectedCompletedCaseIds([]);
+    } else if (!selectedCompletedCaseIds.length) {
+      setLines((current) => current.filter((line) => !line.isPeriodSummary));
+    }
+    setFormError('');
+  };
+
   const resetComposer = () => {
     selectedClientIdRef.current = '';
     completedSearchRef.current += 1;
@@ -636,6 +732,9 @@ export default function InvoicesPage() {
     setBulkRate('');
     setBulkDiscountPercent('0');
     setBulkTaxPercent('0');
+    setBillingMode('itemized');
+    setSummaryCountMode('automatic');
+    setManualCaseCount('');
     setFormError('');
   };
 
@@ -645,6 +744,13 @@ export default function InvoicesPage() {
     if (!invoice) return;
     selectedClientIdRef.current = invoice.clientId;
     setEditingId(invoice.id);
+    const summaryLine = invoice.items.find((item) => item.isPeriodSummary);
+    setBillingMode(summaryLine ? 'summary' : 'itemized');
+    setSummaryCountMode(summaryLine && !invoice.coveredCaseIds?.length ? 'manual' : 'automatic');
+    setManualCaseCount(summaryLine ? String(summaryLine.quantity) : '');
+    if (invoice.billingPeriodFrom) setCompletedFrom(dateInput(invoice.billingPeriodFrom));
+    if (invoice.billingPeriodTo) setCompletedTo(dateInput(invoice.billingPeriodTo));
+    setSelectedCompletedCaseIds(invoice.coveredCaseIds || []);
     setForm({
       clientId: invoice.clientId,
       invoiceDate: dateInput(invoice.invoiceDate),
@@ -665,14 +771,34 @@ export default function InvoicesPage() {
       unitPrice: Number(item.unitPrice),
       discountPercent: Number(item.discountPercent),
       taxPercent: Number(item.taxPercent),
+      isPeriodSummary: item.isPeriodSummary,
     }));
     setLines(invoiceLines);
     setBulkRate(String(invoiceLines[0]?.unitPrice ?? ''));
     setBulkDiscountPercent(String(invoiceLines[0]?.discountPercent ?? 0));
     setBulkTaxPercent(String(invoiceLines[0]?.taxPercent ?? 0));
     setCasesLoading(true);
-    try { setCases(await listInvoiceCases(invoice.clientId, accessToken)); }
-    catch { setCases([]); }
+    try {
+      setCases(await listInvoiceCases(invoice.clientId, accessToken));
+      if (invoice.coveredCaseIds?.length && invoice.billingPeriodFrom && invoice.billingPeriodTo) {
+        const periodCases = await listCompletedInvoiceCases(
+          invoice.clientId,
+          dateInput(invoice.billingPeriodFrom),
+          dateInput(invoice.billingPeriodTo),
+          accessToken,
+        );
+        setCompletedCases(periodCases.map((item) => ({
+          ...item,
+          isBilled: invoice.coveredCaseIds?.includes(item.id) ? false : item.isBilled,
+        })));
+        setCompletedSearchDone(true);
+        setSelectedCompletedCaseIds(invoice.coveredCaseIds);
+      }
+    }
+    catch (cause) {
+      setCases([]);
+      setFormError(cause instanceof Error ? cause.message : 'Could not load invoice cases.');
+    }
     finally { setCasesLoading(false); }
   };
 
@@ -681,6 +807,25 @@ export default function InvoicesPage() {
     if (!form.clientId) { setFormError('Choose a client before saving.'); return; }
     if (!lines.length) { setFormError('Add at least one line item before saving.'); return; }
     if (lines.some((line) => !line.description.trim() || amount(line.quantity) <= 0 || amount(line.unitPrice) < 0)) { setFormError('Each line needs a description, positive quantity, and valid rate.'); return; }
+    const summaryLine = billingMode === 'summary' ? lines.find((item) => item.isPeriodSummary) : undefined;
+    if (summaryCountMode === 'manual' && !summaryLine) {
+      setFormError('Enter the count and add the manual total-count line before saving.');
+      return;
+    }
+    if (summaryLine && (!completedFrom || !completedTo || completedFrom > completedTo)) {
+      setFormError('Enter a valid completion date range for the total-count line.');
+      return;
+    }
+    if (summaryLine && (!Number.isInteger(amount(summaryLine.quantity)) || amount(summaryLine.quantity) > 100000)) {
+      setFormError('The total-count quantity must be a whole number between 1 and 100,000.');
+      return;
+    }
+    if (billingMode === 'summary' && summaryCountMode === 'automatic' && selectedCompletedCaseIds.length) {
+      if (!summaryLine || amount(summaryLine.quantity) !== selectedCompletedCaseIds.length) {
+        setFormError('Add or update the period summary line so its quantity matches the selected cases.');
+        return;
+      }
+    }
     const payload: InvoiceInput = {
       ...form,
       clientAddress: clientBilling.address,
@@ -690,6 +835,11 @@ export default function InvoicesPage() {
       clientGst: clientBilling.gstNumber,
       clientPan: clientBilling.panNumber,
       clientEmail: clientBilling.email,
+      ...(summaryLine ? {
+        billingPeriodFrom: completedFrom,
+        billingPeriodTo: completedTo,
+        ...(summaryCountMode === 'automatic' && selectedCompletedCaseIds.length ? { coveredCaseIds: selectedCompletedCaseIds } : {}),
+      } : {}),
       items: lines.map((item) => ({
         ...(item.caseId ? { caseId: item.caseId } : {}),
         description: item.description,
@@ -699,6 +849,7 @@ export default function InvoicesPage() {
         unitPrice: amount(item.unitPrice),
         discountPercent: amount(item.discountPercent),
         taxPercent: amount(item.taxPercent),
+        ...(item.isPeriodSummary ? { isPeriodSummary: true } : {}),
       })),
     };
     setWorking(true);
@@ -915,6 +1066,17 @@ export default function InvoicesPage() {
           </div>
 
           <div className="space-y-6 p-5 sm:p-7">
+            {!editingId && <section aria-label="Invoice billing format" className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/50 p-4 sm:p-5">
+              <div className="mb-3"><h3 className="text-sm font-semibold">Choose how to bill</h3><p className="mt-1 text-xs text-[var(--muted)]">Create invoice lines for each candidate, or combine completed cases into one date-range total.</p></div>
+              <div role="group" aria-label="Invoice billing format" className="grid gap-3 sm:grid-cols-2">
+                <button type="button" onClick={() => changeBillingMode('itemized')} aria-pressed={billingMode === 'itemized'} className={`rounded-lg border p-4 text-left transition-colors ${billingMode === 'itemized' ? 'border-[var(--primary)] bg-[var(--primary)]/[0.06] ring-1 ring-[var(--primary)]' : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-muted)]'}`}>
+                  <span className="block text-sm font-semibold">By candidate name</span><span className="mt-1 block text-xs leading-5 text-[var(--muted)]">Show candidate and case details as individual invoice lines.</span>
+                </button>
+                <button type="button" onClick={() => changeBillingMode('summary')} aria-pressed={billingMode === 'summary'} className={`rounded-lg border p-4 text-left transition-colors ${billingMode === 'summary' ? 'border-[var(--primary)] bg-[var(--primary)]/[0.06] ring-1 ring-[var(--primary)]' : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-muted)]'}`}>
+                  <span className="block text-sm font-semibold">Total count</span><span className="mt-1 block text-xs leading-5 text-[var(--muted)]">Bill completed BGV cases in a date range as one quantity × rate line, with GST.</span>
+                </button>
+              </div>
+            </section>}
             <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <FormField label="Bill to client"><select value={form.clientId} onChange={(event) => void chooseClient(event.target.value)} required className={fieldClass}><option value="">Select client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></FormField>
               <FormField label="Invoice date"><InvoiceDateInput value={form.invoiceDate} onChange={(value) => setFormValue('invoiceDate', value)} required className={fieldClass} ariaLabel="Invoice date" /></FormField>
@@ -927,18 +1089,74 @@ export default function InvoicesPage() {
 
             {form.clientId && <section aria-label="Client billing details" className="border-l-2 border-[var(--primary)] py-2 pl-4"><div className="mb-3 flex flex-wrap items-baseline justify-between gap-2"><div><h3 className="text-sm font-semibold">Client billing details</h3><p className="mt-0.5 text-[11px] text-[var(--muted)]">Saved on this invoice; the client profile will not be changed.</p></div>{missingClientBillingFields.length > 0 && <p className="text-[11px] text-amber-700 dark:text-amber-300">Complete {missingClientBillingFields.join(', ')} for a more complete invoice</p>}</div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><FormField label="Billing address" className="sm:col-span-2"><textarea value={clientBilling.address} onChange={(event) => setClientBilling((current) => ({ ...current, address: event.target.value }))} maxLength={1000} placeholder="Street, city, postal code, country" className={`${fieldClass} min-h-16 resize-y`} /></FormField><FormField label="Contact person"><input value={clientBilling.contactName} onChange={(event) => setClientBilling((current) => ({ ...current, contactName: event.target.value }))} maxLength={150} className={fieldClass} /></FormField><FormField label="Contact phone"><input value={clientBilling.phone} onChange={(event) => setClientBilling((current) => ({ ...current, phone: event.target.value }))} maxLength={50} className={fieldClass} /></FormField><FormField label="State"><GeoSelect kind="state" countryName={clients.find((client) => client.id === form.clientId)?.country || undefined} value={clientBilling.state} onChange={(value) => { setClientBilling((current) => ({ ...current, state: value })); setForm((current) => ({ ...current, placeOfSupply: value })); }} className={fieldClass} /></FormField><FormField label="GSTIN"><input value={clientBilling.gstNumber} onChange={(event) => setClientBilling((current) => ({ ...current, gstNumber: event.target.value }))} maxLength={30} className={fieldClass} /></FormField><FormField label="PAN"><input value={clientBilling.panNumber} onChange={(event) => setClientBilling((current) => ({ ...current, panNumber: event.target.value }))} maxLength={20} className={fieldClass} /></FormField><FormField label="Billing email"><input type="email" value={clientBilling.email} onChange={(event) => setClientBilling((current) => ({ ...current, email: event.target.value }))} maxLength={255} className={fieldClass} /></FormField></div></section>}
 
-            {form.clientId && !editingId && <section aria-label="Automatically add completed cases" className="overflow-hidden rounded-xl border border-[var(--primary)]/20 bg-gradient-to-br from-[var(--primary)]/[0.07] via-[var(--surface)] to-[var(--surface)]">
+            {form.clientId && (!editingId || billingMode === 'summary') && <section aria-label="Automatically add completed cases" className="overflow-hidden rounded-xl border border-[var(--primary)]/20 bg-gradient-to-br from-[var(--primary)]/[0.07] via-[var(--surface)] to-[var(--surface)]">
               <div className="flex items-start gap-3 border-b border-[var(--border)]/70 p-4 sm:p-5">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><CalendarDays size={17} /></span>
-                <div><h3 className="text-sm font-semibold">Auto-add completed BGV cases</h3><p className="mt-1 text-xs leading-5 text-[var(--muted)]">Completed cases within the selected date range are shown. You can select unbilled cases or re-bill cases that were included on another invoice.</p></div>
+                <div><h3 className="text-sm font-semibold">Bill completed BGV cases</h3><p className="mt-1 text-xs leading-5 text-[var(--muted)]">{billingMode === 'summary' ? 'Select the completion period and cases to create one count, rate, and GST line.' : 'Select completed cases to add individual candidate and case lines.'}</p></div>
               </div>
-              <div className="grid gap-3 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end sm:p-5">
+              <div className={`grid gap-3 p-4 sm:items-end sm:p-5 ${billingMode === 'summary' && summaryCountMode === 'manual' ? 'sm:grid-cols-2' : 'sm:grid-cols-[1fr_1fr_auto]'}`}>
                 <FormField label="Completed from"><InvoiceDateInput value={completedFrom} max={completedTo || undefined} onChange={(value) => { setCompletedFrom(value); clearCompletedSearch(); }} className={fieldClass} ariaLabel="Completed from" /></FormField>
                 <FormField label="Completed to"><InvoiceDateInput value={completedTo} min={completedFrom || undefined} max={today()} onChange={(value) => { setCompletedTo(value); clearCompletedSearch(); }} className={fieldClass} ariaLabel="Completed to" /></FormField>
-                <button type="button" onClick={() => void findCompletedCases()} disabled={completedLoading || !form.clientId} className="inline-flex items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-[var(--primary-foreground)] disabled:opacity-60">{completedLoading ? <LoaderCircle size={15} className="animate-spin" /> : <Search size={15} />}{completedLoading ? 'Finding cases…' : 'Find completed cases'}</button>
+                {(billingMode !== 'summary' || summaryCountMode === 'automatic') && <button type="button" onClick={() => void findCompletedCases()} disabled={completedLoading || !form.clientId} className="inline-flex items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-[var(--primary-foreground)] disabled:opacity-60">{completedLoading ? <LoaderCircle size={15} className="animate-spin" /> : <Search size={15} />}{completedLoading ? 'Finding cases…' : 'Find completed cases'}</button>}
               </div>
-              {completedSearchDone && <div className="border-t border-[var(--border)] bg-[var(--surface)]/70">
+              {billingMode === 'summary' && <div className="px-4 pb-4 sm:px-5">
+                <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="How to get total case count">
+                  <button type="button" onClick={() => changeSummaryCountMode('automatic')} aria-pressed={summaryCountMode === 'automatic'} className={`rounded-md border px-3 py-2 text-xs font-semibold ${summaryCountMode === 'automatic' ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'}`}>Count selected completed cases</button>
+                  <button type="button" onClick={() => changeSummaryCountMode('manual')} aria-pressed={summaryCountMode === 'manual'} className={`rounded-md border px-3 py-2 text-xs font-semibold ${summaryCountMode === 'manual' ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'}`}>Enter count manually</button>
+                </div>
+                {summaryCountMode === 'manual' && <div className="rounded-lg border border-[var(--primary)]/20 bg-[var(--primary)]/[0.04] p-4">
+                  <div className="mb-3"><h4 className="text-sm font-semibold">Manual total-count invoice line</h4><p className="mt-1 text-xs text-[var(--muted)]">Enter the number of completed BGV cases and the billing rate. The selected completion period, count, rate, and GST will appear on the invoice.</p></div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <FormField label="Completed case count"><input type="number" min="1" max="100000" step="1" inputMode="numeric" value={manualCaseCount} onChange={(event) => {
+                      const value = event.target.value;
+                      setManualCaseCount(value);
+                      setLines((current) => current.map((line) => line.isPeriodSummary ? { ...line, quantity: value } : line));
+                    }} className={fieldClass} /></FormField>
+                    <FormField label={`Rate per case (${form.currency})`}><input type="number" min="0" max="100000000" step="0.01" value={bulkRate} onChange={(event) => setBulkRate(event.target.value)} className={fieldClass} /></FormField>
+                    <FormField label="Discount (%)"><input type="number" min="0" max="100" step="0.01" value={bulkDiscountPercent} onChange={(event) => setBulkDiscountPercent(event.target.value)} className={fieldClass} /></FormField>
+                    <FormField label={profile.gstNumber ? 'GST (%)' : 'Tax (%)'}><input type="number" min="0" max="100" step="0.01" value={bulkTaxPercent} onChange={(event) => setBulkTaxPercent(event.target.value)} className={fieldClass} /></FormField>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md bg-[var(--surface)] px-3 py-2.5 text-xs">
+                    <span>{Number(manualCaseCount) || 0} cases × {money(amount(bulkRate), form.currency)} each · {completedFrom ? dateLabel(completedFrom) : '—'} – {completedTo ? dateLabel(completedTo) : '—'}</span>
+                    <span className="font-semibold">Estimated total incl. tax: {money(
+                      roundMoney(roundMoney((Number(manualCaseCount) || 0) * amount(bulkRate)
+                        * (1 - amount(bulkDiscountPercent) / 100))
+                        * (1 + amount(bulkTaxPercent) / 100)),
+                      form.currency,
+                    )}</span>
+                  </div>
+                  <button type="button" onClick={addPeriodSummaryLine} className="mt-3 inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-3.5 py-2 text-xs font-semibold text-[var(--primary-foreground)]"><Receipt size={14} />Add manual count line</button>
+                  <p className="mt-2 text-[11px] leading-5 text-[var(--muted)]">Manual counts are billed as an aggregate and are not linked to specific candidate cases. Use automatic counting when you need case-level duplicate-billing checks.</p>
+                </div>}
+              </div>}
+              {completedSearchDone && (billingMode !== 'summary' || summaryCountMode === 'automatic') && <div className="border-t border-[var(--border)] bg-[var(--surface)]/70">
                 {completedCases.length > 0 ? <>
+                  {billingMode === 'summary' && summaryCountMode === 'automatic' && <div className="m-4 rounded-lg border border-[var(--primary)]/20 bg-[var(--primary)]/[0.04] p-4 sm:m-5">
+                    <div className="mb-3">
+                      <h4 className="text-sm font-semibold">Total-count invoice line</h4>
+                      <p className="mt-1 text-xs text-[var(--muted)]">Select unbilled completed cases below. The invoice shows the case count, completion date range, rate, GST, and total.</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <FormField label={`Rate per case (${form.currency})`}><input type="number" min="0" max="100000000" step="0.01" value={bulkRate} onChange={(event) => setBulkRate(event.target.value)} className={fieldClass} /></FormField>
+                      <FormField label="Discount (%)"><input type="number" min="0" max="100" step="0.01" value={bulkDiscountPercent} onChange={(event) => setBulkDiscountPercent(event.target.value)} className={fieldClass} /></FormField>
+                      <FormField label={profile.gstNumber ? 'GST (%)' : 'Tax (%)'}><input type="number" min="0" max="100" step="0.01" value={bulkTaxPercent} onChange={(event) => setBulkTaxPercent(event.target.value)} className={fieldClass} /></FormField>
+                    </div>
+                    <div className="mt-3 grid gap-2 rounded-md bg-[var(--surface)] p-3 text-xs sm:grid-cols-2 lg:grid-cols-5">
+                      <div><p className="text-[var(--muted)]">Completed cases</p><p className="mt-1 font-semibold">{selectedCompletedCaseIds.length}</p></div>
+                      <div><p className="text-[var(--muted)]">Completion period</p><p className="mt-1 font-semibold">{completedFrom ? dateLabel(completedFrom) : '—'} – {completedTo ? dateLabel(completedTo) : '—'}</p></div>
+                      <div><p className="text-[var(--muted)]">Rate per case</p><p className="mt-1 font-semibold">{money(amount(bulkRate), form.currency)}</p></div>
+                      <div><p className="text-[var(--muted)]">{profile.gstNumber ? 'GST' : 'Tax'} rate</p><p className="mt-1 font-semibold">{amount(bulkTaxPercent)}%</p></div>
+                      <div><p className="text-[var(--muted)]">Estimated total incl. tax</p><p className="mt-1 font-semibold">{money(
+                        roundMoney(roundMoney(selectedCompletedCaseIds.length * amount(bulkRate)
+                          * (1 - amount(bulkDiscountPercent) / 100))
+                          * (1 + amount(bulkTaxPercent) / 100)),
+                        form.currency,
+                      )}</p></div>
+                    </div>
+                    <button type="button" onClick={addPeriodSummaryLine} disabled={!selectedCompletedCaseIds.length} className="mt-3 inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-3.5 py-2 text-xs font-semibold text-[var(--primary-foreground)] disabled:cursor-not-allowed disabled:opacity-50">
+                      <Receipt size={14} />Add total-count line to invoice
+                    </button>
+                  </div>}
                   <div className="px-4 pt-4 sm:px-5">
                     <label className="relative block">
                       <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
@@ -946,11 +1164,11 @@ export default function InvoicesPage() {
                     </label>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-5">
-                    <div><p className="text-sm font-semibold">{completedCases.length} completed {completedCases.length === 1 ? 'case' : 'cases'} available</p><p className="mt-0.5 text-xs text-[var(--muted)]">{selectedCompletedCaseIds.length} selected and added to invoice lines</p></div>
+                    <div><p className="text-sm font-semibold">{completedCases.length} completed {completedCases.length === 1 ? 'case' : 'cases'} available</p><p className="mt-0.5 text-xs text-[var(--muted)]">{selectedCompletedCaseIds.length} selected {billingMode === 'summary' ? 'for the summary line' : 'and added to invoice lines'}</p></div>
                     <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-[var(--primary)]">
                       <input
                         type="checkbox"
-                        checked={visibleUnbilledCases.length > 0 && visibleUnbilledCases.every((item) => selectedCompletedCaseIds.includes(item.id) || isCandidateAlreadyLinked(item) || isCandidateAlreadySelected(item))}
+                        checked={visibleUnbilledCases.length > 0 && visibleUnbilledCases.every((item) => selectedCompletedCaseIds.includes(item.id) || (billingMode === 'itemized' && (isCandidateAlreadyLinked(item) || isCandidateAlreadySelected(item))))}
                         onChange={(event) => event.target.checked ? selectAllUniqueCandidates() : clearVisibleUnbilledSelection()}
                         disabled={!visibleUnbilledCases.length}
                         className="h-4 w-4 accent-[var(--primary)]"
@@ -960,7 +1178,7 @@ export default function InvoicesPage() {
                   </div>
                   {visibleUnbilledCases.length > 0 && <div className="max-h-56 divide-y divide-[var(--border)] overflow-y-auto border-y border-[var(--border)]">
                     {visibleUnbilledCases.map((item) => <label key={item.id} className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-[var(--surface-muted)] sm:px-5">
-                      <input type="checkbox" checked={selectedCompletedCaseIds.includes(item.id)} disabled={!selectedCompletedCaseIds.includes(item.id) && (isCandidateAlreadyLinked(item) || isCandidateAlreadySelected(item))} onChange={(event) => updateCompletedCaseSelection(event.target.checked ? [...selectedCompletedCaseIds, item.id] : selectedCompletedCaseIds.filter((id) => id !== item.id))} className="h-4 w-4 accent-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-40" />
+                      <input type="checkbox" checked={selectedCompletedCaseIds.includes(item.id)} disabled={!selectedCompletedCaseIds.includes(item.id) && billingMode === 'itemized' && (isCandidateAlreadyLinked(item) || isCandidateAlreadySelected(item))} onChange={(event) => updateCompletedCaseSelection(event.target.checked ? [...selectedCompletedCaseIds, item.id] : selectedCompletedCaseIds.filter((id) => id !== item.id))} className="h-4 w-4 accent-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-40" />
                       <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.candidateName}</span><span className="mt-0.5 block truncate text-xs text-[var(--muted)]">{item.caseNumber}{item.packageName ? ` · ${item.packageName}` : ''}{item.subclientName ? ` · ${item.subclientName}` : ''}{item.suggestedRate != null ? ` · Suggested ${money(item.suggestedRate, form.currency)}` : ''}</span></span>
                       <time className="shrink-0 text-xs text-[var(--muted)]">{item.completedAt ? dateLabel(item.completedAt) : ''}</time>
                     </label>)}
@@ -971,18 +1189,16 @@ export default function InvoicesPage() {
                       {visibleBilledCases.map((item) => {
                         const isSelected = selectedCompletedCaseIds.includes(item.id);
                         return <div key={item.id} className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-muted)] sm:px-5">
-                          <input type="checkbox" checked={isSelected} onChange={(event) => updateCompletedCaseSelection(event.target.checked ? [...selectedCompletedCaseIds, item.id] : selectedCompletedCaseIds.filter((id) => id !== item.id))} className="h-4 w-4 accent-[var(--primary)]" aria-label={`${isSelected ? 'Remove' : 'Re-bill'} ${item.caseNumber}`} />
+                          <input type="checkbox" checked={isSelected} disabled={billingMode === 'summary' && !isSelected} onChange={(event) => updateCompletedCaseSelection(event.target.checked ? [...selectedCompletedCaseIds, item.id] : selectedCompletedCaseIds.filter((id) => id !== item.id))} className="h-4 w-4 accent-[var(--primary)] disabled:opacity-40" aria-label={`${isSelected ? 'Remove' : 'Re-bill'} ${item.caseNumber}`} />
                           <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.candidateName}</span><span className="mt-0.5 block truncate text-xs text-[var(--muted)]">{item.caseNumber}{item.packageName ? ` · ${item.packageName}` : ''}{item.subclientName ? ` · ${item.subclientName}` : ''}{item.suggestedRate != null ? ` · Suggested ${money(item.suggestedRate, form.currency)}` : ''}</span></span>
                           <time className="shrink-0 text-xs text-[var(--muted)]">{item.completedAt ? dateLabel(item.completedAt) : ''}</time>
-                          <button type="button" onClick={() => updateCompletedCaseSelection(isSelected ? selectedCompletedCaseIds.filter((id) => id !== item.id) : [...selectedCompletedCaseIds, item.id])} className="shrink-0 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-xs font-semibold hover:bg-[var(--surface)]">
-                            {isSelected ? 'Remove' : 'Re-bill'}
-                          </button>
+                          {billingMode === 'itemized' && <button type="button" onClick={() => updateCompletedCaseSelection(isSelected ? selectedCompletedCaseIds.filter((id) => id !== item.id) : [...selectedCompletedCaseIds, item.id])} className="shrink-0 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-xs font-semibold hover:bg-[var(--surface)]">{isSelected ? 'Remove' : 'Re-bill'}</button>}
                         </div>;
                       })}
                     </div>
                   </div>}
                   {!visibleUnbilledCases.length && !visibleBilledCases.length && <p role="status" className="px-4 py-5 text-center text-sm text-[var(--muted)]">No completed cases match this search.</p>}
-                  <p className="px-4 py-3 text-xs text-[var(--muted)] sm:px-5">Checking a case adds it to the invoice lines immediately. Uncheck it to remove it.</p>
+                  <p className="px-4 py-3 text-xs text-[var(--muted)] sm:px-5">{billingMode === 'summary' ? 'Previously billed cases cannot be added to a summary line.' : 'Checking a case adds it to the invoice lines immediately. Uncheck it to remove it.'}</p>
                 </> : <p role="status" className="border-t border-[var(--border)] px-4 py-5 text-center text-sm text-[var(--muted)]">No completed cases were found for this client and date range.</p>}
               </div>}
             </section>}
@@ -1038,7 +1254,7 @@ export default function InvoicesPage() {
                     }} className={fieldClass}><option value="">No case link</option>{selectableCases.map((item) => <option key={item.id} value={item.id} disabled={isCandidateLinkedOnAnotherLine(item, index)}>{item.caseNumber} · {item.candidateName}</option>)}</select></FormField>
                     <FormField label="Individual / candidate" className="lg:col-span-4"><input value={line.candidateName} onChange={(event) => setCandidateName(index, event.target.value)} placeholder={linkedCase?.candidateName || 'Optional'} maxLength={255} className={fieldClass} /></FormField>
                     <FormField label="Service / HSN code" className="lg:col-span-3"><input value={line.serviceCode} onChange={(event) => setLineValue(index, 'serviceCode', event.target.value)} placeholder="Optional" maxLength={30} className={fieldClass} /></FormField>
-                    <FormField label="Quantity" className="lg:col-span-2"><input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => setLineValue(index, 'quantity', event.target.value)} required className={fieldClass} /></FormField>
+                    <FormField label="Quantity" className="lg:col-span-2"><input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => setLineValue(index, 'quantity', event.target.value)} disabled={line.isPeriodSummary} required className={`${fieldClass} disabled:bg-[var(--surface-muted)]`} /></FormField>
                     <FormField label={`Rate (${form.currency})`} className="lg:col-span-3"><input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => setLineValue(index, 'unitPrice', event.target.value)} required className={fieldClass} /></FormField>
                     <FormField label="Discount %" className="lg:col-span-2"><input type="number" min="0" max="100" step="0.01" value={line.discountPercent} onChange={(event) => setLineValue(index, 'discountPercent', event.target.value)} className={fieldClass} /></FormField>
                     <FormField label={profile.gstNumber ? 'GST rate (%)' : 'Tax rate (%)'} className="lg:col-span-2"><input type="number" min="0" max="100" step="0.01" value={line.taxPercent} onChange={(event) => setLineValue(index, 'taxPercent', event.target.value)} className={fieldClass} /></FormField>
@@ -1075,7 +1291,7 @@ export default function InvoicesPage() {
         <aside className="flex h-full w-full max-w-xl flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-2xl">
           <div className="flex items-start justify-between border-b border-[var(--border)] px-5 py-4 sm:px-6"><div><div className="mb-2 flex items-center gap-2"><StatusTag status={selected.status} />{selected.purchaseOrderNumber && <span className="text-xs text-[var(--muted)]">PO {selected.purchaseOrderNumber}</span>}</div><h2 className="text-lg font-semibold">{selected.invoiceNumber}</h2><p className="mt-1 text-sm text-[var(--muted)]">{selected.clientName}</p></div><button onClick={() => setSelected(null)} className="rounded p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)]" aria-label="Close invoice details"><X size={18} /></button></div>
           <div className="flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
-            <div className="grid grid-cols-2 gap-3"><div className="rounded-md border border-[var(--border)] p-3"><p className="text-xs text-[var(--muted)]">Invoice date</p><p className="mt-1 text-sm font-medium">{dateLabel(selected.invoiceDate)}</p></div><div className="rounded-md border border-[var(--border)] p-3"><p className="text-xs text-[var(--muted)]">Due date</p><p className="mt-1 text-sm font-medium">{dateLabel(selected.dueDate)}</p></div></div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3"><div className="rounded-md border border-[var(--border)] p-3"><p className="text-xs text-[var(--muted)]">Invoice date</p><p className="mt-1 text-sm font-medium">{dateLabel(selected.invoiceDate)}</p></div><div className="rounded-md border border-[var(--border)] p-3"><p className="text-xs text-[var(--muted)]">Due date</p><p className="mt-1 text-sm font-medium">{dateLabel(selected.dueDate)}</p></div>{selected.billingPeriodFrom && selected.billingPeriodTo && <div className="rounded-md border border-[var(--border)] p-3"><p className="text-xs text-[var(--muted)]">Service completion period</p><p className="mt-1 text-sm font-medium">{dateLabel(selected.billingPeriodFrom)} – {dateLabel(selected.billingPeriodTo)}</p></div>}</div>
             <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Billed to</h3><div className="text-sm font-semibold">{selected.clientName}</div><p className="mt-1 whitespace-pre-line text-xs leading-5 text-[var(--muted)]">{selected.clientAddress || 'No billing address on file'}</p><div className="mt-2 grid gap-1 text-xs text-[var(--muted)] sm:grid-cols-2"><p>Contact: {selected.clientContactName || 'Not provided'}</p><p>Phone: {selected.clientPhone || 'Not provided'}</p><p>State: {selected.clientState || selected.placeOfSupply || 'Not provided'}</p><p>GSTIN: {selected.clientGst || 'Not provided'}</p><p>PAN: {selected.clientPan || 'Not provided'}</p><p>Email: {selected.clientEmail || 'Not provided'}</p></div></section>
             <section><h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Line items</h3><div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">{selected.items.map((item) => <div key={item.id} className="flex items-start justify-between gap-4 p-3"><div className="min-w-0"><p className="text-sm font-medium">{item.case?.caseNumber || item.description}</p>{item.candidateName && <p className="mt-0.5 text-xs text-[var(--muted)]">{item.candidateName}</p>}{item.case?.subclient?.name && <p className="mt-0.5 text-xs text-[var(--muted)]">Subclient: {item.case.subclient.name}</p>}<p className="mt-1 text-xs text-[var(--muted)]">{amount(item.quantity)} × {money(item.unitPrice, selected.currency)}{Number(item.discountPercent) > 0 ? ` · ${item.discountPercent}% discount` : ''} · {item.taxPercent}% {selected.taxType === 'NONE' ? 'tax' : 'GST'}</p></div><span className="shrink-0 text-sm font-semibold">{money(item.total, selected.currency)}</span></div>)}</div>
               <div className="ml-auto mt-3 max-w-xs space-y-1.5 text-sm"><div className="flex justify-between text-[var(--muted)]"><span>Subtotal</span><span>{money(selected.subtotal, selected.currency)}</span></div><div className="flex justify-between text-[var(--muted)]"><span>Discount</span><span>-{money(selected.discountTotal, selected.currency)}</span></div>{taxBreakdown(selected.taxType, amount(selected.taxTotal)).map(([label, value]) => <div key={label} className="flex justify-between text-[var(--muted)]"><span>{label}</span><span>{money(value, selected.currency)}</span></div>)}<div className="flex justify-between border-t border-[var(--border)] pt-2 font-semibold"><span>Total</span><span>{money(selected.total, selected.currency)}</span></div><div className="flex justify-between text-emerald-700 dark:text-emerald-300"><span>Paid</span><span>{money(selected.amountPaid, selected.currency)}</span></div><div className="flex justify-between font-semibold"><span>Balance due</span><span>{money(selected.balanceDue, selected.currency)}</span></div></div>

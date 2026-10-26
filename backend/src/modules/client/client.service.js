@@ -33,6 +33,8 @@ const toDto = (client) => ({
   contactName: client.contactName,
   contactEmail: client.contactEmail,
   contactPhone: client.contactPhone,
+  supportEmail: client.supportEmail,
+  supportPhone: client.supportPhone,
   gstNumber: client.gstNumber,
   panNumber: client.panNumber,
   addressLine1: client.addressLine1,
@@ -63,6 +65,8 @@ const create = async ({ payload, currentUser, req }) => {
     contactName,
     contactEmail,
     contactPhone,
+    supportEmail,
+    supportPhone,
     gstNumber,
     panNumber,
     addressLine1,
@@ -142,6 +146,8 @@ const create = async ({ payload, currentUser, req }) => {
     contactName,
     contactEmail,
     contactPhone,
+    supportEmail: supportEmail?.trim().toLowerCase() || null,
+    supportPhone: supportPhone?.trim() || null,
     gstNumber,
     panNumber,
     addressLine1,
@@ -269,6 +275,8 @@ const createSubclient = async ({ parentClientId, companyId, payload, currentUser
     contactName: payload.contactName?.trim() || null,
     contactEmail: payload.contactEmail?.trim().toLowerCase() || null,
     contactPhone: payload.contactPhone?.trim() || null,
+    supportEmail: payload.supportEmail?.trim().toLowerCase() || null,
+    supportPhone: payload.supportPhone?.trim() || null,
     gstNumber: payload.gstNumber?.trim() || null,
     panNumber: payload.panNumber?.trim() || null,
     addressLine1: payload.addressLine1?.trim() || null,
@@ -291,12 +299,16 @@ const updateSubclient = async ({ parentClientId, subclientId, companyId, payload
   });
   if (!current) throw new NotFoundError('Subclient not found');
   const data = {};
-  for (const key of ['name', 'clientCode', 'industry', 'contactName', 'contactEmail', 'contactPhone', 'gstNumber', 'panNumber', 'addressLine1', 'addressLine2', 'city', 'state', 'country', 'postalCode', 'status']) {
+  for (const key of ['name', 'clientCode', 'industry', 'contactName', 'contactEmail', 'contactPhone', 'supportEmail', 'supportPhone', 'gstNumber', 'panNumber', 'addressLine1', 'addressLine2', 'city', 'state', 'country', 'postalCode', 'status']) {
     if (payload[key] !== undefined) data[key] = typeof payload[key] === 'string' ? payload[key].trim() || null : payload[key];
   }
   if (data.name === null) throw new BadRequestError('Subclient name is required.');
   if (data.clientCode === null) throw new BadRequestError('Subclient code is required.');
   if (data.contactEmail) data.contactEmail = data.contactEmail.toLowerCase();
+  if (data.supportEmail) data.supportEmail = data.supportEmail.toLowerCase();
+  if (payload.candidateFormConfig !== undefined) {
+    data.candidateFormConfig = validateConfig(payload.candidateFormConfig, subclientId);
+  }
   if (payload.serviceRates !== undefined) data.serviceRates = await normalizeServiceRates(payload.serviceRates, new Set((current.serviceRates || []).map((entry) => entry.checkType)));
   if (payload.packageRate !== undefined) data.packageRate = normalizePackageRate(payload.packageRate);
   if (data.clientCode && data.clientCode !== current.clientCode) {
@@ -420,6 +432,8 @@ const update = async ({
     'contactName',
     'contactEmail',
     'contactPhone',
+    'supportEmail',
+    'supportPhone',
     'gstNumber',
     'panNumber',
     'addressLine1',

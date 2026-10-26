@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, Clock3, Copy, Download, FileCheck2, FileText, KeyRound, MessageSquareText, Plus, RefreshCw, Receipt, Sparkles, Users, X, Eye, Search } from 'lucide-react';
+import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, Clock3, Copy, Download, FileCheck2, FileText, KeyRound, Mail, MessageSquareText, Phone, Plus, RefreshCw, Receipt, Sparkles, Users, X, Eye, Search } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { changePassword } from '@/src/lib/api/users';
@@ -309,7 +309,7 @@ export default function ClientPortalPage() {
         </form>
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
           <h3 className="text-[14px] font-semibold">{client?.name || 'Client'} details</h3>
-          <dl className="mt-4 grid gap-4 text-[12px] sm:grid-cols-2">{[['Client code', client?.clientCode], ['Industry', client?.industry], ['Contact', client?.contactName], ['Email', client?.contactEmail], ['Phone', client?.contactPhone], ['Website', client?.website], ['Address', [client?.addressLine1, client?.addressLine2, client?.city, client?.state, client?.postalCode, client?.country].filter(Boolean).join(', ') || null]].map(([label, value]) => <div key={label}><dt className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</dt><dd className="mt-1 break-words">{value || '—'}</dd></div>)}</dl>
+          <dl className="mt-4 grid gap-4 text-[12px] sm:grid-cols-2">{[['Client code', client?.clientCode], ['Industry', client?.industry], ['Support email', client?.supportEmail], ['Support phone', client?.supportPhone], ['Website', client?.website], ['Address', [client?.addressLine1, client?.addressLine2, client?.city, client?.state, client?.postalCode, client?.country].filter(Boolean).join(', ') || null]].map(([label, value]) => <div key={label}><dt className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</dt><dd className="mt-1 break-words">{value || '—'}</dd></div>)}</dl>
         </section>
       </section>
     );
@@ -505,6 +505,27 @@ export default function ClientPortalPage() {
             </div>
           </div>
         </section>
+
+        {(dashboard?.supportContact?.email || dashboard?.supportContact?.phone) && (
+          <section aria-label="Candidate support contacts" className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-[13px] font-semibold">Candidate support</h3>
+              <p className="mt-1 text-[11px] text-[var(--muted)]">Contact details for candidate portal support.</p>
+            </div>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {dashboard.supportContact.email && (
+                <a href={`mailto:${dashboard.supportContact.email}`} className="inline-flex items-center gap-2 text-[12px] font-medium text-[var(--primary)] hover:underline">
+                  <Mail size={14} aria-hidden="true" />{dashboard.supportContact.email}
+                </a>
+              )}
+              {dashboard.supportContact.phone && (
+                <a href={`tel:${dashboard.supportContact.phone.replace(/[^\d+]/g, '')}`} className="inline-flex items-center gap-2 text-[12px] font-medium text-[var(--primary)] hover:underline">
+                  <Phone size={14} aria-hidden="true" />{dashboard.supportContact.phone}
+                </a>
+              )}
+            </div>
+          </section>
+        )}
 
         {dashboard?.notifications.length ? <section aria-label="Client portal notifications" className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
           <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4 sm:px-6">

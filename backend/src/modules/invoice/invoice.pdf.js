@@ -43,12 +43,13 @@ const BLOCK_BOTTOM = 768; // other blocks must end above this (footer line is at
 
 // Table columns (x = left edge of the text box, w = width)
 const COL = {
-  no: { x: 58, w: 20 },
-  desc: { x: 84, w: 212 },
-  qty: { x: 300, w: 38 },
-  rate: { x: 342, w: 72 },
-  tax: { x: 418, w: 38 },
-  amt: { x: 460, w: 79 },
+  no: { x: 58, w: 18 },
+  desc: { x: 81, w: 178 },
+  qty: { x: 264, w: 34 },
+  rate: { x: 303, w: 60 },
+  subtotal: { x: 368, w: 68 },
+  tax: { x: 441, w: 38 },
+  amt: { x: 484, w: 55 },
 };
 
 /* ------------------------------------------------------------------ */
@@ -160,6 +161,9 @@ const drawHeader = (doc, invoice, logo, theme) => {
     ['PLACE OF SUPPLY', invoice.placeOfSupply || '-'],
     ['CURRENCY', invoice.currency || 'INR'],
     ['PO NUMBER', invoice.purchaseOrderNumber || '-'],
+    ...(invoice.billingPeriodFrom && invoice.billingPeriodTo
+      ? [['BILLING PERIOD', `${date(invoice.billingPeriodFrom)} - ${date(invoice.billingPeriodTo)}`]]
+      : []),
   ];
   doc.roundedRect(L, y, W, 38, 6).fill(colors.pale);
   const cw = W / cells.length;
@@ -220,8 +224,9 @@ const drawTableHeader = (doc, y, theme, invoice) => {
   const t = (label, c, align) => doc.text(label, c.x, y + 8, { width: c.w, align, characterSpacing: 0.6, lineBreak: false });
   t('#', COL.no, 'left');
   t('DESCRIPTION', COL.desc, 'left');
-  t('QTY', COL.qty, 'right');
+  t(invoice.items?.some((item) => item.isPeriodSummary) ? 'COUNT' : 'QTY', COL.qty, 'right');
   t('RATE', COL.rate, 'right');
+  t('SUBTOTAL', COL.subtotal, 'right');
   t(invoice.supplierGst ? 'GST %' : 'TAX %', COL.tax, 'right');
   t('AMOUNT', COL.amt, 'right');
   return y + 24;
@@ -234,17 +239,20 @@ const drawContinuationHeader = (doc, invoice, theme) => {
   return 68;
 };
 
-const itemDescription = (item) => {
+const itemDescription = (item, invoice) => {
   const title = item.case?.caseNumber || item.description || item.title || '-';
   const subs = [];
+  if (item.isPeriodSummary && invoice.billingPeriodFrom && invoice.billingPeriodTo) {
+    subs.push(`Completed cases from ${date(invoice.billingPeriodFrom)} to ${date(invoice.billingPeriodTo)}`);
+  }
   if (item.candidateName) subs.push(`Candidate: ${item.candidateName}`);
   if (item.case?.subclient?.name) subs.push(`Subclient: ${item.case.subclient.name}`);
   if (item.serviceCode) subs.push(`Service code: ${item.serviceCode}`);
   return { title, sub: subs.join('   ·   ') };
 };
 
-const measureItemRow = (doc, item) => {
-  const { title, sub } = itemDescription(item);
+const measureItemRow = (doc, item, invoice) => {
+  const { title, sub } = itemDescription(item, invoice);
   doc.font('Helvetica-Bold').fontSize(9);
   const titleH = doc.heightOfString(title, { width: COL.desc.w, lineGap: 1.5 });
   doc.font('Helvetica').fontSize(7.5);
@@ -254,14 +262,14 @@ const measureItemRow = (doc, item) => {
 
 const drawItems = (doc, invoice, startY, theme) => {
   const items = invoice.items || [];
-  if (items.length && startY + 24 + measureItemRow(doc, items[0]).rowH > ROWS_BOTTOM) {
+  if (items.length && startY + 24 + measureItemRow(doc, items[0], invoice).rowH > ROWS_BOTTOM) {
     doc.addPage();
     startY = drawContinuationHeader(doc, invoice, theme) + 4;
   }
   let y = drawTableHeader(doc, startY, theme, invoice);
 
   items.forEach((item, index) => {
-    const { title, sub, titleH, rowH } = measureItemRow(doc, item);
+    const { title, sub, titleH, rowH } = measureItemRow(doc, item, invoice);
 
     if (y + rowH > ROWS_BOTTOM) {
       doc.addPage();
@@ -279,10 +287,12 @@ const drawItems = (doc, invoice, startY, theme) => {
 
     const qty = num(item.quantity);
     const unit = num(item.unitPrice);
+    const subtotal = item.subtotal ?? qty * unit;
     const lineTotal = item.total ?? qty * unit;
     doc.fillColor(colors.ink).font('Helvetica').fontSize(9);
     doc.text(qty.toLocaleString('en-IN'), COL.qty.x, ty, { width: COL.qty.w, align: 'right', lineBreak: false });
     doc.text(fmt(unit), COL.rate.x, ty, { width: COL.rate.w, align: 'right', lineBreak: false });
+    doc.text(fmt(subtotal), COL.subtotal.x, ty, { width: COL.subtotal.w, align: 'right', lineBreak: false });
     doc.text(`${num(item.taxPercent)}%`, COL.tax.x, ty, { width: COL.tax.w, align: 'right', lineBreak: false });
     doc.font('Helvetica-Bold').text(fmt(lineTotal), COL.amt.x, ty, { width: COL.amt.w, align: 'right', lineBreak: false });
 

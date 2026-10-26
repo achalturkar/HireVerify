@@ -19,7 +19,7 @@ interface Props {
 // Sits inside a --surface panel, so it uses --surface-muted as a "sunken"
 // background — same convention as the other form panels.
 const inputClass =
-  'w-full rounded-lg bg-[var(--surface-muted)] border border-[var(--border)] px-3 py-2.5 text-[13.5px] text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none focus:border-[#3FDCC0]/50 focus:ring-1 focus:ring-[#3FDCC0]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  'w-full rounded-lg bg-[var(--surface-muted)] border border-[var(--border)] px-3 py-2.5 text-[13.5px] text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--primary)]/50 focus:ring-1 focus:ring-[var(--primary)]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
 
 const labelClass = 'block text-[11.5px] font-medium text-[var(--muted)] mb-1.5';
 
@@ -66,6 +66,8 @@ export default function ClientFormModal({
     contactName: empty(client?.contactName),
     contactEmail: empty(client?.contactEmail),
     contactPhone: empty(client?.contactPhone),
+    supportEmail: empty(client?.supportEmail),
+    supportPhone: empty(client?.supportPhone),
     gstNumber: empty(client?.gstNumber),
     panNumber: empty(client?.panNumber),
     addressLine1: empty(client?.addressLine1),
@@ -138,7 +140,7 @@ export default function ClientFormModal({
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] sticky top-0 bg-[var(--surface)] z-10">
           <div>
             <p
-              className="text-[11px] uppercase tracking-[0.14em] text-[#3FDCC0] mb-0.5"
+              className="text-[11px] uppercase tracking-[0.14em] text-[var(--primary)] mb-0.5"
               style={{ fontFamily: 'var(--font-mono)' }}
             >
               {mode === 'create' ? 'New client' : 'Edit client'}
@@ -241,7 +243,7 @@ export default function ClientFormModal({
                 <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[12px] text-[var(--muted)]">PNG, JPG, WEBP, or SVG up to 1 MB.</span>
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#3FDCC0]/25 bg-[#3FDCC0]/10 px-3 py-2 text-[12px] font-medium text-[#3FDCC0] hover:bg-[#3FDCC0]/20 transition-colors">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--primary)]/25 bg-[var(--primary)]/10 px-3 py-2 text-[12px] font-medium text-[var(--primary)] hover:bg-[var(--primary)]/20 transition-colors">
                       <Camera size={13} />
                       Choose file
                       <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml" className="hidden" onChange={handleLogoSelection} />
@@ -267,7 +269,7 @@ export default function ClientFormModal({
           {/* Contact */}
           <div>
             <p className={sectionTitleClass}>Contact</p>
-            <p className="mb-3 text-[12px] leading-5 text-[var(--muted)]">This client contact email and phone number are shown to candidates in their verification portal for questions or corrections.</p>
+            <p className="mb-3 text-[12px] leading-5 text-[var(--muted)]">Contact person details are for your records. Candidate support details are managed separately below.</p>
             <div className="space-y-3">
               <div>
                 <label className={labelClass}>Contact name</label>
@@ -300,6 +302,34 @@ export default function ClientFormModal({
                     placeholder="+1 555 000 0000"
                     disabled={submitting}
                   />
+                </div>
+              </div>
+              <div className="mt-5 border-t border-[var(--border)] pt-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">Candidate portal support</p>
+                <p className="mb-3 mt-1 text-[12px] leading-5 text-[var(--muted)]">These details are displayed to candidates in their verification portal. They are separate from the contact person above.</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelClass}>Support email</label>
+                    <input
+                      type="email"
+                      className={inputClass}
+                      value={values.supportEmail}
+                      onChange={set('supportEmail')}
+                      placeholder="support@acme.com"
+                      disabled={submitting}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Support mobile number</label>
+                    <input
+                      type="tel"
+                      className={inputClass}
+                      value={values.supportPhone}
+                      onChange={set('supportPhone')}
+                      placeholder="+1 555 000 0000"
+                      disabled={submitting}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -407,7 +437,7 @@ export default function ClientFormModal({
             <button
               type="submit"
               disabled={!isValid || submitting}
-              className="flex-1 rounded-lg bg-[#3FDCC0] text-[#0B0F26] text-[13.5px] font-semibold py-2.5 hover:bg-[#3FDCC0]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13.5px] font-semibold py-2.5 hover:bg-[var(--primary)]/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {submitting ? 'Saving…' : mode === 'create' ? 'Create client' : 'Save changes'}
             </button>

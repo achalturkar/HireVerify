@@ -21,6 +21,25 @@ import { stopCompanyImpersonation } from "@/src/lib/api/impersonation";
 
 import { User } from "./types";
 
+function getTokenExpiration(token: string | undefined): number | null {
+  if (!token || typeof window === "undefined") return null;
+
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+
+    const normalizedPayload = payload
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    const claims = JSON.parse(window.atob(normalizedPayload)) as { exp?: unknown };
+
+    return typeof claims.exp === "number" ? claims.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -90,12 +109,12 @@ export function AuthProvider({
         }
       }
 
-      await logoutService();
-
       setUser(null);
 
       setAccessToken(null);
       setIsImpersonating(false);
+      router.replace("/login");
+      await logoutService();
 
     } finally {
 
@@ -103,7 +122,7 @@ export function AuthProvider({
 
     }
 
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const loadTimer = window.setTimeout(() => {
@@ -153,9 +172,6 @@ export function AuthProvider({
   }, [router]);
 
   const logout = useCallback(async () => {
-
-    await logoutService();
-
     setUser(null);
 
     setAccessToken(null);
@@ -163,7 +179,39 @@ export function AuthProvider({
 
     router.replace("/login");
 
+    await logoutService();
+
   }, [router]);
+
+  useEffect(() => {
+    const session = getSession();
+    if (!session) return;
+
+    const impersonation = AuthStorage.getImpersonation();
+    const primarySession = AuthStorage.getPrimarySession();
+    const accessExpiration = getTokenExpiration(session.accessToken);
+    const refreshExpiration = primarySession?.refreshExpiresAt
+      ? Date.parse(primarySession.refreshExpiresAt)
+      : getTokenExpiration(primarySession?.refreshToken ?? session.refreshToken);
+    const expirations = [accessExpiration, refreshExpiration].filter(
+      (expiration): expiration is number =>
+        expiration !== null && Number.isFinite(expiration)
+    );
+
+    if (expirations.length === 0) return;
+
+    const timer = window.setTimeout(() => {
+      if (refreshExpiration !== null && refreshExpiration <= Date.now()) {
+        void logout();
+      } else if (impersonation) {
+        void loadUser();
+      } else {
+        void logout();
+      }
+    }, Math.max(0, Math.min(...expirations) - Date.now()));
+
+    return () => window.clearTimeout(timer);
+  }, [accessToken, loadUser, logout]);
 
   return (
 

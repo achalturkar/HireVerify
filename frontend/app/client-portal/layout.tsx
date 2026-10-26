@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Bell, Building2, CheckCheck, FileCheck2, FileText, KeyRound, LayoutDashboard, LogOut, Menu, MessageSquareText, Receipt, Users, X } from 'lucide-react';
+import { Bell, Building2, CheckCheck, FileCheck2, FileText, KeyRound, LayoutDashboard, LogOut, Mail, Menu, MessageSquareText, Phone, Receipt, Users, X } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { listClients } from '@/src/lib/api/clients';
 import { ThemeToggle } from '@/src/components/layout/theme-toggle';
@@ -177,7 +177,26 @@ export default function ClientPortalLayout({ children }: { children: ReactNode }
         </Link>
       </nav>
       <div className="shrink-0 border-t border-[var(--border)] px-4 py-3">
-        <div className="truncate text-[11px] font-semibold text-[var(--foreground)]">{client?.contactName || client?.contactEmail || user?.email}</div>
+        {(client?.supportEmail || client?.supportPhone) && (
+          <section aria-label="Candidate support contacts" className="mb-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">Support contacts</h2>
+            <div className="mt-2 space-y-2">
+              {client.supportEmail && (
+                <a href={`mailto:${client.supportEmail}`} className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-[var(--foreground)] hover:text-[var(--primary)]">
+                  <Mail size={13} className="shrink-0" />
+                  <span className="truncate">{client.supportEmail}</span>
+                </a>
+              )}
+              {client.supportPhone && (
+                <a href={`tel:${client.supportPhone.replace(/[^\d+]/g, '')}`} className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-[var(--foreground)] hover:text-[var(--primary)]">
+                  <Phone size={13} className="shrink-0" />
+                  <span className="truncate">{client.supportPhone}</span>
+                </a>
+              )}
+            </div>
+          </section>
+        )}
+        <div className="truncate text-[11px] font-semibold text-[var(--foreground)]">{user ? `${user.firstName} ${user.lastName}`.trim() || user.email : 'Client account'}</div>
         <div className="mt-1 truncate text-[10px] text-[var(--muted)]">{client?.industry || client?.clientCode || 'Client account'}</div>
         <div className="mt-3 flex items-center gap-2 border-t border-[var(--border)] pt-3">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/15" title="HireVerify">

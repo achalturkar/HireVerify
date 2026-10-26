@@ -46,11 +46,13 @@ const TABS: { key: TabKey; label: string; icon: typeof Users }[] = [
 type SubclientCheckDraft = { checkType: VerificationType };
 type SubclientDraft = {
   name: string; clientCode: string; industry: string; contactName: string; contactEmail: string; contactPhone: string;
+  supportEmail: string; supportPhone: string;
   gstNumber: string; panNumber: string; addressLine1: string; addressLine2: string; city: string; state: string;
   country: string; postalCode: string; status: 'ACTIVE' | 'INACTIVE'; serviceRates: SubclientCheckDraft[]; packageRate: string;
 };
 const emptySubclientDraft = (): SubclientDraft => ({
   name: '', clientCode: '', industry: '', contactName: '', contactEmail: '', contactPhone: '',
+  supportEmail: '', supportPhone: '',
   gstNumber: '', panNumber: '', addressLine1: '', addressLine2: '', city: '', state: '',
   country: '', postalCode: '', status: 'ACTIVE', serviceRates: [], packageRate: '',
 });
@@ -218,6 +220,7 @@ export default function ClientDetailPage() {
   const [reportBrandingError, setReportBrandingError] = useState<string | null>(null);
   const [reportBrandingSaved, setReportBrandingSaved] = useState(false);
   const [candidateFormConfig, setCandidateFormConfig] = useState<CandidateFormConfig>(DEFAULT_CANDIDATE_FORM_CONFIG);
+  const [candidateFormTargetId, setCandidateFormTargetId] = useState('');
   const [candidateFormSaving, setCandidateFormSaving] = useState(false);
   const [candidateFormError, setCandidateFormError] = useState<string | null>(null);
   const [candidateFormSaved, setCandidateFormSaved] = useState(false);
@@ -308,9 +311,15 @@ export default function ClientDetailPage() {
     setCandidateFormError(null);
     setCandidateFormSaved(false);
     try {
-      const updated = await updateClient(client.id, { candidateFormConfig }, accessToken);
-      setClient(updated);
-      setCandidateFormConfig(updated.candidateFormConfig);
+      if (candidateFormTargetId) {
+        const updated = await updateSubclient(client.id, candidateFormTargetId, { candidateFormConfig }, accessToken);
+        setSubclients((current) => current.map((subclient) => subclient.id === updated.id ? updated : subclient));
+        setCandidateFormConfig(updated.candidateFormConfig);
+      } else {
+        const updated = await updateClient(client.id, { candidateFormConfig }, accessToken);
+        setClient(updated);
+        setCandidateFormConfig(updated.candidateFormConfig);
+      }
       setCandidateFormSaved(true);
     } catch (saveError) {
       setCandidateFormError(saveError instanceof ClientApiError ? saveError.message : 'Could not save candidate form settings.');
@@ -397,17 +406,25 @@ export default function ClientDetailPage() {
   const uploadCandidateTemplate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!client || !candidateTemplateFile) return;
+    const target = candidateFormTargetId
+      ? subclients.find((subclient) => subclient.id === candidateFormTargetId)
+      : client;
+    if (!target) return;
     setCandidateFormSaving(true);
     setCandidateFormError(null);
     setCandidateFormSaved(false);
     try {
-      const updated = await uploadCandidateFormTemplate(client.id, {
+      const updated = await uploadCandidateFormTemplate(target.id, {
         file: candidateTemplateFile,
         name: candidateTemplateName,
         category: candidateTemplateCategory,
         required: candidateTemplateRequired,
       }, accessToken);
-      setClient(updated);
+      if (candidateFormTargetId) {
+        setSubclients((current) => current.map((subclient) => subclient.id === updated.id ? updated : subclient));
+      } else {
+        setClient(updated);
+      }
       setCandidateFormConfig(updated.candidateFormConfig);
       setCandidateTemplateName('');
       setCandidateTemplateFile(null);
@@ -422,12 +439,20 @@ export default function ClientDetailPage() {
 
   const deleteCandidateTemplate = async (formId: string) => {
     if (!client || !window.confirm('Remove this form from the candidate portal?')) return;
+    const target = candidateFormTargetId
+      ? subclients.find((subclient) => subclient.id === candidateFormTargetId)
+      : client;
+    if (!target) return;
     setCandidateFormSaving(true);
     setCandidateFormError(null);
     setCandidateFormSaved(false);
     try {
-      const updated = await removeCandidateFormTemplate(client.id, formId, accessToken);
-      setClient(updated);
+      const updated = await removeCandidateFormTemplate(target.id, formId, accessToken);
+      if (candidateFormTargetId) {
+        setSubclients((current) => current.map((subclient) => subclient.id === updated.id ? updated : subclient));
+      } else {
+        setClient(updated);
+      }
       setCandidateFormConfig(updated.candidateFormConfig);
       setCandidateFormSaved(true);
     } catch (deleteError) {
@@ -439,10 +464,14 @@ export default function ClientDetailPage() {
 
   const downloadCandidateTemplate = async (formId: string, fileName: string) => {
     if (!client) return;
+    const target = candidateFormTargetId
+      ? subclients.find((subclient) => subclient.id === candidateFormTargetId)
+      : client;
+    if (!target) return;
     setCandidateTemplateDownloading(formId);
     setCandidateFormError(null);
     try {
-      const blob = await downloadCandidateFormTemplate(client.id, formId, accessToken);
+      const blob = await downloadCandidateFormTemplate(target.id, formId, accessToken);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -626,7 +655,7 @@ export default function ClientDetailPage() {
   };
 
   useEffect(() => {
-    if (tab !== 'subclients' && tab !== 'candidates') return undefined;
+    if (tab !== 'subclients' && tab !== 'candidates' && tab !== 'candidate-form') return undefined;
     const timer = window.setTimeout(() => { void loadSubclients(); }, 0);
     return () => window.clearTimeout(timer);
   }, [loadSubclients, tab]);
@@ -752,6 +781,8 @@ export default function ClientDetailPage() {
       contactName: values.contactName.trim(),
       contactEmail: values.contactEmail.trim(),
       contactPhone: values.contactPhone.trim(),
+      supportEmail: values.supportEmail.trim(),
+      supportPhone: values.supportPhone.trim(),
       gstNumber: values.gstNumber.trim(),
       panNumber: values.panNumber.trim(),
       addressLine1: values.addressLine1.trim(),
@@ -833,6 +864,8 @@ export default function ClientDetailPage() {
       contactName: subclient?.contactName || '',
       contactEmail: subclient?.contactEmail || '',
       contactPhone: subclient?.contactPhone || '',
+      supportEmail: subclient?.supportEmail || '',
+      supportPhone: subclient?.supportPhone || '',
       gstNumber: subclient?.gstNumber || '',
       panNumber: subclient?.panNumber || '',
       addressLine1: subclient?.addressLine1 || '',
@@ -868,6 +901,8 @@ export default function ClientDetailPage() {
       contactName: subclientDraft.contactName.trim(),
       contactEmail: subclientDraft.contactEmail.trim(),
       contactPhone: subclientDraft.contactPhone.trim(),
+      supportEmail: subclientDraft.supportEmail.trim(),
+      supportPhone: subclientDraft.supportPhone.trim(),
       gstNumber: subclientDraft.gstNumber.trim(),
       panNumber: subclientDraft.panNumber.trim(),
       addressLine1: subclientDraft.addressLine1.trim(),
@@ -1162,8 +1197,29 @@ export default function ClientDetailPage() {
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
           <div className="max-w-3xl">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">Candidate intake</p>
-            <h2 className="mt-1 text-[16px] font-semibold">Configure candidate portal for {client.name}</h2>
-            <p className="mt-1 text-[12px] leading-5 text-[var(--muted)]">Choose which sections and identity fields candidates see. Upload client-specific PDF forms such as BGV or PCC forms and decide whether candidates must return them. Candidate case checks continue to add their own checklist items.</p>
+            <h2 className="mt-1 text-[16px] font-semibold">Configure candidate portal for {candidateFormTargetId ? subclients.find((item) => item.id === candidateFormTargetId)?.name || client.name : client.name}</h2>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--muted)]">Choose which sections and identity fields candidates see. Settings can be managed separately for each subclient. Upload PDF forms and decide whether candidates must return them.</p>
+          </div>
+          <div className="mt-4 rounded-xl border border-[var(--border)] p-4">
+            <label htmlFor="candidate-form-target" className="block text-[13px] font-semibold">Settings apply to</label>
+            <select
+              id="candidate-form-target"
+              value={candidateFormTargetId}
+              onChange={(event) => {
+                const targetId = event.target.value;
+                setCandidateFormTargetId(targetId);
+                const target = targetId ? subclients.find((item) => item.id === targetId) : client;
+                setCandidateFormConfig(target?.candidateFormConfig ?? DEFAULT_CANDIDATE_FORM_CONFIG);
+                setCandidateFormSaved(false);
+                setCandidateFormError(null);
+              }}
+              disabled={!canManageAccess || candidateFormSaving || subclientsLoading}
+              className="mt-2 w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-[12px]"
+            >
+              <option value="">Parent client: {client.name}</option>
+              {subclients.map((subclient) => <option key={subclient.id} value={subclient.id}>Subclient: {subclient.name}</option>)}
+            </select>
+            {subclientsLoading && <p className="mt-2 text-[11px] text-[var(--muted)]">Loading subclient settings…</p>}
           </div>
           <div className="mt-4 rounded-xl border border-[var(--border)] p-4">
             <label htmlFor="candidate-link-validity" className="block text-[13px] font-semibold">Candidate portal link validity</label>
@@ -1872,6 +1928,8 @@ export default function ClientDetailPage() {
                   <label className="text-[11px] font-medium text-[var(--muted)]">Contact person<input maxLength={150} value={subclientDraft.contactName} onChange={(event) => setSubclientDraft((current) => ({ ...current, contactName: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
                   <label className="text-[11px] font-medium text-[var(--muted)]">Contact email<input type="email" maxLength={255} value={subclientDraft.contactEmail} onChange={(event) => setSubclientDraft((current) => ({ ...current, contactEmail: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
                   <label className="text-[11px] font-medium text-[var(--muted)]">Phone<input maxLength={50} value={subclientDraft.contactPhone} onChange={(event) => setSubclientDraft((current) => ({ ...current, contactPhone: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">Candidate support email<input type="email" maxLength={255} value={subclientDraft.supportEmail} onChange={(event) => setSubclientDraft((current) => ({ ...current, supportEmail: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
+                  <label className="text-[11px] font-medium text-[var(--muted)]">Candidate support mobile number<input type="tel" maxLength={50} value={subclientDraft.supportPhone} onChange={(event) => setSubclientDraft((current) => ({ ...current, supportPhone: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
                   <label className="text-[11px] font-medium text-[var(--muted)]">GSTIN<input maxLength={30} value={subclientDraft.gstNumber} onChange={(event) => setSubclientDraft((current) => ({ ...current, gstNumber: event.target.value.toUpperCase() }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
                   <label className="text-[11px] font-medium text-[var(--muted)]">PAN<input maxLength={20} value={subclientDraft.panNumber} onChange={(event) => setSubclientDraft((current) => ({ ...current, panNumber: event.target.value.toUpperCase() }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]" /></label>
                   <label className="text-[11px] font-medium text-[var(--muted)]">Status<select value={subclientDraft.status} onChange={(event) => setSubclientDraft((current) => ({ ...current, status: event.target.value as 'ACTIVE' | 'INACTIVE' }))} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)]"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>

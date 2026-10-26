@@ -175,6 +175,8 @@ export interface Client {
   contactName: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  supportEmail: string | null;
+  supportPhone: string | null;
   gstNumber: string | null;
   panNumber: string | null;
   addressLine1: string | null;
@@ -206,6 +208,8 @@ export interface ClientFormValues {
   contactName: string;
   contactEmail: string;
   contactPhone: string;
+  supportEmail: string;
+  supportPhone: string;
   gstNumber: string;
   panNumber: string;
   addressLine1: string;
@@ -226,6 +230,8 @@ export interface CreateClientPayload {
   contactName?: string;
   contactEmail?: string;
   contactPhone?: string;
+  supportEmail?: string;
+  supportPhone?: string;
   gstNumber?: string;
   panNumber?: string;
   addressLine1?: string;
@@ -248,6 +254,8 @@ export interface UpdateClientPayload {
   contactName?: string;
   contactEmail?: string;
   contactPhone?: string;
+  supportEmail?: string;
+  supportPhone?: string;
   gstNumber?: string;
   panNumber?: string;
   addressLine1?: string;

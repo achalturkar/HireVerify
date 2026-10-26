@@ -63,6 +63,15 @@ const createValidator = [
     .optional()
     .isLength({ max: 50 }),
 
+  body('supportEmail')
+    .optional({ values: 'falsy' })
+    .isEmail()
+    .normalizeEmail(),
+
+  body('supportPhone')
+    .optional()
+    .isLength({ max: 50 }),
+
   body('gstNumber')
     .optional()
     .isLength({ max: 30 }),
@@ -139,6 +148,15 @@ const updateValidator = [
     .optional({ values: 'falsy' })
     .isLength({ max: 50 }),
 
+  body('supportEmail')
+    .optional({ values: 'falsy' })
+    .isEmail()
+    .normalizeEmail(),
+
+  body('supportPhone')
+    .optional({ values: 'falsy' })
+    .isLength({ max: 50 }),
+
   body('gstNumber')
     .optional({ values: 'falsy' })
     .isLength({ max: 30 }),
@@ -185,6 +203,9 @@ const subclientFieldValidators = (isUpdate = false) => [
   body('contactName').optional({ values: 'falsy' }).isLength({ max: 150 }),
   body('contactEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
   body('contactPhone').optional({ values: 'falsy' }).isLength({ max: 50 }),
+  body('supportEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
+  body('supportPhone').optional({ values: 'falsy' }).isLength({ max: 50 }),
+  body('candidateFormConfig').optional().isObject(),
   body('gstNumber').optional({ values: 'falsy' }).isLength({ max: 30 }),
   body('panNumber').optional({ values: 'falsy' }).isLength({ max: 20 }),
   body('addressLine1').optional({ values: 'falsy' }).isLength({ max: 500 }),

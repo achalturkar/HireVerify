@@ -47,6 +47,8 @@ export interface PortalSubclient {
   contactName: string | null;
   contactEmail: string | null;
   contactPhone: string | null;
+  supportEmail: string | null;
+  supportPhone: string | null;
   serviceRates: { checkType: VerificationType; rate: number }[];
   packageRate: number | null;
   status: 'ACTIVE' | 'INACTIVE';
@@ -144,6 +146,7 @@ export interface PortalPage<T> {
 export interface PortalDashboardSummary {
   period: 'monthly' | 'yearly';
   year: number;
+  supportContact: { email: string | null; phone: string | null } | null;
   permissions: { candidates: boolean; cases: boolean; reports: boolean; invoices: boolean; subclients: boolean };
   counts: {
     candidates: number | null;

@@ -269,7 +269,11 @@ const getDashboard = asyncHandler(async (req, res) => {
   const trendEnd = new Date(Date.UTC(selectedYear + 1, 0, 1));
   const bucketCount = period === 'monthly' ? 12 : 5;
   const invoiceWhere = { ...scope, status: { notIn: ['DRAFT', 'VOID'] } };
-  const [candidateCount, caseCount, openCaseCount, completedCaseCount, reportCount, invoiceCount, subclientCount, chartCandidates, chartCases, chartReports, recentCandidates, recentCases, recentCompletedCases, recentReports, recentInvoices, invoiceRows] = await Promise.all([
+  const [supportContact, candidateCount, caseCount, openCaseCount, completedCaseCount, reportCount, invoiceCount, subclientCount, chartCandidates, chartCases, chartReports, recentCandidates, recentCases, recentCompletedCases, recentReports, recentInvoices, invoiceRows] = await Promise.all([
+    prisma.client.findFirst({
+      where: { id: req.user.clientId, companyId: req.user.companyId, isDeleted: false },
+      select: { supportEmail: true, supportPhone: true },
+    }),
     canViewCandidates ? prisma.candidate.count({ where: { ...scope, isDeleted: false } }) : null,
     canViewCases ? prisma.bGVCase.count({ where: scope }) : null,
     canViewCases ? prisma.bGVCase.count({ where: { ...scope, status: { notIn: ['COMPLETED', 'CANCELLED'] } } }) : null,
@@ -508,6 +512,10 @@ const getDashboard = asyncHandler(async (req, res) => {
     data: {
       period,
       year: selectedYear,
+      supportContact: supportContact ? {
+        email: supportContact.supportEmail,
+        phone: supportContact.supportPhone,
+      } : null,
       permissions: { candidates: canViewCandidates, cases: canViewCases, reports: canViewReports, invoices: canViewInvoices, subclients: canViewSubclients },
       counts: {
         candidates: candidateCount,

@@ -50,6 +50,7 @@ export interface InvoiceItemInput {
   unitPrice: number;
   discountPercent: number;
   taxPercent: number;
+  isPeriodSummary?: boolean;
 }
 
 export interface InvoiceInput {
@@ -68,6 +69,9 @@ export interface InvoiceInput {
   purchaseOrderNumber?: string;
   notes?: string;
   terms?: string;
+  billingPeriodFrom?: string;
+  billingPeriodTo?: string;
+  coveredCaseIds?: string[];
   items: InvoiceItemInput[];
 }
 
@@ -79,6 +83,7 @@ export interface InvoiceItem extends InvoiceItemInput {
   taxableAmount: InvoiceAmount;
   taxAmount: InvoiceAmount;
   total: InvoiceAmount;
+  isPeriodSummary?: boolean;
 }
 
 export interface InvoicePayment {
@@ -135,6 +140,9 @@ export interface Invoice {
   supplierBankBranch: string | null;
   supplierUpiId: string | null;
   placeOfSupply: string | null;
+  billingPeriodFrom: string | null;
+  billingPeriodTo: string | null;
+  coveredCaseIds: string[];
   taxType: string;
   currency: string;
   purchaseOrderNumber: string | null;

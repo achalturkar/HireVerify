@@ -36,6 +36,7 @@ const includeInvoice = {
   },
   payments: { orderBy: { paymentDate: 'desc' } },
   activity: { orderBy: { createdAt: 'desc' } },
+  periodCases: { select: { caseId: true } },
 };
 
 const getProfile = async (companyId) => {
@@ -129,7 +130,15 @@ const listCompletedCases = async ({ companyId, clientId, completedFrom, complete
     select: { caseId: true },
     distinct: ['caseId'],
   });
-  const billedCaseIds = billedItems.map((item) => item.caseId).filter(Boolean);
+  const billedPeriodCases = await prisma.invoicePeriodCase.findMany({
+    where: { invoice: { companyId, clientId, status: { not: 'VOID' } } },
+    select: { caseId: true },
+    distinct: ['caseId'],
+  });
+  const billedCaseIds = new Set([
+    ...billedItems.map((item) => item.caseId).filter(Boolean),
+    ...billedPeriodCases.map((item) => item.caseId),
+  ]);
   const cases = await prisma.bGVCase.findMany({
     where: {
       companyId,
@@ -155,7 +164,7 @@ const listCompletedCases = async ({ companyId, clientId, completedFrom, complete
     candidateName: `${item.candidate.firstName} ${item.candidate.lastName}`.trim(),
     subclientName: subclient?.name || null,
     suggestedRate: subclientRateForCase({ subclient, checks }),
-    isBilled: billedCaseIds.includes(item.id),
+    isBilled: billedCaseIds.has(item.id),
   }));
 };
 
@@ -185,6 +194,7 @@ const calculateItems = (items) => {
       unitPrice,
       discountPercent,
       taxPercent,
+      isPeriodSummary: item.isPeriodSummary === true,
       subtotal,
       discountAmount,
       taxableAmount,
@@ -218,6 +228,29 @@ const buildInvoiceData = async ({ payload, companyId, clientId }) => {
   if (itemCaseIds.length !== linkedCaseIds.length) {
     throw new BadRequestError('A BGV case can only be included once on an invoice.');
   }
+  const coveredCaseIds = payload.coveredCaseIds || [];
+  const summaryItems = payload.items.filter((item) => item.isPeriodSummary === true);
+  if (!Array.isArray(coveredCaseIds) || coveredCaseIds.length > 500
+    || new Set(coveredCaseIds).size !== coveredCaseIds.length) {
+    throw new BadRequestError('Select up to 500 unique cases for period-summary billing.');
+  }
+  if (summaryItems.length > 1) {
+    throw new BadRequestError('An invoice can contain only one total-count summary line.');
+  }
+  if (summaryItems.length || coveredCaseIds.length) {
+    if (!payload.billingPeriodFrom || !payload.billingPeriodTo || payload.billingPeriodFrom > payload.billingPeriodTo) {
+      throw new BadRequestError('Choose a valid billing period for the total-count line.');
+    }
+    if (!summaryItems.length || !Number.isInteger(Number(summaryItems[0].quantity))
+      || Number(summaryItems[0].quantity) < 1 || Number(summaryItems[0].quantity) > 100000) {
+      throw new BadRequestError('A total-count line must have a whole count between 1 and 100,000.');
+    }
+    if (coveredCaseIds.length && Number(summaryItems[0].quantity) !== coveredCaseIds.length) {
+      throw new BadRequestError('The total-count quantity must match the selected cases.');
+    }
+  } else if (payload.billingPeriodFrom || payload.billingPeriodTo) {
+    throw new BadRequestError('A billing period can only be added to a total-count line.');
+  }
   const manualCandidateNames = payload.items
     .filter((item) => !item.caseId)
     .map((item) => item.candidateName?.trim().toLocaleLowerCase())
@@ -237,6 +270,38 @@ const buildInvoiceData = async ({ payload, companyId, clientId }) => {
     const linkedCandidateNames = new Set(ownedCases.map((item) => `${item.candidate.firstName} ${item.candidate.lastName}`.trim().toLocaleLowerCase()));
     if (manualCandidateNames.some((name) => linkedCandidateNames.has(name))) {
       throw new BadRequestError('A candidate can only be included once on an invoice.');
+    }
+  }
+  if (coveredCaseIds.length) {
+    const coveredCases = await prisma.bGVCase.findMany({
+      where: { id: { in: coveredCaseIds }, companyId, clientId, status: 'COMPLETED' },
+      select: { id: true, candidateId: true, completedAt: true, candidate: { select: { firstName: true, lastName: true } } },
+    });
+    if (coveredCases.length !== coveredCaseIds.length
+      || coveredCases.some((item) => !item.completedAt
+        || item.completedAt < toDate(payload.billingPeriodFrom)
+        || item.completedAt > new Date(`${payload.billingPeriodTo}T23:59:59.999Z`))) {
+      throw new BadRequestError('Every period-summary case must be completed for this client within the selected date range.');
+    }
+    if (new Set(coveredCases.map((item) => item.candidateId)).size !== coveredCases.length) {
+      throw new BadRequestError('A candidate can only be included once in a period summary.');
+    }
+    const coveredCandidateNames = new Set(coveredCases.map((item) => `${item.candidate.firstName} ${item.candidate.lastName}`.trim().toLocaleLowerCase()));
+    if (manualCandidateNames.some((name) => coveredCandidateNames.has(name))) {
+      throw new BadRequestError('A candidate cannot be billed both individually and in a period summary.');
+    }
+    if (coveredCases.some((item) => itemCaseIds.includes(item.id))) {
+      throw new BadRequestError('A case cannot appear both as an individual line and in the period summary.');
+    }
+    const summaryCandidateIds = new Set(coveredCases.map((item) => item.candidateId));
+    const separatelyLinkedCandidates = itemCaseIds.length
+      ? await prisma.bGVCase.findMany({
+        where: { id: { in: itemCaseIds }, companyId, clientId },
+        select: { candidateId: true },
+      })
+      : [];
+    if (separatelyLinkedCandidates.some((item) => summaryCandidateIds.has(item.candidateId))) {
+      throw new BadRequestError('A candidate cannot be billed both individually and in a period summary.');
     }
   }
   const { items, totals } = calculateItems(payload.items);
@@ -260,6 +325,8 @@ const buildInvoiceData = async ({ payload, companyId, clientId }) => {
       clientId,
       invoiceDate: toDate(payload.invoiceDate),
       dueDate: toDate(payload.dueDate),
+      billingPeriodFrom: payload.billingPeriodFrom ? toDate(payload.billingPeriodFrom) : null,
+      billingPeriodTo: payload.billingPeriodTo ? toDate(payload.billingPeriodTo) : null,
       supplierName: company.name,
       supplierAddress: supplierAddress || null,
       supplierGst: company.gstNumber,
@@ -296,7 +363,31 @@ const buildInvoiceData = async ({ payload, companyId, clientId }) => {
       notes: payload.notes?.trim() || null,
       terms: payload.terms?.trim() || null,
     },
+    coveredCaseIds,
   };
+};
+
+const assertPeriodCasesAvailable = async (tx, caseIds, { companyId, clientId, excludeInvoiceId }) => {
+  if (!caseIds.length) return;
+  const activeInvoice = {
+    companyId,
+    clientId,
+    status: { not: 'VOID' },
+    ...(excludeInvoiceId ? { id: { not: excludeInvoiceId } } : {}),
+  };
+  const [periodLinks, itemLinks] = await Promise.all([
+    tx.invoicePeriodCase.findMany({
+      where: { caseId: { in: caseIds }, invoice: activeInvoice },
+      select: { caseId: true },
+    }),
+    tx.invoiceItem.findMany({
+      where: { caseId: { in: caseIds }, invoice: activeInvoice },
+      select: { caseId: true },
+    }),
+  ]);
+  if (periodLinks.length || itemLinks.length) {
+    throw new ConflictError('One or more selected cases have already been billed. Refresh the completed-case list and try again.');
+  }
 };
 
 const withBalance = (invoice) => {
@@ -326,7 +417,7 @@ const getById = async ({ id, companyId }) => {
     },
   });
   if (!invoice) throw new NotFoundError('Invoice not found');
-  const { client, company, ...snapshot } = invoice;
+  const { client, company, periodCases, ...snapshot } = invoice;
   const admin = company.users[0];
   return withBalance({
     ...snapshot,
@@ -335,6 +426,7 @@ const getById = async ({ id, companyId }) => {
       || null,
     supplierSignatureUrl: snapshot.supplierSignatureUrl || company.signatureUrl,
     supplierAdminName: snapshot.supplierAdminName || (admin ? `${admin.firstName} ${admin.lastName}`.trim() : null),
+    coveredCaseIds: (periodCases || []).map((item) => item.caseId),
   });
 };
 
@@ -356,7 +448,10 @@ const list = async ({ companyId, query }) => {
     prisma.invoice.count({ where }),
     prisma.invoice.findMany({ where: { companyId, status: { not: 'VOID' } }, select: { status: true, total: true, dueDate: true, invoiceDate: true, currency: true, clientName: true, payments: { select: { amount: true, paymentDate: true } } } }),
   ]);
-  const items = invoices.map(withBalance);
+  const items = invoices.map((invoice) => ({
+    ...withBalance(invoice),
+    coveredCaseIds: (invoice.periodCases || []).map((item) => item.caseId),
+  }));
   const currentMonth = new Date();
   const monthRows = Array.from({ length: 12 }, (_, index) => {
     const date = new Date(Date.UTC(currentMonth.getUTCFullYear(), currentMonth.getUTCMonth() - 11 + index, 1));
@@ -419,26 +514,39 @@ const list = async ({ companyId, query }) => {
 const create = async ({ payload, companyId, currentUser }) => {
   const prepared = await buildInvoiceData({ payload, companyId, clientId: payload.clientId });
   const year = new Date(payload.invoiceDate).getUTCFullYear();
-  const invoice = await prisma.$transaction(async (tx) => {
-    const sequence = await tx.invoiceSequence.upsert({
-      where: { companyId_year: { companyId, year } },
-      create: { companyId, year, value: 1 },
-      update: { value: { increment: 1 } },
-    });
-    const invoiceNumber = `${prepared.company.shortCode || 'INV'}-INV-${year}-${String(sequence.value).padStart(5, '0')}`;
-    return tx.invoice.create({
-      data: {
-        ...prepared.invoice,
+  let invoice;
+  try {
+    invoice = await prisma.$transaction(async (tx) => {
+      await assertPeriodCasesAvailable(tx, prepared.coveredCaseIds, {
         companyId,
-        invoiceNumber,
-        createdById: currentUser?.id || null,
-        updatedById: currentUser?.id || null,
-        items: { create: prepared.items },
-        activity: { create: { action: 'CREATED', actorId: currentUser?.id || null, details: { invoiceNumber } } },
-      },
-      include: includeInvoice,
-    });
-  });
+        clientId: payload.clientId,
+      });
+      const sequence = await tx.invoiceSequence.upsert({
+        where: { companyId_year: { companyId, year } },
+        create: { companyId, year, value: 1 },
+        update: { value: { increment: 1 } },
+      });
+      const invoiceNumber = `${prepared.company.shortCode || 'INV'}-INV-${year}-${String(sequence.value).padStart(5, '0')}`;
+      return tx.invoice.create({
+        data: {
+          ...prepared.invoice,
+          companyId,
+          invoiceNumber,
+          createdById: currentUser?.id || null,
+          updatedById: currentUser?.id || null,
+          items: { create: prepared.items },
+          periodCases: { create: prepared.coveredCaseIds.map((caseId) => ({ caseId })) },
+          activity: { create: { action: 'CREATED', actorId: currentUser?.id || null, details: { invoiceNumber } } },
+        },
+        include: includeInvoice,
+      });
+    }, { isolationLevel: 'Serializable' });
+  } catch (error) {
+    if (error.code === 'P2034' && prepared.coveredCaseIds.length) {
+      throw new ConflictError('One or more selected cases have already been billed. Refresh the completed-case list and try again.');
+    }
+    throw error;
+  }
   return withBalance(invoice);
 };
 
@@ -447,18 +555,32 @@ const update = async ({ id, payload, companyId, currentUser }) => {
   if (!existing) throw new NotFoundError('Invoice not found');
   if (existing.status !== 'DRAFT') throw new ConflictError('Only draft invoices can be edited.');
   const prepared = await buildInvoiceData({ payload, companyId, clientId: payload.clientId });
-  await prisma.$transaction(async (tx) => {
-    await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
-    await tx.invoice.update({
-      where: { id },
-      data: {
-        ...prepared.invoice,
-        updatedById: currentUser?.id || null,
-        items: { create: prepared.items },
-        activity: { create: { action: 'UPDATED', actorId: currentUser?.id || null, details: {} } },
-      },
-    });
-  });
+  try {
+    await prisma.$transaction(async (tx) => {
+      await assertPeriodCasesAvailable(tx, prepared.coveredCaseIds, {
+        companyId,
+        clientId: payload.clientId,
+        excludeInvoiceId: id,
+      });
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
+      await tx.invoicePeriodCase.deleteMany({ where: { invoiceId: id } });
+      await tx.invoice.update({
+        where: { id },
+        data: {
+          ...prepared.invoice,
+          updatedById: currentUser?.id || null,
+          items: { create: prepared.items },
+          periodCases: { create: prepared.coveredCaseIds.map((caseId) => ({ caseId })) },
+          activity: { create: { action: 'UPDATED', actorId: currentUser?.id || null, details: {} } },
+        },
+      });
+    }, { isolationLevel: 'Serializable' });
+  } catch (error) {
+    if (error.code === 'P2034') {
+      throw new ConflictError('The invoice or selected cases changed while saving. Refresh and try again.');
+    }
+    throw error;
+  }
   return getById({ id, companyId });
 };
 

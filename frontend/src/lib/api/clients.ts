@@ -257,6 +257,9 @@ export type SubclientPayload = {
   contactName?: string;
   contactEmail?: string;
   contactPhone?: string;
+  supportEmail?: string | null;
+  supportPhone?: string | null;
+  candidateFormConfig?: Client['candidateFormConfig'];
   gstNumber?: string;
   panNumber?: string;
   addressLine1?: string;

@@ -312,6 +312,8 @@ model Client {
   contactName  String? @map("contact_name") @db.VarChar(150)
   contactEmail String? @map("contact_email") @db.VarChar(255)
   contactPhone String? @map("contact_phone") @db.VarChar(50)
+  supportEmail String? @map("support_email") @db.VarChar(255)
+  supportPhone String? @map("support_phone") @db.VarChar(50)
 
   website String? @db.VarChar(255)
 
@@ -561,6 +563,7 @@ model BGVCase {
   checks VerificationCheck[]
 
   invoiceItems InvoiceItem[]
+  invoicePeriodCases InvoicePeriodCase[]
 
   report BGVReport?
 
@@ -1072,6 +1075,8 @@ model Invoice {
   clientPhone       String? @map("client_phone") @db.VarChar(50)
 
   placeOfSupply       String?   @map("place_of_supply") @db.VarChar(120)
+  billingPeriodFrom   DateTime? @map("billing_period_from") @db.Date
+  billingPeriodTo     DateTime? @map("billing_period_to") @db.Date
   taxType             String    @default("NONE") @map("tax_type") @db.VarChar(20)
   currency            String    @default("INR") @db.VarChar(3)
   purchaseOrderNumber String?   @map("purchase_order_number") @db.VarChar(100)
@@ -1092,6 +1097,7 @@ model Invoice {
   items    InvoiceItem[]
   payments InvoicePayment[]
   activity InvoiceActivity[]
+  periodCases InvoicePeriodCase[]
 
   @@unique([companyId, invoiceNumber])
   @@index([companyId, status, invoiceDate])
@@ -1111,6 +1117,7 @@ model InvoiceItem {
   unitPrice       Decimal @map("unit_price") @db.Decimal(14, 2)
   discountPercent Decimal @default(0) @map("discount_percent") @db.Decimal(5, 2)
   taxPercent      Decimal @default(0) @map("tax_percent") @db.Decimal(5, 2)
+  isPeriodSummary Boolean @default(false) @map("is_period_summary")
   subtotal        Decimal @db.Decimal(14, 2)
   discountAmount  Decimal @default(0) @map("discount_amount") @db.Decimal(14, 2)
   taxableAmount   Decimal @map("taxable_amount") @db.Decimal(14, 2)
@@ -1123,6 +1130,20 @@ model InvoiceItem {
   @@index([invoiceId, position])
   @@index([caseId])
   @@map("invoice_items")
+}
+
+model InvoicePeriodCase {
+  id        String   @id @default(uuid()) @db.Uuid
+  invoiceId String   @map("invoice_id") @db.Uuid
+  caseId    String   @map("case_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  case    BGVCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([invoiceId, caseId])
+  @@index([caseId])
+  @@map("invoice_period_cases")
 }
 
 model InvoicePayment {

@@ -15,6 +15,8 @@ type Draft = {
   contactName: string;
   contactEmail: string;
   contactPhone: string;
+  supportEmail: string;
+  supportPhone: string;
   status: PortalSubclient['status'];
   packageRate: string;
   selectedChecks: Record<string, boolean>;
@@ -26,6 +28,8 @@ const emptyDraft = (clientCode = ''): Draft => ({
   contactName: '',
   contactEmail: '',
   contactPhone: '',
+  supportEmail: '',
+  supportPhone: '',
   status: 'ACTIVE',
   packageRate: '',
   selectedChecks: {},
@@ -146,6 +150,8 @@ export default function PortalSubclientsPage() {
       contactName: item.contactName || '',
       contactEmail: item.contactEmail || '',
       contactPhone: item.contactPhone || '',
+      supportEmail: item.supportEmail || '',
+      supportPhone: item.supportPhone || '',
       status: item.status,
       packageRate: item.packageRate === null ? '' : String(item.packageRate),
       selectedChecks: Object.fromEntries(item.serviceRates.map(({ checkType }) => [checkType, true])),
@@ -177,6 +183,8 @@ export default function PortalSubclientsPage() {
         contactName: draft.contactName.trim() || null,
         contactEmail: draft.contactEmail.trim() || null,
         contactPhone: draft.contactPhone.trim() || null,
+        supportEmail: draft.supportEmail.trim() || null,
+        supportPhone: draft.supportPhone.trim() || null,
         packageRate,
         serviceRates,
       };
@@ -302,6 +310,8 @@ export default function PortalSubclientsPage() {
             <label className="text-xs font-medium text-[var(--muted)]">Contact person<input maxLength={150} value={draft.contactName} onChange={(event) => setDraft((current) => ({ ...current, contactName: event.target.value }))} className={fieldClass} /></label>
             <label className="text-xs font-medium text-[var(--muted)]">Contact email<input type="email" maxLength={255} value={draft.contactEmail} onChange={(event) => setDraft((current) => ({ ...current, contactEmail: event.target.value }))} className={fieldClass} /></label>
             <label className="text-xs font-medium text-[var(--muted)]">Contact phone<input maxLength={50} value={draft.contactPhone} onChange={(event) => setDraft((current) => ({ ...current, contactPhone: event.target.value }))} className={fieldClass} /></label>
+            <label className="text-xs font-medium text-[var(--muted)]">Candidate support email<input type="email" maxLength={255} value={draft.supportEmail} onChange={(event) => setDraft((current) => ({ ...current, supportEmail: event.target.value }))} className={fieldClass} /></label>
+            <label className="text-xs font-medium text-[var(--muted)]">Candidate support mobile number<input type="tel" maxLength={50} value={draft.supportPhone} onChange={(event) => setDraft((current) => ({ ...current, supportPhone: event.target.value }))} className={fieldClass} /></label>
             {editingId && <label className="text-xs font-medium text-[var(--muted)]">Status<select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as Draft['status'] }))} className={fieldClass}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>}
           </div>
           <fieldset>

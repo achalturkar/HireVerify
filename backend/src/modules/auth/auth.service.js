@@ -54,6 +54,8 @@ const toUserDto = (user) => ({
     contactName: user.client.contactName,
     contactEmail: user.client.contactEmail,
     contactPhone: user.client.contactPhone,
+    supportEmail: user.client.supportEmail,
+    supportPhone: user.client.supportPhone,
     addressLine1: user.client.addressLine1,
     addressLine2: user.client.addressLine2,
     city: user.client.city,

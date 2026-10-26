@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { AlertCircle, ArrowRight, CheckCircle2, Clock3, LoaderCircle, MessageSquareText, Plus, Send } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, Clock3, LoaderCircle, Mail, MessageSquareText, Phone, Plus, Send } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import {
   ClientPortalApiError,
@@ -35,7 +35,7 @@ const dateText = (value: string) => new Intl.DateTimeFormat(undefined, {
 }).format(new Date(value));
 
 export default function ClientRequestsPage() {
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const [items, setItems] = useState<ClientRequest[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -102,6 +102,27 @@ export default function ClientRequestsPage() {
           </button>
         </div>
       </section>
+
+      {(user?.client?.supportEmail || user?.client?.supportPhone) && (
+        <section aria-label="Support contacts" className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">Support contacts</h3>
+            <p className="mt-1 text-xs text-[var(--muted)]">Contact support directly by email or phone.</p>
+          </div>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {user.client.supportEmail && (
+              <a href={`mailto:${user.client.supportEmail}`} className="inline-flex items-center gap-2 text-sm font-medium text-[var(--primary)] hover:underline">
+                <Mail size={15} aria-hidden="true" />{user.client.supportEmail}
+              </a>
+            )}
+            {user.client.supportPhone && (
+              <a href={`tel:${user.client.supportPhone.replace(/[^\d+]/g, '')}`} className="inline-flex items-center gap-2 text-sm font-medium text-[var(--primary)] hover:underline">
+                <Phone size={15} aria-hidden="true" />{user.client.supportPhone}
+              </a>
+            )}
+          </div>
+        </section>
+      )}
 
       {notice && <div role="status" className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-700"><CheckCircle2 size={17} />{notice}</div>}
 

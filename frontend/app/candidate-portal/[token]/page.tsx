@@ -95,7 +95,7 @@ type PendingItem = { key: string; label: string; type: string; documentType?: st
 type PortalData = {
   candidate: Record<string, unknown> & { status?: string; employmentHistory?: EmploymentRecord[]; educationHistory?: EducationRecord[]; addressVerificationLocations?: string[] };
   company: { name: string; logoUrl?: string | null; primaryColor?: string | null };
-  client?: { name: string; contactName?: string | null; contactEmail?: string | null; contactPhone?: string | null } | null;
+  client?: { name: string; supportEmail?: string | null; supportPhone?: string | null } | null;
   candidateFormConfig?: CandidateFormConfig;
   case: { id: string; caseNumber: string; status: string; checks?: string[] } | null;
   documents: PortalDocument[];
@@ -515,31 +515,29 @@ function RequiredMark() {
 }
 
 function ClientContactCard({ client }: { client?: PortalData['client'] }) {
-  if (!client?.contactName && !client?.contactEmail && !client?.contactPhone) {
+  if (!client?.supportEmail && !client?.supportPhone) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-slate-900">Questions or corrections?</h3>
-        <p className="mt-1 text-sm leading-5 text-slate-600">Please check that the information and documents in your preview are correct. For help or corrections, contact {client?.name || 'the company that invited you'} directly.</p>
+        <p className="mt-1 text-sm leading-5 text-slate-600">Support contact details are not available.</p>
       </div>
     );
   }
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <h3 className="text-sm font-semibold text-slate-900">Questions or corrections?</h3>
-      <p className="mt-1 text-sm leading-5 text-slate-600">Please check that the information and documents in your preview are correct. Contact your client representative if you have a query or need to correct anything.</p>
-      {client.contactName && <p className="mt-3 text-sm font-medium text-slate-800">{client.contactName}</p>}
+      <p className="mt-1 text-sm leading-5 text-slate-600">Please check that the information and documents in your preview are correct. Contact the support team if you have a query or need to correct anything.</p>
       <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
-        {client.contactEmail && (
-          <a href={`mailto:${client.contactEmail}`} className="inline-flex items-center gap-2 break-all text-sm font-medium hover:underline" style={{ color: 'var(--accent)' }}>
-            <Mail size={15} aria-hidden="true" />{client.contactEmail}
+        {client.supportEmail && (
+          <a href={`mailto:${client.supportEmail}`} className="inline-flex items-center gap-2 break-all text-sm font-medium hover:underline" style={{ color: 'var(--accent)' }}>
+            <Mail size={15} aria-hidden="true" />{client.supportEmail}
           </a>
         )}
-        {client.contactPhone && (
-          <a href={`tel:${client.contactPhone.replace(/[^\d+]/g, '')}`} className="inline-flex items-center gap-2 text-sm font-medium hover:underline" style={{ color: 'var(--accent)' }}>
-            <Phone size={15} aria-hidden="true" />{client.contactPhone}
+        {client.supportPhone && (
+          <a href={`tel:${client.supportPhone.replace(/[^\d+]/g, '')}`} className="inline-flex items-center gap-2 text-sm font-medium hover:underline" style={{ color: 'var(--accent)' }}>
+            <Phone size={15} aria-hidden="true" />{client.supportPhone}
           </a>
         )}
-        {!client.contactEmail && !client.contactPhone && <p className="mt-2 text-xs text-slate-500">Contact details are not available here. Please contact {client.name || 'the company that invited you'} directly.</p>}
       </div>
     </div>
   );
