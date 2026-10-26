@@ -333,7 +333,7 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: 'address', label: 'Address', icon: MapPin },
   { key: 'bgv', label: 'BGV forms', icon: FileText },
   { key: 'cibil', label: 'CIBIL', icon: FileCheck },
-  { key: 'education', label: 'Higher education', icon: GraduationCap },
+  { key: 'education', label: 'Qualification', icon: GraduationCap },
   { key: 'employment', label: 'Employment', icon: BriefcaseBusiness },
   { key: 'policeVerification', label: 'Police verification', icon: ShieldCheck },
   { key: 'otherChecks', label: 'Other checks', icon: FileCheck },
@@ -913,7 +913,8 @@ export default function CandidatePortalPage() {
       if (syncForm) {
         const next = toForm(data.candidate);
         const nextPastEmployments = toPastEmploymentForms(data.candidate.employmentHistory);
-        const nextEducationRecords = toEducationRecords(data.candidate);
+        const savedEducationRecords = toEducationRecords(data.candidate);
+        const nextEducationRecords = savedEducationRecords.length ? savedEducationRecords : [emptyEducationRecord()];
         setForm(next);
         setBaseline(next);
         setPastEmployments(nextPastEmployments);
@@ -1758,7 +1759,8 @@ export default function CandidatePortalPage() {
               'Current and permanent address',
               'Enter the addresses where you currently live and where you are permanently registered.',
               'Save addresses',
-              (candidateFormConfig.address.currentAddressEnabled || candidateFormConfig.address.permanentAddressEnabled) && (
+              candidateFormConfig.address.showVerificationLocationSelector
+              && (candidateFormConfig.address.currentAddressEnabled || candidateFormConfig.address.permanentAddressEnabled) && (
                 <fieldset className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <legend className="px-1 text-sm font-semibold text-slate-800">Which address should be verified?</legend>
                   <p className="mb-3 text-xs text-slate-600">Select one or both locations for address verification.</p>
@@ -1816,7 +1818,7 @@ export default function CandidatePortalPage() {
 
         {currentTab === 'education' && (
           <div role="tabpanel" id="panel-education" aria-labelledby="tab-education" className="space-y-5">
-            <SectionCard icon={GraduationCap} title="Higher education" description="Add each qualification separately, up to five records. Attach the matching certificate or marksheet to each record so it can be reviewed with the right qualification.">
+            <SectionCard icon={GraduationCap} title="Qualification" description="Add each qualification separately, up to five records. Attach the matching certificate or marksheet to each record so it can be reviewed with the right qualification.">
               <div className="space-y-4">
                 {educationRecords.map((record, index) => {
                   const documents = educationDocuments.filter((document) => document.documentNumber === record.id);
@@ -1824,7 +1826,7 @@ export default function CandidatePortalPage() {
                     <section key={record.id} className="rounded-xl border border-slate-200 p-4">
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <div>
-                          <h3 className="text-sm font-semibold text-slate-900">Education record {index + 1}</h3>
+                          <h3 className="text-sm font-semibold text-slate-900">{index === 0 ? 'Higher Qualification' : `Education record ${index + 1}`}</h3>
                           <p className="mt-1 text-xs text-slate-500">Enter the qualification as it appears on your certificate.</p>
                         </div>
                         <button type="button" onClick={() => setEducationRecords((previous) => previous.filter((item) => item.id !== record.id))} disabled={profileReadOnly} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
@@ -1865,7 +1867,12 @@ export default function CandidatePortalPage() {
                   );
                 })}
                 {educationRecords.length < 5 && (
-                  <button type="button" onClick={() => setEducationRecords((previous) => [...previous, emptyEducationRecord()])} disabled={profileReadOnly} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  <button
+                    type="button"
+                    onClick={() => setEducationRecords((previous) => [...previous, emptyEducationRecord()])}
+                    disabled={profileReadOnly}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
                     <Plus size={16} aria-hidden="true" /> Add education
                   </button>
                 )}

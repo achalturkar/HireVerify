@@ -114,6 +114,7 @@ export type CandidateFormConfig = Record<CandidateIdentityFieldKey, {
   fields: Record<CandidateFormRequiredFieldKey, { required: boolean }>;
   sections: Record<CandidateFormSectionKey, { enabled: boolean }>;
   address: {
+    showVerificationLocationSelector: boolean;
     currentAddressEnabled: boolean;
     currentAddressRequired: boolean;
     permanentAddressEnabled: boolean;
@@ -143,6 +144,7 @@ export const DEFAULT_CANDIDATE_FORM_CONFIG: CandidateFormConfig = {
     address: { enabled: true },
   },
   address: {
+    showVerificationLocationSelector: false,
     currentAddressEnabled: true,
     currentAddressRequired: true,
     permanentAddressEnabled: true,

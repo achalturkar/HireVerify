@@ -357,7 +357,7 @@ export default function ClientDetailPage() {
     }));
   };
 
-  const updateCandidateAddressField = (key: 'currentAddressEnabled' | 'currentAddressRequired' | 'permanentAddressEnabled' | 'permanentAddressRequired', value: boolean) => {
+  const updateCandidateAddressField = (key: 'showVerificationLocationSelector' | 'currentAddressEnabled' | 'currentAddressRequired' | 'permanentAddressEnabled' | 'permanentAddressRequired', value: boolean) => {
     setCandidateFormSaved(false);
     setCandidateFormConfig((current) => ({
       ...current,
@@ -1418,6 +1418,7 @@ export default function ClientDetailPage() {
                     ...(candidateFormConfig[field.key].documentRequired ? [`${field.label} document copy *`] : []),
                   ])} />}
                   {selectedPreviewTab === 'address' && <CandidateFormPreviewFields title="Address details and requested documents" fields={[
+                    ...(candidateFormConfig.address.showVerificationLocationSelector && (candidateFormConfig.address.currentAddressEnabled || candidateFormConfig.address.permanentAddressEnabled) ? ['Which address should be verified?'] : []),
                     ...(candidateFormConfig.address.currentAddressEnabled ? [`Current address${candidateFormConfig.address.currentAddressRequired ? ' *' : ''}`] : []),
                     ...(candidateFormConfig.address.permanentAddressEnabled ? [`Permanent address${candidateFormConfig.address.permanentAddressRequired ? ' *' : ''}`] : []),
                     ...addressDocs.map((document) => `${CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? document.type}${document.required ? ' *' : ''}`),
@@ -1495,6 +1496,25 @@ export default function ClientDetailPage() {
           <div id="candidate-address-settings" className="mt-5 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <h3 className="text-[13px] font-semibold">Address details and verification</h3>
             <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Choose which address fields and address documents this client requests. Required items block consent until completed.</p>
+            <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border border-[var(--border)] p-3 text-[12px]">
+              <input
+                type="checkbox"
+                aria-label="Show address verification location question in candidate portal"
+                checked={candidateFormConfig.address.showVerificationLocationSelector}
+                onChange={(event) => updateCandidateAddressField('showVerificationLocationSelector', event.target.checked)}
+                disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.address.enabled}
+                className="mt-0.5 accent-[var(--primary)]"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-2 font-medium">
+                  Show “Which address should be verified?” in candidate portal
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${candidateFormConfig.address.showVerificationLocationSelector ? 'bg-emerald-100 text-emerald-800' : 'bg-[var(--surface-muted)] text-[var(--muted)]'}`}>
+                    {candidateFormConfig.address.showVerificationLocationSelector ? 'On' : 'Off'}
+                  </span>
+                </span>
+                <span className="mt-0.5 block text-[11px] text-[var(--muted)]">When on, candidates can choose their current address, permanent address, or both for verification. Save the candidate form to apply changes.</span>
+              </span>
+            </label>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {([
                 ['currentAddressEnabled', 'Current address'],

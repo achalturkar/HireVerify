@@ -74,6 +74,7 @@ const DEFAULT_CANDIDATE_FORM_CONFIG = Object.fromEntries(
 );
 DEFAULT_CANDIDATE_FORM_CONFIG.sections = DEFAULT_SECTION_CONFIG;
 DEFAULT_CANDIDATE_FORM_CONFIG.address = {
+  showVerificationLocationSelector: false,
   currentAddressEnabled: true,
   currentAddressRequired: true,
   permanentAddressEnabled: true,
@@ -138,6 +139,7 @@ const normalizeConfig = (value) => {
   const sourceAddress = source.address && typeof source.address === 'object' && !Array.isArray(source.address) ? source.address : {};
   const sourceAddressDocuments = Array.isArray(sourceAddress.documents) ? sourceAddress.documents : [];
   const address = {
+    showVerificationLocationSelector: sourceAddress.showVerificationLocationSelector === true,
     currentAddressEnabled: sourceAddress.currentAddressEnabled !== false,
     currentAddressRequired: sourceAddress.currentAddressEnabled !== false && sourceAddress.currentAddressRequired !== false,
     permanentAddressEnabled: sourceAddress.permanentAddressEnabled !== false,
@@ -193,11 +195,11 @@ const validateConfig = (value, clientId) => {
       if (!field || typeof field !== 'object' || Array.isArray(field)) {
         throw new BadRequestError('Candidate address settings must be an object.');
       }
-      const allowedAddressKeys = new Set(['currentAddressEnabled', 'currentAddressRequired', 'permanentAddressEnabled', 'permanentAddressRequired', 'documents']);
+      const allowedAddressKeys = new Set(['showVerificationLocationSelector', 'currentAddressEnabled', 'currentAddressRequired', 'permanentAddressEnabled', 'permanentAddressRequired', 'documents']);
       for (const property of Object.keys(field)) {
         if (!allowedAddressKeys.has(property)) throw new BadRequestError(`Invalid candidate address setting: ${property}.`);
       }
-      for (const property of ['currentAddressEnabled', 'currentAddressRequired', 'permanentAddressEnabled', 'permanentAddressRequired']) {
+      for (const property of ['showVerificationLocationSelector', 'currentAddressEnabled', 'currentAddressRequired', 'permanentAddressEnabled', 'permanentAddressRequired']) {
         if (field[property] !== undefined && typeof field[property] !== 'boolean') {
           throw new BadRequestError(`Invalid ${property} setting for candidate address.`);
         }
