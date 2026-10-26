@@ -37,6 +37,22 @@ export async function listUsers(
   return { items: json.data.data as User[], meta: json.data.meta as PaginationMeta };
 }
 
+export async function listDeletedUsers(
+  token: string | null,
+  params: ListUsersParams
+): Promise<{ items: User[]; meta: PaginationMeta }> {
+  const query = buildQuery({
+    page: params.page,
+    limit: params.limit,
+    search: params.search,
+    companyId: params.companyId,
+    sortBy: params.sortBy,
+    sortOrder: params.sortOrder,
+  });
+  const json = await authFetch(`/users/deleted${query}`, token, { method: 'GET' });
+  return { items: json.data.data as User[], meta: json.data.meta as PaginationMeta };
+}
+
 export async function getUser(token: string | null, id: string): Promise<User> {
   const json = await authFetch(`/users/${id}`, token, { method: 'GET' });
   return json.data.data as User;
@@ -64,6 +80,10 @@ export async function updateUser(
 
 export async function deleteUser(token: string | null, id: string): Promise<void> {
   await authFetch(`/users/${id}`, token, { method: 'DELETE' });
+}
+
+export async function permanentlyDeleteUser(token: string | null, id: string): Promise<void> {
+  await authFetch(`/users/${id}/permanent`, token, { method: 'DELETE' });
 }
 
 // Lightweight lookups for the create/edit form.

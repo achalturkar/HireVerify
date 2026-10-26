@@ -1,12 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import type { User, UserStatus, RoleRef, CompanyRef } from '@/src/types/user';
 import {
   listUsers,
   createUser,
   updateUser,
   deleteUser,
+  listDeletedUsers,
+  permanentlyDeleteUser,
   listRolesForCompany,
   listCompanyOptions,
 } from '@/src/lib/api/user.api';
@@ -43,6 +46,8 @@ export default function UsersPage() {
   const [companyFilter, setCompanyFilter] = useState(''); // super admin only
   const [sortBy, setSortBy] = useState<'firstName' | 'lastName' | 'email' | 'createdAt'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [showDeletedUsers, setShowDeletedUsers] = useState(false);
+  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
 
   const [companies, setCompanies] = useState<CompanyRef[]>([]);
 
@@ -70,7 +75,7 @@ export default function UsersPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const result = await listUsers(accessToken, {
+      const params = {
         page,
         limit: LIMIT,
         search: search || undefined,
@@ -78,7 +83,10 @@ export default function UsersPage() {
         companyId: isSuperAdmin && companyFilter ? companyFilter : undefined,
         sortBy,
         sortOrder,
-      });
+      };
+      const result = showDeletedUsers
+        ? await listDeletedUsers(accessToken, params)
+        : await listUsers(accessToken, params);
       setUsers(result.items);
       setTotal(result.meta.total ?? result.items.length);
     } catch (err) {
@@ -86,10 +94,11 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, page, search, statusFilter, companyFilter, isSuperAdmin, sortBy, sortOrder]);
+  }, [accessToken, page, search, statusFilter, companyFilter, isSuperAdmin, sortBy, sortOrder, showDeletedUsers]);
 
   useEffect(() => {
-    fetchUsers();
+    const timer = window.setTimeout(() => { void fetchUsers(); }, 0);
+    return () => window.clearTimeout(timer);
   }, [fetchUsers]);
 
   useEffect(() => {
@@ -172,6 +181,25 @@ export default function UsersPage() {
     }
   }
 
+  async function handlePermanentDelete(user: User) {
+    if (!window.confirm(`Permanently delete ${user.email}? This cannot be undone. The email will then be available for a new account.`)) return;
+    setPermanentDeleteId(user.id);
+    setLoadError(null);
+    try {
+      await permanentlyDeleteUser(accessToken, user.id);
+      setToast('Deleted user permanently removed. The email can now be reused.');
+      if (users.length === 1 && page > 1) {
+        setPage((currentPage) => currentPage - 1);
+      } else {
+        await fetchUsers();
+      }
+    } catch (err) {
+      setLoadError(err instanceof ApiError ? err.message : 'Could not permanently delete user.');
+    } finally {
+      setPermanentDeleteId(null);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-7">
       {/* Header */}
@@ -198,10 +226,23 @@ export default function UsersPage() {
 
         <div className="flex items-center gap-3 flex-wrap">
           <div className="rounded-2xl bg-[var(--surface)] px-4 py-3 text-[13px] text-[var(--foreground)] border border-[var(--border)]">
-            <span className="block text-[11px] text-[var(--muted)]">Total users</span>
+            <span className="block text-[11px] text-[var(--muted)]">{showDeletedUsers ? 'Deleted users' : 'Total users'}</span>
             <span className="text-[20px] font-semibold">{total}</span>
           </div>
-          {canCreate && (
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowDeletedUsers((showing) => !showing);
+                setPage(1);
+                setStatusFilter('');
+              }}
+              className="rounded-lg border border-[var(--border)] px-4 py-2.5 text-[13px] font-semibold text-[var(--foreground)] hover:border-[var(--primary)]"
+            >
+              {showDeletedUsers ? 'Active users' : 'Deleted users'}
+            </button>
+          )}
+          {!showDeletedUsers && canCreate && (
             <button
               type="button"
               onClick={openCreate}
@@ -252,7 +293,7 @@ export default function UsersPage() {
           />
         </div>
 
-        <select
+        {!showDeletedUsers && <select
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value as UserStatus | '');
@@ -264,7 +305,7 @@ export default function UsersPage() {
           <option value="ACTIVE">Active</option>
           <option value="SUSPENDED">Suspended</option>
           <option value="INACTIVE">Inactive</option>
-        </select>
+        </select>}
 
         {isSuperAdmin && (
           <select
@@ -291,7 +332,7 @@ export default function UsersPage() {
           <div className="flex justify-center py-16 text-[13px] text-[var(--muted)]">Loading users…</div>
         ) : (
           <>
-            <UserTable
+            {!showDeletedUsers ? <UserTable
               users={users}
               showCompanyColumn={isSuperAdmin && !companyFilter}
               canUpdate={canUpdate}
@@ -302,7 +343,47 @@ export default function UsersPage() {
               onSortChange={handleSortChange}
               sortBy={sortBy}
               sortOrder={sortOrder}
-            />
+            /> : (
+              <div className="overflow-x-auto">
+                {users.length ? (
+                  <table className="min-w-[760px] w-full text-left">
+                    <thead>
+                      <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--muted)]">
+                        <th className="px-5 py-3 font-medium">Name</th>
+                        <th className="px-5 py-3 font-medium">Email</th>
+                        <th className="px-5 py-3 font-medium">Company / client</th>
+                        <th className="px-5 py-3 font-medium">Role</th>
+                        <th className="px-5 py-3 font-medium">Deleted</th>
+                        <th className="px-5 py-3 text-right font-medium">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user) => (
+                        <tr key={user.id} className="border-t border-[var(--border)]">
+                          <td className="px-5 py-3 text-[13px] font-medium text-[var(--foreground)]">{user.firstName} {user.lastName}</td>
+                          <td className="px-5 py-3 text-[13px] text-[var(--muted)]">{user.email}</td>
+                          <td className="px-5 py-3 text-[13px] text-[var(--muted)]">{user.client?.name || user.company?.name || '—'}</td>
+                          <td className="px-5 py-3 text-[13px] text-[var(--muted)]">{user.role?.name || '—'}{user.clientId && <span className="ml-1 text-[10px]">(client portal)</span>}</td>
+                          <td className="px-5 py-3 text-[12px] text-[var(--muted)]">{user.deletedAt ? new Date(user.deletedAt).toLocaleDateString() : '—'}</td>
+                          <td className="px-5 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => void handlePermanentDelete(user)}
+                              disabled={permanentDeleteId === user.id}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-500/10 disabled:opacity-50"
+                            >
+                              <Trash2 size={13} />{permanentDeleteId === user.id ? 'Deleting…' : 'Delete permanently'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="m-4 rounded-lg border border-dashed border-[var(--border)] py-12 text-center text-[13px] text-[var(--muted)]">No deleted users found.</p>
+                )}
+              </div>
+            )}
             <Pagination page={page} limit={LIMIT} total={total} onPageChange={setPage} />
           </>
         )}

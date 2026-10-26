@@ -10,6 +10,8 @@ import {
   updateUser,
   updateCompanyAdminEmail,
   deleteUser,
+  listDeletedUsers,
+  permanentlyDeleteUser,
   listRolesForCompany,
   listCompanyOptions,
   ApiError,
@@ -107,6 +109,8 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<UserStatus | ''>('');
   const [companyId, setCompanyId] = useState('');
+  const [showDeletedUsers, setShowDeletedUsers] = useState(false);
+  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
 
   const [roles, setRoles] = useState<RoleRef[]>([]);
   const [companies, setCompanies] = useState<CompanyRef[]>([]);
@@ -139,7 +143,10 @@ export default function UsersPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await listUsers(accessToken, { page, limit: PAGE_SIZE, search, status, companyId, sortBy: 'createdAt', sortOrder: 'desc' });
+      const params = { page, limit: PAGE_SIZE, search, status, companyId, sortBy: 'createdAt' as const, sortOrder: 'desc' as const };
+      const res = showDeletedUsers
+        ? await listDeletedUsers(accessToken, params)
+        : await listUsers(accessToken, params);
       setUsers(res.items);
       setMeta(res.meta);
     } catch (err) {
@@ -147,7 +154,7 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [accessToken, page, search, status, companyId]);
+  }, [accessToken, page, search, status, companyId, showDeletedUsers]);
 
   useEffect(() => {
     const task = Promise.resolve().then(fetchUsers);
@@ -268,6 +275,23 @@ export default function UsersPage() {
     }
   };
 
+  const handlePermanentDelete = async (user: User) => {
+    if (!window.confirm(`Permanently delete ${user.email}? This cannot be undone. The email will then be available for a new account.`)) return;
+    setPermanentDeleteId(user.id);
+    try {
+      await permanentlyDeleteUser(accessToken, user.id);
+      setBanner({ text: `${user.email} was permanently deleted. The email can now be reused.`, tone: 'success' });
+      await fetchUsers();
+    } catch (err) {
+      setBanner({
+        text: err instanceof ApiError ? err.message : 'Failed to permanently delete user.',
+        tone: 'error',
+      });
+    } finally {
+      setPermanentDeleteId(null);
+    }
+  };
+
   const openEmailChange = (user: User) => {
     setEmailTarget(user);
     setEmailDraft(user.email);
@@ -326,13 +350,28 @@ export default function UsersPage() {
             {isSuperAdmin ? 'Manage users across every company' : 'Manage users in your company'}
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13px] font-semibold px-4 py-2.5 hover:bg-[var(--primary)]/90 transition-colors shrink-0"
-        >
-          <PlusIcon />
-          Add user
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowDeletedUsers((showing) => !showing);
+                setPage(1);
+                setStatus('');
+              }}
+              className="rounded-lg border border-white/[0.12] px-4 py-2.5 text-[13px] font-semibold text-[#AAB2D4] hover:border-[var(--primary)] hover:text-white"
+            >
+              {showDeletedUsers ? 'Active users' : 'Deleted users'}
+            </button>
+          )}
+          {!showDeletedUsers && <button
+            onClick={openCreate}
+            className="flex items-center gap-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-[13px] font-semibold px-4 py-2.5 hover:bg-[var(--primary)]/90 transition-colors shrink-0"
+          >
+            <PlusIcon />
+            Add user
+          </button>}
+        </div>
       </div>
 
       {/* Banner */}
@@ -364,7 +403,7 @@ export default function UsersPage() {
             className="w-full rounded-lg bg-[#161C3A] border border-white/[0.08] pl-9 pr-3 py-2.5 text-[13.5px] text-[#F2F4FA] placeholder:text-[#565F8C] outline-none focus:border-[var(--primary)]/50 focus:ring-1 focus:ring-[var(--primary)]/30 transition-colors"
           />
         </div>
-        <select
+        {!showDeletedUsers && <select
           value={status}
           onChange={(e) => {
             setStatus(e.target.value as UserStatus | '');
@@ -376,7 +415,7 @@ export default function UsersPage() {
           <option value="ACTIVE">Active</option>
           <option value="SUSPENDED">Suspended</option>
           <option value="INACTIVE">Inactive</option>
-        </select>
+        </select>}
         {isSuperAdmin && (
           <select
             value={companyId}
@@ -398,7 +437,47 @@ export default function UsersPage() {
 
       {/* Table */}
       <div className="rounded-2xl border border-white/[0.08] bg-[#161C3A] overflow-hidden">
-        <table className="w-full text-left">
+        {showDeletedUsers ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left">
+              <thead>
+                <tr className="border-b border-white/[0.08] text-[11px] uppercase tracking-wide text-[#565F8C]" style={{ fontFamily: 'var(--font-mono)' }}>
+                  <th className="px-5 py-3 font-medium">User</th>
+                  <th className="px-5 py-3 font-medium">Company / client</th>
+                  <th className="px-5 py-3 font-medium">Role</th>
+                  <th className="px-5 py-3 font-medium">Deleted</th>
+                  <th className="px-5 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && <tr><td colSpan={5} className="px-5 py-10 text-center text-[13px] text-[#565F8C]">Loading deleted users…</td></tr>}
+                {!loading && loadError && <tr><td colSpan={5} className="px-5 py-10 text-center text-[13px] text-[#FF6B6B]">{loadError}</td></tr>}
+                {!loading && !loadError && users.length === 0 && <tr><td colSpan={5} className="px-5 py-10 text-center text-[13px] text-[#565F8C]">No deleted users found.</td></tr>}
+                {!loading && !loadError && users.map((user) => (
+                  <tr key={user.id} className="border-t border-white/[0.06] hover:bg-white/[0.03]">
+                    <td className="px-5 py-3">
+                      <p className="text-[13.5px] text-[#F2F4FA]">{user.firstName} {user.lastName}</p>
+                      <p className="text-[11.5px] text-[#8891B8]">{user.email}</p>
+                    </td>
+                    <td className="px-5 py-3 text-[13px] text-[#AAB2D4]">{user.client?.name || user.company?.name || '—'}</td>
+                    <td className="px-5 py-3 text-[13px] text-[#AAB2D4]">{user.role?.name ?? '—'}{user.clientId && <span className="ml-1 text-[10px] text-[#8891B8]">(client portal)</span>}</td>
+                    <td className="px-5 py-3 text-[12.5px] text-[#8891B8]" style={{ fontFamily: 'var(--font-mono)' }}>{formatDate(user.deletedAt ?? null)}</td>
+                    <td className="px-5 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => void handlePermanentDelete(user)}
+                        disabled={permanentDeleteId === user.id}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-[#FF6B6B]/30 px-2.5 py-1.5 text-[11px] font-semibold text-[#FF6B6B] hover:bg-[#FF6B6B]/10 disabled:opacity-50"
+                      >
+                        <TrashIcon />{permanentDeleteId === user.id ? 'Deleting…' : 'Delete permanently'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <table className="w-full text-left">
           <thead>
             <tr
               className="text-[11px] uppercase tracking-wide text-[#565F8C] border-b border-white/[0.08]"
@@ -504,7 +583,7 @@ export default function UsersPage() {
                 </tr>
               ))}
           </tbody>
-        </table>
+        </table>}
 
         {/* Pagination */}
         <div className="flex items-center justify-between px-5 py-3.5 border-t border-white/[0.08]">

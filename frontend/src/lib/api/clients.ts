@@ -476,7 +476,14 @@ export async function inviteClientPortalUser(
 export async function updateClientPortalUser(
   clientId: string,
   userId: string,
-  payload: { permissions?: ClientPortalPermission[]; status?: 'ACTIVE' | 'INACTIVE' },
+  payload: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    password?: string;
+    permissions?: ClientPortalPermission[];
+    status?: 'ACTIVE' | 'INACTIVE';
+  },
   accessToken: string | null
 ): Promise<ClientPortalUser> {
   const res = await request<Envelope<ClientPortalUser>>(`/clients/${clientId}/portal-users/${userId}`, accessToken, {

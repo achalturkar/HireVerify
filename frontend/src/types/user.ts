@@ -21,6 +21,10 @@ export interface User {
   status: UserStatus;
   companyId: string | null;
   company: CompanyRef | null;
+  clientId?: string | null;
+  client?: { id: string; name: string } | null;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
   role: RoleRef | null;
   permissions: string[];
   mustChangePassword: boolean;

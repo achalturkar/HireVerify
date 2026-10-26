@@ -205,6 +205,10 @@ export default function ClientDetailPage() {
   const [portalUsersLoading, setPortalUsersLoading] = useState(false);
   const [portalUsersError, setPortalUsersError] = useState<string | null>(null);
   const [portalUserPermissionDrafts, setPortalUserPermissionDrafts] = useState<Record<string, ClientPortalPermission[]>>({});
+  const [portalUserEditingId, setPortalUserEditingId] = useState<string | null>(null);
+  const [portalUserEditDraft, setPortalUserEditDraft] = useState({ firstName: '', lastName: '', email: '', password: '', passwordConfirm: '' });
+  const [portalUserEditError, setPortalUserEditError] = useState<string | null>(null);
+  const [portalUserEditSaving, setPortalUserEditSaving] = useState(false);
   const [portalInviteSubmitting, setPortalInviteSubmitting] = useState(false);
   const [portalInviteError, setPortalInviteError] = useState<string | null>(null);
   const [portalInviteSuccess, setPortalInviteSuccess] = useState<string | null>(null);
@@ -633,6 +637,38 @@ export default function ClientDetailPage() {
       });
     } catch (err) {
       setPortalUsersError(err instanceof ClientApiError ? err.message : 'Could not update portal permissions.');
+    }
+  };
+
+  const openPortalUserEdit = (user: ClientPortalUser) => {
+    setPortalUserEditingId(user.id);
+    setPortalUserEditDraft({ firstName: user.firstName, lastName: user.lastName, email: user.email, password: '', passwordConfirm: '' });
+    setPortalUserEditError(null);
+  };
+
+  const savePortalUserDetails = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!client || !portalUserEditingId) return;
+    if (portalUserEditDraft.password && portalUserEditDraft.password !== portalUserEditDraft.passwordConfirm) {
+      setPortalUserEditError('Passwords do not match.');
+      return;
+    }
+    setPortalUserEditSaving(true);
+    setPortalUserEditError(null);
+    try {
+      const updated = await updateClientPortalUser(client.id, portalUserEditingId, {
+        firstName: portalUserEditDraft.firstName.trim(),
+        lastName: portalUserEditDraft.lastName.trim(),
+        email: portalUserEditDraft.email.trim(),
+        ...(portalUserEditDraft.password ? { password: portalUserEditDraft.password } : {}),
+      }, accessToken);
+      setPortalUsers((current) => current.map((user) => user.id === updated.id ? updated : user));
+      setPortalUserEditingId(null);
+      setPortalUserEditDraft({ firstName: '', lastName: '', email: '', password: '', passwordConfirm: '' });
+    } catch (err) {
+      setPortalUserEditError(err instanceof ClientApiError ? err.message : 'Could not update client portal account.');
+    } finally {
+      setPortalUserEditSaving(false);
     }
   };
 
@@ -1814,10 +1850,40 @@ export default function ClientDetailPage() {
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="min-w-0"><p className="truncate text-[13px] font-semibold">{user.firstName} {user.lastName}</p><p className="mt-0.5 truncate text-[11px] text-[var(--muted)]">{user.email}</p><span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${user.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-700' : 'bg-[var(--surface-muted)] text-[var(--muted)]'}`}>{user.status}</span></div>
                             <div className="flex shrink-0 gap-2">
+                              <button type="button" onClick={() => openPortalUserEdit(user)} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-medium hover:bg-[var(--surface-muted)]">
+                                <Pencil size={12} />Edit account
+                              </button>
                               <button type="button" onClick={() => void togglePortalUserStatus(user)} className="rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-medium hover:bg-[var(--surface-muted)]">{user.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</button>
                               <button type="button" onClick={() => void revokePortalUser(user)} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/30 px-3 py-2 text-[11px] font-medium text-rose-700 hover:bg-rose-500/5"><Trash2 size={12} />Revoke</button>
                             </div>
                           </div>
+                          {portalUserEditingId === user.id && (
+                            <form onSubmit={savePortalUserDetails} className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <label className="text-[11px] font-medium text-[var(--muted)]">First name
+                                  <input required maxLength={100} value={portalUserEditDraft.firstName} onChange={(event) => setPortalUserEditDraft((draft) => ({ ...draft, firstName: event.target.value }))} disabled={portalUserEditSaving} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[12px] text-[var(--foreground)]" />
+                                </label>
+                                <label className="text-[11px] font-medium text-[var(--muted)]">Last name
+                                  <input required maxLength={100} value={portalUserEditDraft.lastName} onChange={(event) => setPortalUserEditDraft((draft) => ({ ...draft, lastName: event.target.value }))} disabled={portalUserEditSaving} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[12px] text-[var(--foreground)]" />
+                                </label>
+                                <label className="text-[11px] font-medium text-[var(--muted)] sm:col-span-2">Email address
+                                  <input required type="email" maxLength={255} autoComplete="email" value={portalUserEditDraft.email} onChange={(event) => setPortalUserEditDraft((draft) => ({ ...draft, email: event.target.value }))} disabled={portalUserEditSaving} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[12px] text-[var(--foreground)]" />
+                                </label>
+                                <label className="text-[11px] font-medium text-[var(--muted)]">New password (optional)
+                                  <input type="password" minLength={8} maxLength={128} autoComplete="new-password" value={portalUserEditDraft.password} onChange={(event) => setPortalUserEditDraft((draft) => ({ ...draft, password: event.target.value }))} disabled={portalUserEditSaving} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[12px] text-[var(--foreground)]" />
+                                </label>
+                                <label className="text-[11px] font-medium text-[var(--muted)]">Confirm new password
+                                  <input type="password" minLength={8} maxLength={128} autoComplete="new-password" value={portalUserEditDraft.passwordConfirm} onChange={(event) => setPortalUserEditDraft((draft) => ({ ...draft, passwordConfirm: event.target.value }))} disabled={portalUserEditSaving || !portalUserEditDraft.password} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[12px] text-[var(--foreground)] disabled:opacity-50" />
+                                </label>
+                              </div>
+                              <p className="mt-2 text-[10px] text-[var(--muted)]">Leave both password fields empty to keep the current password. A new password is stored securely and is never displayed.</p>
+                              {portalUserEditError && <p role="alert" className="mt-3 text-[12px] text-[#FF6B6B]">{portalUserEditError}</p>}
+                              <div className="mt-3 flex justify-end gap-2">
+                                <button type="button" onClick={() => { setPortalUserEditingId(null); setPortalUserEditError(null); }} disabled={portalUserEditSaving} className="rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-semibold disabled:opacity-50">Cancel</button>
+                                <button type="submit" disabled={portalUserEditSaving || Boolean(portalUserEditDraft.password && portalUserEditDraft.password !== portalUserEditDraft.passwordConfirm)} className="rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50">{portalUserEditSaving ? 'Saving…' : 'Save account'}</button>
+                              </div>
+                            </form>
+                          )}
                           <details className="mt-3">
                             <summary className="cursor-pointer text-[11px] font-medium text-[var(--primary)]">Edit permissions ({user.permissions.length})</summary>
                             <div className="mt-3 grid gap-2 sm:grid-cols-2">
