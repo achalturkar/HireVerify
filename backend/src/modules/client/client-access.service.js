@@ -7,6 +7,7 @@ const { hashPassword } = require('../../utils/password');
 const { signResetToken } = require('../../utils/jwt');
 const { sendMail, buildClientPortalInviteEmail } = require('../../utils/mailer');
 const { invalidateUserAuthCache } = require('../../middleware/auth.middleware');
+const authRepo = require('../auth/auth.repository');
 const { NotFoundError, BadRequestError, ConflictError } = require('../../utils/errors');
 
 const CLIENT_PERMISSIONS = [
@@ -147,13 +148,39 @@ const update = async ({ clientId, companyId, userId, payload }) => {
   if (!existing) throw new NotFoundError('Client portal user not found');
 
   const data = {};
+  const passwordChanged = payload.password !== undefined && payload.password !== '';
+  if (payload.firstName !== undefined) data.firstName = payload.firstName.trim();
+  if (payload.lastName !== undefined) data.lastName = payload.lastName.trim();
+  if (payload.email !== undefined) {
+    const email = payload.email.trim().toLowerCase();
+    if (email !== existing.email.toLowerCase()) {
+      const conflictingUser = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+      if (conflictingUser && conflictingUser.id !== userId) {
+        throw new ConflictError('An account with this email already exists.');
+      }
+      data.email = email;
+    }
+  }
+  if (passwordChanged) {
+    data.passwordHash = await hashPassword(payload.password);
+    data.mustChangePassword = false;
+  }
   if (payload.permissions !== undefined) {
     data.clientPermissions = validatePermissions(payload.permissions, { allowEmpty: true });
   }
   if (payload.status !== undefined) data.status = payload.status;
   if (Object.keys(data).length === 0) throw new BadRequestError('No client portal user fields to update.');
 
-  const user = await prisma.user.update({ where: { id: userId }, data });
+  let user;
+  try {
+    user = await prisma.user.update({ where: { id: userId }, data });
+  } catch (error) {
+    if (error.code === 'P2002' && error.meta?.target?.includes('email')) {
+      throw new ConflictError('An account with this email already exists.');
+    }
+    throw error;
+  }
+  if (passwordChanged) await authRepo.revokeAllUserRefreshTokens(userId);
   await invalidateUserAuthCache(userId);
   return userDto(user);
 };

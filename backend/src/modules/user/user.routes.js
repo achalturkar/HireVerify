@@ -91,6 +91,13 @@ router
   .get(authorize('users.view'), validate(v.listValidator), controller.listUsers)
   .post(authorize('users.create'), validate(v.createValidator), controller.createUser);
 
+router.get(
+  '/deleted',
+  requireRole({ superAdmin: true }),
+  validate(v.listValidator),
+  controller.listDeletedUsers
+);
+
 /**
  * @openapi
  * /users/{id}:
@@ -109,6 +116,13 @@ router
   .get(authorize('users.view'), validate(v.idParamValidator), controller.getUser)
   .put(authorize('users.update'), validate(v.updateValidator), controller.updateUser)
   .delete(authorize('users.delete'), validate(v.idParamValidator), controller.deleteUser);
+
+router.delete(
+  '/:id/permanent',
+  requireRole({ superAdmin: true }),
+  validate(v.idParamValidator),
+  controller.permanentlyDeleteUser
+);
 
 router.put(
   '/:id/email',

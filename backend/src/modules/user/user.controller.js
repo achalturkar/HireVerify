@@ -21,10 +21,23 @@ const listUsers = asyncHandler(async (req, res) => {
   const pagination = parsePagination(req.query);
   const { items, total } = await service.list({
     currentUser: req.user,
-    query: { ...pagination, companyId: req.query.companyId, status: req.query.status },
+    query: { ...pagination, companyId: req.query.companyId, status: req.query.status, search: req.query.search, sortBy: req.query.sortBy, sortOrder: req.query.sortOrder },
   });
   return success(res, {
     message: 'Users',
+    data: items,
+    meta: buildMeta({ page: pagination.page, limit: pagination.limit, total }),
+  });
+});
+
+const listDeletedUsers = asyncHandler(async (req, res) => {
+  const pagination = parsePagination(req.query);
+  const { items, total } = await service.listDeleted({
+    currentUser: req.user,
+    query: { ...pagination, companyId: req.query.companyId, search: req.query.search, sortBy: req.query.sortBy, sortOrder: req.query.sortOrder },
+  });
+  return success(res, {
+    message: 'Deleted users',
     data: items,
     meta: buildMeta({ page: pagination.page, limit: pagination.limit, total }),
   });
@@ -52,6 +65,12 @@ const deleteUser = asyncHandler(async (req, res) => {
   return success(res, { message: 'User deleted (soft)' });
 });
 
+const permanentlyDeleteUser = asyncHandler(async (req, res) => {
+  await service.permanentlyRemove({ currentUser: req.user, id: req.params.id });
+  await writeAudit({ req, action: 'users.permanentDelete', entity: 'User', entityId: req.params.id });
+  return success(res, { message: 'Deleted user permanently removed.' });
+});
+
 /* ------------------------------------------------------------------
    Self-service: /users/me/*
 ------------------------------------------------------------------- */
@@ -77,9 +96,11 @@ module.exports = {
   createUser,
   getUser,
   listUsers,
+  listDeletedUsers,
   updateUser,
   updateCompanyAdminEmail,
   deleteUser,
+  permanentlyDeleteUser,
   getMyProfile,
   updateMyProfile,
   changeMyPassword,

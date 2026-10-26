@@ -22,8 +22,12 @@ const toDto = (u) => ({
   email: u.email,
   phone: u.phone,
   status: u.status,
+  isDeleted: u.isDeleted,
+  deletedAt: u.deletedAt,
   companyId: u.companyId,
   company: u.company ? { id: u.company.id, name: u.company.name } : null,
+  clientId: u.clientId,
+  client: u.client ? { id: u.client.id, name: u.client.name } : null,
   role: u.role ? { id: u.role.id, name: u.role.name, isCompanyAdmin: u.role.isCompanyAdmin, isSuperAdmin: u.role.isSuperAdmin } : null,
   mustChangePassword: u.mustChangePassword,
   lastLoginAt: u.lastLoginAt,
@@ -112,6 +116,21 @@ const list = async ({ currentUser, query }) => {
   return { items: res.items.map(toDto), total: res.total };
 };
 
+const listDeleted = async ({ currentUser, query }) => {
+  if (!currentUser.role?.isSuperAdmin) {
+    throw new ForbiddenError('Only a Super Admin can view deleted users.');
+  }
+  const res = await repo.listDeleted({
+    companyId: query.companyId || undefined,
+    skip: query.skip,
+    limit: query.limit,
+    search: query.search,
+    sortBy: ['firstName', 'lastName', 'email', 'createdAt'].includes(query.sortBy) ? query.sortBy : 'createdAt',
+    sortOrder: query.sortOrder,
+  });
+  return { items: res.items.map(toDto), total: res.total };
+};
+
 const update = async ({ currentUser, id, payload }) => {
   const user = await repo.findById(id);
   if (!user) throw new NotFoundError('User not found');
@@ -174,6 +193,18 @@ const remove = async ({ currentUser, id }) => {
   await invalidateUserAuthCache(id);
 };
 
+const permanentlyRemove = async ({ currentUser, id }) => {
+  if (!currentUser.role?.isSuperAdmin) {
+    throw new ForbiddenError('Only a Super Admin can permanently delete users.');
+  }
+  const user = await repo.findDeletedById(id);
+  if (!user) throw new NotFoundError('Deleted user not found.');
+  if (user.id === currentUser.id) throw new BadRequestError('You cannot permanently delete yourself.');
+  if (user.role?.isSuperAdmin) throw new ForbiddenError('Cannot permanently delete a Super Admin.');
+  await repo.permanentlyDelete(id);
+  await invalidateUserAuthCache(id);
+};
+
 /* ------------------------------------------------------------------
    Self-service: profile + password.
    Unlike `update`/`remove` above, these are NEVER passed an `id` from
@@ -233,9 +264,11 @@ module.exports = {
   create,
   getById,
   list,
+  listDeleted,
   update,
   updateCompanyAdminEmail,
   remove,
+  permanentlyRemove,
   getMyProfile,
   updateProfile,
   changePassword,

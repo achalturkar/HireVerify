@@ -249,6 +249,10 @@ const invitePortalUserValidator = [
 ];
 const updatePortalUserValidator = [
   ...portalUserIdValidator,
+  body('firstName').optional().isString().trim().isLength({ min: 1, max: 100 }),
+  body('lastName').optional().isString().trim().isLength({ min: 1, max: 100 }),
+  body('email').optional().isEmail().normalizeEmail(),
+  body('password').optional().isString().isLength({ min: 8, max: 128 }),
   body('permissions').optional().isArray().custom((values) => values.every((value) => CLIENT_PERMISSIONS.includes(value))),
   body('status').optional().isIn(['ACTIVE', 'INACTIVE']),
 ];
