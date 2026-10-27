@@ -38,6 +38,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { ApiError, activateCandidatePortal, downloadCandidateExcel, downloadCandidateFormPdf, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
 import { formatCandidateName } from '@/src/lib/candidate-name';
+import CandidateSubmittedDetails from '@/src/components/CandidateSubmittedDetails';
 import { listBGVCases } from '@/src/lib/api/bgv';
 import type { BGVCase } from '@/src/types/bgv';
 import type { Candidate } from '@/src/types/candidate';
@@ -47,8 +48,8 @@ import type { Candidate } from '@/src/types/candidate';
 /* ------------------------------------------------------------------ */
 type CandidateDocument = { id: string; documentType: string; documentNumber?: string | null; fileName: string; fileUrl: string; verificationStatus: string; uploadedAt: string };
 type CandidateDetail = Candidate & { documents?: CandidateDocument[] };
-type Tab = 'summary' | 'personal' | 'family' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal';
-type ProfileKey = keyof Pick<Candidate, 'fullName' | 'firstName' | 'middleName' | 'lastName' | 'email' | 'phone' | 'dateOfBirth' | 'gender' | 'fatherName' | 'motherName' | 'aadhaarNumber' | 'panNumber' | 'uanNumber' | 'passportNumber' | 'drivingLicenseNumber' | 'voterIdNumber' | 'highestQualification' | 'courseName' | 'institutionName' | 'universityName' | 'yearOfPassing' | 'gradeOrPercentage' | 'employeeId' | 'employeeDesignation' | 'employeeDepartment' | 'employmentType' | 'joiningDate' | 'workLocation' | 'currentEmployer' | 'currentAddress' | 'permanentAddress'>;
+type Tab = 'summary' | 'submitted' | 'personal' | 'family' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal';
+type ProfileKey = keyof Pick<Candidate, 'fullName' | 'firstName' | 'middleName' | 'lastName' | 'email' | 'phone' | 'dateOfBirth' | 'gender' | 'fatherName' | 'motherName' | 'maritalStatus' | 'spouseName' | 'childrenCount' | 'candidateNotes' | 'aadhaarNumber' | 'panNumber' | 'uanNumber' | 'passportNumber' | 'drivingLicenseNumber' | 'voterIdNumber' | 'highestQualification' | 'courseName' | 'institutionName' | 'universityName' | 'yearOfPassing' | 'gradeOrPercentage' | 'employeeId' | 'employeeDesignation' | 'employeeDepartment' | 'employmentType' | 'joiningDate' | 'workLocation' | 'currentEmployer' | 'employerHrName' | 'employerHrPhone' | 'currentAddress' | 'permanentAddress'>;
 type ProfileDraft = Record<ProfileKey, string>;
 type PortalState = 'none' | 'active' | 'expiring' | 'expired' | 'locked';
 type Category = 'identity' | 'education' | 'employment' | 'address' | 'other';
@@ -76,10 +77,11 @@ const CATEGORY_TYPES: Record<Exclude<Category, 'other'>, string[]> = {
 const CATEGORY_LABEL: Record<Category, string> = { identity: 'Identity', education: 'Education', employment: 'Employment', address: 'Address', other: 'Other' };
 
 const PROFILE_SECTIONS: { label: string; fields: string[] }[] = [
-  { label: 'Personal', fields: ['fullName', 'email', 'phone', 'dateOfBirth', 'gender'] },
+  { label: 'Personal', fields: ['fullName', 'email', 'phone', 'dateOfBirth', 'gender', 'candidateNotes'] },
+  { label: 'Family', fields: ['fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount'] },
   { label: 'Identity', fields: IDENTITY_ITEMS.map((item) => item.fieldKey) },
   { label: 'Education', fields: ['highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage'] },
-  { label: 'Employment', fields: ['employeeId', 'currentEmployer', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation'] },
+  { label: 'Employment', fields: ['employeeId', 'currentEmployer', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'employerHrName', 'employerHrPhone'] },
   { label: 'Addresses', fields: ['currentAddress', 'permanentAddress'] },
 ];
 
@@ -99,9 +101,10 @@ const isFilled = (value: unknown) => value !== null && value !== undefined && St
 const valueOrDash = (value: unknown) => (isFilled(value) ? String(value) : 'Not provided');
 const editableProfileFields: ProfileKey[] = [
   'fullName', 'firstName', 'middleName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName',
+  'maritalStatus', 'spouseName', 'childrenCount', 'candidateNotes',
   'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber',
   'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage',
-  'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation',
+  'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'employerHrName', 'employerHrPhone',
   'currentEmployer', 'currentAddress', 'permanentAddress',
 ];
 const toProfileDraft = (candidate: CandidateDetail): ProfileDraft => Object.fromEntries(
@@ -200,7 +203,7 @@ function EditableFields({
   values,
   onChange,
 }: {
-  rows: { key: ProfileKey; label: string; type?: 'text' | 'email' | 'date' | 'number' | 'textarea' | 'gender' }[];
+  rows: { key: ProfileKey; label: string; type?: 'text' | 'email' | 'date' | 'number' | 'textarea' | 'gender' | 'maritalStatus' }[];
   editing: boolean;
   values: ProfileDraft;
   onChange: (key: ProfileKey, value: string) => void;
@@ -217,6 +220,10 @@ function EditableFields({
               ) : type === 'gender' ? (
                 <select value={values[key]} onChange={(event) => onChange(key, event.target.value)} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm text-[var(--foreground)]">
                   <option value="">Prefer not to say</option><option value="FEMALE">Female</option><option value="MALE">Male</option><option value="NON_BINARY">Non-binary</option><option value="OTHER">Other</option>
+                </select>
+              ) : type === 'maritalStatus' ? (
+                <select value={values[key]} onChange={(event) => onChange(key, event.target.value)} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm text-[var(--foreground)]">
+                  <option value="">Select marital status</option><option value="SINGLE">Single</option><option value="MARRIED">Married</option><option value="DIVORCED">Divorced</option><option value="WIDOWED">Widowed</option><option value="SEPARATED">Separated</option>
                 </select>
               ) : (
                 <input type={type} value={values[key]} onChange={(event) => onChange(key, event.target.value)} className="mt-1.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 text-sm text-[var(--foreground)]" />
@@ -416,7 +423,7 @@ export default function CandidateDetailPage() {
     setError('');
     setNotice('');
     try {
-      const payload = Object.fromEntries(editableProfileFields.map((key) => [key, profileValues[key].trim() || null]));
+      const payload = Object.fromEntries(editableProfileFields.map((key) => [key, key === 'childrenCount' ? (profileValues[key] ? Number(profileValues[key]) : null) : profileValues[key].trim() || null]));
       await updateCandidate(id, payload, accessToken);
       setEditingProfile(false);
       setNotice('Candidate details saved.');
@@ -614,6 +621,7 @@ export default function CandidateDetailPage() {
 
   const tabs: { key: Tab; label: string; icon: LucideIcon; count?: number }[] = [
     { key: 'summary', label: 'Summary', icon: LayoutDashboard },
+    { key: 'submitted', label: 'Submitted details', icon: FileText },
     { key: 'personal', label: 'Personal', icon: UserRound },
     { key: 'family', label: 'Family', icon: Users },
     { key: 'identity', label: 'Identity', icon: Hash, count: docsOf('identity').length },
@@ -754,6 +762,8 @@ export default function CandidateDetailPage() {
         </div>
       )}
 
+      {tab === 'submitted' && <CandidateSubmittedDetails candidate={candidate} />}
+
       {tab === 'summary' && (
         <div className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -853,13 +863,18 @@ export default function CandidateDetailPage() {
               : [{ key: 'fullName' as const, label: 'Full name' }, { key: 'firstName' as const, label: 'First name' }, { key: 'middleName' as const, label: 'Middle name' }, { key: 'lastName' as const, label: 'Last name' }]),
             { key: 'email', label: 'Email', type: 'email' },
             { key: 'phone', label: 'Phone' }, { key: 'dateOfBirth', label: 'Date of birth', type: 'date' }, { key: 'gender', label: 'Gender', type: 'gender' },
+            { key: 'candidateNotes', label: 'Notes for the verification team', type: 'textarea' },
           ]} editing={editingProfile} values={profileValues} onChange={(key, value) => setProfileValues((current) => current ? { ...current, [key]: value } : current)} />}
         </Panel>
       )}
 
       {tab === 'family' && (
-        <Panel title="Family details" description="Parent names provided by the candidate.">
-          {profileValues && <EditableFields rows={[{ key: 'fatherName', label: "Father's name" }, { key: 'motherName', label: "Mother's name" }]} editing={editingProfile} values={profileValues} onChange={(key, value) => setProfileValues((current) => current ? { ...current, [key]: value } : current)} />}
+        <Panel title="Family details" description="Family information provided by the candidate.">
+          {profileValues && <EditableFields rows={[
+            { key: 'fatherName', label: "Father's name" }, { key: 'motherName', label: "Mother's name" },
+            { key: 'maritalStatus', label: 'Marital status', type: 'maritalStatus' },
+            { key: 'spouseName', label: 'Spouse name' }, { key: 'childrenCount', label: 'Number of children', type: 'number' },
+          ]} editing={editingProfile} values={profileValues} onChange={(key, value) => setProfileValues((current) => current ? { ...current, [key]: value } : current)} />}
         </Panel>
       )}
 
@@ -880,6 +895,21 @@ export default function CandidateDetailPage() {
               { key: 'universityName', label: 'University or board' }, { key: 'yearOfPassing', label: 'Year of passing', type: 'number' }, { key: 'gradeOrPercentage', label: 'Percentage or CGPA' },
             ]} editing={editingProfile} values={profileValues} onChange={(key, value) => setProfileValues((current) => current ? { ...current, [key]: value } : current)} />}
           </Panel>
+          {candidate.educationHistory?.length ? <Panel title="Education history" description="All education records submitted by the candidate.">
+            <div className="space-y-4">
+              {candidate.educationHistory.map((record, index) => {
+                const rows: [string, unknown][] = ([
+                  ['Qualification', record.qualification], ['Course or degree', record.courseName],
+                  ['Institution', record.institutionName], ['University or board', record.universityName],
+                  ['Year of passing', record.yearOfPassing], ['Grade or percentage', record.gradeOrPercentage],
+                ] as [string, unknown][]).filter(([, value]) => isFilled(value));
+                return rows.length ? <div key={record.id ?? `education-${index}`} className="rounded-xl border border-[var(--border)] p-4">
+                  <h3 className="mb-4 text-sm font-semibold">{record.qualification || `Education record ${index + 1}`}</h3>
+                  <InfoGrid rows={rows} />
+                </div> : null;
+              })}
+            </div>
+          </Panel> : null}
           <Panel title="Education documents" description="Certificates and marksheets uploaded by the candidate.">
             <DocumentList documents={docsOf('education')} origin={origin} emptyText="No education documents uploaded yet." />
           </Panel>
@@ -892,9 +922,26 @@ export default function CandidateDetailPage() {
             {profileValues && <EditableFields rows={[
               { key: 'currentEmployer', label: 'Current employer' }, { key: 'employeeId', label: 'Employee ID' }, { key: 'employeeDesignation', label: 'Designation' },
               { key: 'employeeDepartment', label: 'Department' }, { key: 'employmentType', label: 'Employment type' }, { key: 'joiningDate', label: 'Joining date', type: 'date' },
-              { key: 'workLocation', label: 'Work location' },
+              { key: 'workLocation', label: 'Work location' }, { key: 'employerHrName', label: 'Employer HR contact name' },
+              { key: 'employerHrPhone', label: 'Employer HR contact number' },
             ]} editing={editingProfile} values={profileValues} onChange={(key, value) => setProfileValues((current) => current ? { ...current, [key]: value } : current)} />}
           </Panel>
+          {candidate.employmentHistory?.length ? <Panel title="Employment history" description="All current and past employment records submitted by the candidate.">
+            <div className="space-y-4">
+              {candidate.employmentHistory.map((record, index) => {
+                const rows: [string, unknown][] = ([
+                  ['Employer', record.employerName], ['Employee ID', record.employeeId], ['Designation', record.designation],
+                  ['Department', record.department], ['Employment type', record.employmentType],
+                  ['Start date', record.startDate], ['End date', record.endDate], ['Work location', record.workLocation],
+                  ['Employer HR contact name', record.employerHrName], ['Employer HR contact number', record.employerHrPhone],
+                ] as [string, unknown][]).filter(([, value]) => isFilled(value));
+                return rows.length ? <div key={`employment-${index}`} className="rounded-xl border border-[var(--border)] p-4">
+                  <h3 className="mb-4 text-sm font-semibold">{record.isCurrent ? 'Current employment' : record.employerName || `Past employment ${index}`}</h3>
+                  <InfoGrid rows={rows} />
+                </div> : null;
+              })}
+            </div>
+          </Panel> : null}
           <Panel title="Employment documents" description="Experience letters and salary slips uploaded by the candidate.">
             <DocumentList documents={docsOf('employment')} origin={origin} emptyText="No employment documents uploaded yet." />
           </Panel>

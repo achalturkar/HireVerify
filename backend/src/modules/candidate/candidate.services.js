@@ -149,6 +149,10 @@ const create = async ({ payload, companyId, currentUser }) => {
     gender: payload.gender || null,
     fatherName: payload.fatherName || null,
     motherName: payload.motherName || null,
+    maritalStatus: payload.maritalStatus || null,
+    spouseName: payload.spouseName || null,
+    childrenCount: payload.childrenCount ?? null,
+    candidateNotes: payload.candidateNotes || null,
     aadhaarNumber: normalizeIdentityValue('aadhaarNumber', payload.aadhaarNumber) || null,
     panNumber: normalizeIdentityValue('panNumber', payload.panNumber) || null,
     uanNumber: normalizeIdentityValue('uanNumber', payload.uanNumber) || null,
@@ -168,6 +172,8 @@ const create = async ({ payload, companyId, currentUser }) => {
     joiningDate: normalizeDateOfBirth(payload.joiningDate) ?? null,
     workLocation: payload.workLocation || null,
     currentEmployer: payload.currentEmployer || null,
+    employerHrName: payload.employerHrName || null,
+    employerHrPhone: payload.employerHrPhone || null,
     currentAddress: payload.currentAddress || null,
     permanentAddress: payload.permanentAddress || null,
     status: 'PENDING',
@@ -248,7 +254,7 @@ const update = async ({ id, companyId, payload, currentUser }) => {
 
   const data = {};
   if (hasCandidateName(payload)) Object.assign(data, normalizeCandidateName(payload, existing));
-  ['clientId', 'subclientId', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'currentAddress', 'permanentAddress', 'status']
+  ['clientId', 'subclientId', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount', 'candidateNotes', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'currentAddress', 'permanentAddress', 'status']
     .forEach((field) => {
       if (payload[field] !== undefined) {
         if (field === 'clientId' && !payload[field]) return;

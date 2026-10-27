@@ -110,23 +110,21 @@ const createCandidateFormPdf = async (candidate) => {
     : COLORS.blue;
   const fullName = candidate.fullName || [candidate.firstName, candidate.middleName, candidate.lastName].filter(Boolean).join(' ');
 
-  const drawLogo = (logo, label, x, align) => {
+  const drawLogo = (logo, x, align) => {
     const width = 54;
     const height = 36;
     if (logo) {
       try {
         doc.image(logo, x, 20, { fit: [width, height], align: 'center', valign: 'center' });
       } catch (_error) {
-        // Keep the textual brand label when an uploaded logo cannot be rendered.
+        // Keep the header clean when an uploaded logo cannot be rendered.
       }
     }
-    doc.fillColor(COLORS.muted).font('Helvetica-Bold').fontSize(6.5)
-      .text(label || '', x, 58, { width, align, lineBreak: false, ellipsis: true });
   };
 
   const drawPageHeader = () => {
-    drawLogo(companyLogo, candidate.company?.name || 'Verification provider', 42, 'left');
-    drawLogo(clientLogo, candidate.client?.name || 'Client', doc.page.width - 96, 'right');
+    drawLogo(companyLogo, 42, 'left');
+    drawLogo(clientLogo, doc.page.width - 96, 'right');
     doc.fillColor(COLORS.navy).font('Helvetica-Bold').fontSize(11)
       .text('CANDIDATE INFORMATION', 112, 25, { width: doc.page.width - 224, align: 'center' });
     doc.fillColor(COLORS.muted).font('Helvetica').fontSize(8)

@@ -37,6 +37,18 @@ export interface CandidateEmploymentRecord {
   startDate: string | null;
   endDate: string | null;
   workLocation: string | null;
+  employerHrName?: string | null;
+  employerHrPhone?: string | null;
+}
+
+export interface CandidateEducationRecord {
+  id?: string;
+  qualification: string | null;
+  courseName: string | null;
+  institutionName: string | null;
+  universityName: string | null;
+  yearOfPassing: string | number | null;
+  gradeOrPercentage: string | null;
 }
 
 export interface ListCandidatesParams {
@@ -64,6 +76,10 @@ export interface Candidate {
   gender?: string | null;
   fatherName?: string | null;
   motherName?: string | null;
+  maritalStatus?: string | null;
+  spouseName?: string | null;
+  childrenCount?: number | null;
+  candidateNotes?: string | null;
   aadhaarNumber?: string | null;
   panNumber?: string | null;
   uanNumber?: string | null;
@@ -83,6 +99,9 @@ export interface Candidate {
   joiningDate?: string | null;
   workLocation?: string | null;
   currentEmployer?: string | null;
+  employerHrName?: string | null;
+  employerHrPhone?: string | null;
+  educationHistory?: CandidateEducationRecord[];
   employmentHistory?: CandidateEmploymentRecord[];
   currentAddress?: string | null;
   permanentAddress?: string | null;

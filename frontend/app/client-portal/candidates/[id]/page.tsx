@@ -9,27 +9,31 @@ import { ClientPortalApiError, downloadPortalCandidatePdf, getPortalCandidate, g
 import { hasPortalPermission } from '@/src/lib/api/client-portal';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import { CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
+import CandidateSubmittedDetails from '@/src/components/CandidateSubmittedDetails';
 
 const profileFields = [
   ['fullName', 'Full name'], ['firstName', 'First name'], ['middleName', 'Middle name'], ['lastName', 'Last name'], ['email', 'Email'], ['phone', 'Phone'],
   ['dateOfBirth', 'Date of birth'], ['gender', 'Gender'], ['fatherName', 'Father name'], ['motherName', 'Mother name'],
+  ['maritalStatus', 'Marital status'], ['spouseName', 'Spouse name'], ['childrenCount', 'Number of children'],
+  ['candidateNotes', 'Notes for the verification team'],
   ['aadhaarNumber', 'Aadhaar number'], ['panNumber', 'PAN number'], ['uanNumber', 'UAN number'],
   ['passportNumber', 'Passport number'], ['drivingLicenseNumber', 'Driving licence'], ['voterIdNumber', 'Voter ID'],
   ['highestQualification', 'Highest qualification'], ['courseName', 'Course'], ['institutionName', 'Institution'],
   ['universityName', 'University'], ['yearOfPassing', 'Year of passing'], ['gradeOrPercentage', 'Grade / percentage'],
   ['employeeId', 'Employee ID'], ['employeeDesignation', 'Designation'], ['employeeDepartment', 'Department'],
   ['employmentType', 'Employment type'], ['joiningDate', 'Joining date'], ['workLocation', 'Work location'],
+  ['employerHrName', 'Employer HR contact name'], ['employerHrPhone', 'Employer HR contact number'],
   ['currentEmployer', 'Current employer'], ['currentAddress', 'Current address'], ['permanentAddress', 'Permanent address'],
 ] as const;
 
 const inputClass = 'mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[12px] text-[var(--foreground)]';
-type CandidateTab = 'summary' | 'personal' | 'family' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal';
-const TAB_FIELDS: Record<Exclude<CandidateTab, 'summary' | 'documents' | 'portal'>, string[]> = {
-  personal: ['fullName', 'firstName', 'middleName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender'],
-  family: ['fatherName', 'motherName'],
+type CandidateTab = 'summary' | 'submitted' | 'personal' | 'family' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal';
+const TAB_FIELDS: Record<Exclude<CandidateTab, 'summary' | 'submitted' | 'documents' | 'portal'>, string[]> = {
+  personal: ['fullName', 'firstName', 'middleName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'candidateNotes'],
+  family: ['fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount'],
   identity: ['aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber'],
   education: ['highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage'],
-  employment: ['employeeId', 'currentEmployer', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation'],
+  employment: ['employeeId', 'currentEmployer', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'employerHrName', 'employerHrPhone'],
   addresses: ['currentAddress', 'permanentAddress'],
 };
 
@@ -190,6 +194,7 @@ export default function ClientPortalCandidatePage() {
   const enabledIdentityKeys = CANDIDATE_IDENTITY_FIELDS.filter((field) => formConfig[field.key].enabled).map((field) => field.key);
   const tabItems: { id: CandidateTab; label: string; icon: typeof Users }[] = [
     { id: 'summary', label: 'Summary', icon: LayoutDashboard },
+    { id: 'submitted', label: 'Submitted details', icon: FileText },
     { id: 'personal', label: 'Personal', icon: Users },
     { id: 'family', label: 'Family', icon: Users },
     ...(enabledIdentityKeys.length ? [{ id: 'identity' as const, label: 'Identity', icon: Hash }] : []),
@@ -232,12 +237,79 @@ export default function ClientPortalCandidatePage() {
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><h3 className="text-[14px] font-semibold">BGV cases</h3><p className="mt-2 text-3xl font-semibold">{candidate.bgvCases.length}</p><p className="text-[11px] text-[var(--muted)]">linked verification cases</p><div className="mt-4 space-y-2">{candidate.bgvCases.slice(0, 3).map((item) => <Link key={item.id} href={`/client-portal/cases/${item.id}`} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-muted)] px-3 py-2 text-[11px] hover:text-[var(--primary)]"><span className="font-mono">{item.caseNumber}</span><span>{item.status.replaceAll('_', ' ')}</span></Link>)}</div></section>
       </div>}
 
+      {activeTab === 'submitted' && <CandidateSubmittedDetails candidate={candidate} />}
+
       {TAB_FIELDS[activeTab as keyof typeof TAB_FIELDS] && <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-[14px] font-semibold">{tabItems.find((item) => item.id === activeTab)?.label} details</h3><p className="mt-1 text-[11px] text-[var(--muted)]">Candidate information for this section.</p></div>{canUpdate && !profileLocked && !editing && <button type="button" onClick={() => { setEditing(true); setMessage(null); }} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-medium hover:bg-[var(--surface-muted)]"><Pencil size={14} />Edit details</button>}{editing && !profileLocked && <div className="flex gap-2"><button type="button" onClick={() => { setEditing(false); void load(); }} className="rounded-lg border border-[var(--border)] px-3 py-2 text-[11px]">Cancel</button><button type="button" onClick={() => void save()} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Save size={14} />{saving ? 'Saving…' : 'Save changes'}</button></div>}</div>
-        {editing ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{profileFields.filter(([key]) => activeFields.includes(key) && (!['firstName', 'middleName', 'lastName'].includes(key))).map(([key, label]) => <label key={key} className={`text-[10px] font-medium text-[var(--muted)] ${key.endsWith('Address') ? 'sm:col-span-2 lg:col-span-3' : ''}`}>{label}{key.endsWith('Address') ? <textarea rows={3} value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass} /> : key === 'gender' ? <select value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass}><option value="">Prefer not to say</option><option value="FEMALE">Female</option><option value="MALE">Male</option><option value="NON_BINARY">Non-binary</option><option value="OTHER">Other</option></select> : <input type={dateFields.has(key) ? 'date' : key === 'email' ? 'email' : key === 'yearOfPassing' ? 'number' : 'text'} value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass} />}</label>)}</div>
-          : <dl className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">{profileFields.filter(([key]) => activeFields.includes(key)).map(([key, label]) => { const raw = candidate[key as keyof PortalCandidateDetail]; const value = raw ? String(raw) : ''; const display = identityFields.has(key) && value && !revealedIds && value.length > 4 ? `${'•'.repeat(value.length - 4)}${value.slice(-4)}` : dateFields.has(key) && value ? dateOnlyLabel(value) : value || '—'; return <div key={key} className={key.endsWith('Address') ? 'sm:col-span-2 lg:col-span-3' : ''}><dt className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</dt><dd className="mt-1 break-words text-[12px]">{display}</dd></div>; })}</dl>}
+        {editing ? <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{profileFields.filter(([key]) => activeFields.includes(key) && (!['firstName', 'middleName', 'lastName'].includes(key))).map(([key, label]) => <label key={key} className={`text-[10px] font-medium text-[var(--muted)] ${key.endsWith('Address') || key === 'candidateNotes' ? 'sm:col-span-2 lg:col-span-3' : ''}`}>{label}{key.endsWith('Address') || key === 'candidateNotes' ? <textarea rows={3} value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass} /> : key === 'gender' ? <select value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass}><option value="">Prefer not to say</option><option value="FEMALE">Female</option><option value="MALE">Male</option><option value="NON_BINARY">Non-binary</option><option value="OTHER">Other</option></select> : key === 'maritalStatus' ? <select value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass}><option value="">Select marital status</option><option value="SINGLE">Single</option><option value="MARRIED">Married</option><option value="DIVORCED">Divorced</option><option value="WIDOWED">Widowed</option><option value="SEPARATED">Separated</option></select> : <input type={dateFields.has(key) ? 'date' : key === 'email' ? 'email' : key === 'yearOfPassing' || key === 'childrenCount' ? 'number' : 'text'} min={key === 'childrenCount' ? 0 : undefined} value={values[key]} onChange={(event) => setValues((value) => ({ ...value, [key]: event.target.value }))} className={inputClass} />}</label>)}</div>
+          : <dl className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">{profileFields.filter(([key]) => activeFields.includes(key)).map(([key, label]) => { const raw = candidate[key as keyof PortalCandidateDetail]; const value = raw === null || raw === undefined ? '' : String(raw); const display = identityFields.has(key) && value && !revealedIds && value.length > 4 ? `${'•'.repeat(value.length - 4)}${value.slice(-4)}` : dateFields.has(key) && value ? dateOnlyLabel(value) : ['gender', 'maritalStatus', 'employmentType'].includes(key) && value ? value.replaceAll('_', ' ').toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase()) : value || '—'; return <div key={key} className={key.endsWith('Address') || key === 'candidateNotes' ? 'sm:col-span-2 lg:col-span-3' : ''}><dt className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</dt><dd className="mt-1 break-words text-[12px]">{display}</dd></div>; })}</dl>}
         {activeTab === 'identity' && !editing && <button type="button" onClick={() => setRevealedIds((value) => !value)} className="mt-4 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px]">{revealedIds ? 'Hide identity numbers' : 'Reveal identity numbers'}</button>}
       </section>}
+
+      {activeTab === 'employment' && candidate.employmentHistory.some((record) => !record.isCurrent) && (
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <h3 className="text-[14px] font-semibold">Past employment history</h3>
+          <div className="mt-4 space-y-4">
+            {candidate.employmentHistory.filter((record) => !record.isCurrent).map((record, index) => (
+              <dl key={`${record.employerName || 'employer'}-${index}`} className="grid gap-x-5 gap-y-4 rounded-xl border border-[var(--border)] p-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="sm:col-span-2 lg:col-span-3"><h4 className="text-[12px] font-semibold">{record.employerName || `Past employer ${index + 1}`}</h4></div>
+                {[
+                  ['Employer', record.employerName],
+                  ['Employee ID', record.employeeId],
+                  ['Designation', record.designation],
+                  ['Department', record.department],
+                  ['Employment type', record.employmentType],
+                  ['Start date', record.startDate ? dateOnlyLabel(record.startDate) : null],
+                  ['End date', record.endDate ? dateOnlyLabel(record.endDate) : null],
+                  ['Work location', record.workLocation],
+                  ['Employer HR contact name', record.employerHrName],
+                  ['Employer HR contact number', record.employerHrPhone],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</dt>
+                    <dd className="mt-1 break-words text-[12px]">{value || '—'}</dd>
+                  </div>
+                ))}
+              </dl>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'addresses' && (
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <h3 className="text-[14px] font-semibold">Address verification selection</h3>
+          <p className="mt-2 text-[12px] text-[var(--muted)]">
+            {candidate.addressVerificationLocations.length
+              ? candidate.addressVerificationLocations.map((location) => location === 'current' ? 'Current address' : 'Permanent address').join(', ')
+              : 'No address locations selected'}
+          </p>
+        </section>
+      )}
+
+      {activeTab === 'education' && candidate.educationHistory.length > 0 && (
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <h3 className="text-[14px] font-semibold">Education history</h3>
+          <div className="mt-4 space-y-4">
+            {candidate.educationHistory.map((record, index) => {
+              const rows = [
+                ['Qualification', record.qualification],
+                ['Course or degree', record.courseName],
+                ['Institution', record.institutionName],
+                ['University or board', record.universityName],
+                ['Year of passing', record.yearOfPassing],
+                ['Grade or percentage', record.gradeOrPercentage],
+              ].filter(([, value]) => value !== null && value !== undefined && String(value).trim());
+              return rows.length ? (
+                <dl key={record.id ?? `education-${index}`} className="grid gap-x-5 gap-y-4 rounded-xl border border-[var(--border)] p-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="sm:col-span-2 lg:col-span-3"><h4 className="text-[12px] font-semibold">{record.qualification || `Education record ${index + 1}`}</h4></div>
+                  {rows.map(([label, value]) => <div key={label}><dt className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</dt><dd className="mt-1 break-words text-[12px]">{value}</dd></div>)}
+                </dl>
+              ) : null;
+            })}
+          </div>
+        </section>
+      )}
 
       {activeTab === 'documents' && <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><h3 className="text-[14px] font-semibold">Candidate documents</h3>{candidate.documents.length ? <div className="mt-4 divide-y divide-[var(--border)]">{candidate.documents.map((document) => <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-[12px]"><div><p className="font-medium">{document.documentType.replaceAll('_', ' ')}</p><p className="mt-0.5 text-[10px] text-[var(--muted)]">{document.fileName} · {dateLabel(document.uploadedAt)}</p></div><span className="rounded-full bg-[var(--surface-muted)] px-2 py-1 text-[10px]">{document.verificationStatus.replaceAll('_', ' ')}</span><a href=      {document.fileUrl.startsWith('http') ? document.fileUrl : document.fileUrl} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-[var(--primary)] hover:underline">Open document</a></div>)}</div> : <p className="mt-4 text-[12px] text-[var(--muted)]">No documents uploaded.</p>}</section>}
 

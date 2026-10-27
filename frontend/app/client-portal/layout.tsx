@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Bell, Building2, CheckCheck, FileCheck2, FileText, KeyRound, LayoutDashboard, LogOut, Mail, Menu, MessageSquareText, Phone, Receipt, Users, X } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
+import { ClientPortalBrandProvider } from '@/src/auth/ClientPortalBrandContext';
 import { listClients } from '@/src/lib/api/clients';
 import { ThemeToggle } from '@/src/components/layout/theme-toggle';
 import BrandMark from '@/src/components/ui/BrandMark';
@@ -267,7 +268,23 @@ export default function ClientPortalLayout({ children }: { children: ReactNode }
             <button type="button" onClick={() => void logout()} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-[11px] text-rose-600 hover:bg-rose-500/10"><LogOut size={15} /><span className="hidden sm:inline">Sign out</span></button>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 lg:px-8">{children}</main>
+        <ClientPortalBrandProvider client={client ? {
+          name: client.name,
+          logoUrl: client.logoUrl,
+          clientCode: client.clientCode,
+          industry: client.industry,
+          supportEmail: client.supportEmail,
+          supportPhone: client.supportPhone,
+          website: client.website,
+          addressLine1: client.addressLine1,
+          addressLine2: client.addressLine2,
+          city: client.city,
+          state: client.state,
+          postalCode: client.postalCode,
+          country: client.country,
+        } : null}>
+          <main className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 lg:px-8">{children}</main>
+        </ClientPortalBrandProvider>
       </div>
     </div>
   );

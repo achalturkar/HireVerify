@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, Clock3, Copy, Download, FileCheck2, FileText, KeyRound, Mail, MessageSquareText, Phone, Plus, RefreshCw, Receipt, Sparkles, Users, X, Eye, Search } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAuth } from '@/src/auth/AuthProvider';
+import { useClientPortalBrand } from '@/src/auth/ClientPortalBrandContext';
 import { changePassword } from '@/src/lib/api/users';
 import { getReportVerificationStatus, getVerificationStatus } from '@/src/lib/verification-status';
 import { formatCandidateName, splitCandidateName } from '@/src/lib/candidate-name';
+import { resolveLogoUrl } from '@/src/lib/logo';
 import {
   ClientPortalApiError,
   downloadPortalReport,
@@ -67,6 +70,7 @@ export default function ClientPortalPage() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, loading: authLoading, accessToken, permissions } = useAuth();
+  const portalBrand = useClientPortalBrand();
   const isPortalAdmin = user?.role.isCompanyAdmin ?? false;
   const isPortalUser = Boolean(user?.role.isClientUser || isPortalAdmin);
   const availableTabs = useMemo(
@@ -294,7 +298,8 @@ export default function ClientPortalPage() {
   const canCreateCandidates = hasPortalPermission(permissions, 'clientportal.candidates.create', isPortalAdmin);
   const canInviteCandidates = hasPortalPermission(permissions, 'clientportal.candidates.invite', isPortalAdmin) || canCreateCandidates;
   const canDownloadReports = hasPortalPermission(permissions, 'clientportal.reports.download', isPortalAdmin);
-  const client = user.client;
+  const client = portalBrand ?? user.client;
+  const clientLogo = resolveLogoUrl(client?.logoUrl);
   if (section === 'account') {
     return (
       <section className="mx-auto max-w-3xl space-y-5">
@@ -484,12 +489,14 @@ export default function ClientPortalPage() {
               <div className="inline-flex items-center gap-1.5 rounded-full border border-current/20 bg-black/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]">
                 <Sparkles size={12} /> Client workspace
               </div>
-              <h2 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome back, {user.firstName}</h2>
+              <div className="mt-4 flex items-center gap-3">
+                {clientLogo && <Image src={clientLogo} alt={`${client?.name ?? 'Client'} logo`} width={64} height={64} unoptimized className="h-14 w-14 shrink-0 rounded-xl bg-white object-contain p-1.5" />}
+                <h2 className="min-w-0 break-words text-2xl font-semibold tracking-tight sm:text-3xl">{client?.name ?? 'Your organization'}</h2>
+              </div>
               <p className="mt-2 max-w-xl text-[13px] leading-6 opacity-80">
                 Here&apos;s your organization&apos;s background verification overview. Follow candidate and case activity, find reports, and keep billing on track.
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] font-medium opacity-80">
-                <span className="inline-flex items-center gap-1.5"><Users size={13} />{client?.name ?? 'Your organization'}</span>
                 {client?.clientCode && <span className="inline-flex items-center gap-1.5"><span className="opacity-60">Client ID</span>{client.clientCode}</span>}
               </div>
             </div>

@@ -74,6 +74,10 @@ export interface PortalCandidateDetail extends PortalCandidate {
   gender: string | null;
   fatherName: string | null;
   motherName: string | null;
+  maritalStatus: string | null;
+  spouseName: string | null;
+  childrenCount: number | null;
+  candidateNotes: string | null;
   aadhaarNumber: string | null;
   panNumber: string | null;
   uanNumber: string | null;
@@ -86,6 +90,15 @@ export interface PortalCandidateDetail extends PortalCandidate {
   universityName: string | null;
   yearOfPassing: number | null;
   gradeOrPercentage: string | null;
+  educationHistory: {
+    id?: string;
+    qualification: string | null;
+    courseName: string | null;
+    institutionName: string | null;
+    universityName: string | null;
+    yearOfPassing: string | number | null;
+    gradeOrPercentage: string | null;
+  }[];
   employeeId: string | null;
   employeeDesignation: string | null;
   employeeDepartment: string | null;
@@ -93,6 +106,22 @@ export interface PortalCandidateDetail extends PortalCandidate {
   joiningDate: string | null;
   workLocation: string | null;
   currentEmployer: string | null;
+  employerHrName: string | null;
+  employerHrPhone: string | null;
+  addressVerificationLocations: ('current' | 'permanent')[];
+  employmentHistory: {
+    isCurrent: boolean;
+    employerName: string | null;
+    employeeId: string | null;
+    designation: string | null;
+    department: string | null;
+    employmentType: string | null;
+    startDate: string | null;
+    endDate: string | null;
+    workLocation: string | null;
+    employerHrName: string | null;
+    employerHrPhone: string | null;
+  }[];
   currentAddress: string | null;
   permanentAddress: string | null;
   documents: { id: string; documentType: string; documentNumber: string | null; fileName: string; fileUrl: string; verificationStatus: string; uploadedAt: string }[];
