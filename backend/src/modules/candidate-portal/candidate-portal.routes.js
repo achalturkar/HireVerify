@@ -55,6 +55,7 @@ router.post('/invitations/:candidateId', authenticate, requireRole({ companyAdmi
 router.post('/invitations/:candidateId/remind', authenticate, requireRole({ companyAdmin: true }), authorize('candidate.update'), controller.remind);
 router.get('/invitations/:candidateId/status', authenticate, requireRole({ companyAdmin: true }), authorize('candidate.view'), controller.status);
 router.patch('/invitations/:candidateId/lock', authenticate, requireRole({ companyAdmin: true }), authorize('candidate.update'), controller.lock);
+router.post('/invitations/:candidateId/unlock-for-corrections', authenticate, requireRole({ companyAdmin: true }), authorize('candidate.update'), controller.unlockForCorrections);
 router.use('/:token', (_req, res, next) => {
   res.set({ 'Cache-Control': 'private, no-store, max-age=0', Pragma: 'no-cache' });
   next();
@@ -64,5 +65,6 @@ router.get('/:token', controller.getPortal);
 router.patch('/:token/profile', controller.updateProfile);
 router.post('/:token/consent', controller.consent);
 router.post('/:token/documents', controller.validateUpload, uploadCandidateDocument, controller.uploadDocument);
+router.delete('/:token/documents/:documentId', controller.validateUpload, controller.deleteCustomFormDocument);
 
 module.exports = router;

@@ -126,18 +126,24 @@ const findInvitation = async (token) => {
 
 const isPortalLocked = (candidate) => {
   const activeCase = candidate.bgvCases?.[0];
-  const consentGiven = Boolean(
-    [...(activeCase?.consents || []), ...(candidate.consents || [])]
-      .some((consent) => consent.consentType === 'BGV_CONSENT' && consent.consentGiven && !consent.revokedAt),
+  const consents = [...(activeCase?.consents || []), ...(candidate.consents || [])];
+  const consentGiven = consents.some((consent) =>
+    consent.consentType === 'BGV_CONSENT' && consent.consentGiven && !consent.revokedAt,
+  );
+  const consentRevoked = consents.some((consent) =>
+    consent.consentType === 'BGV_CONSENT' && consent.consentGiven && consent.revokedAt,
   );
   return consentGiven
     || ['COMPLETED', 'CANCELLED'].includes(activeCase?.status)
-    || (!activeCase && candidate.status === 'VERIFICATION_IN_PROGRESS');
+    || (!activeCase && candidate.status === 'VERIFICATION_IN_PROGRESS' && !consentRevoked);
 };
 const areUploadsLocked = (candidate) => {
   const activeCase = candidate.bgvCases?.[0];
+  const consentRevoked = [...(activeCase?.consents || []), ...(candidate.consents || [])].some((consent) =>
+    consent.consentType === 'BGV_CONSENT' && consent.consentGiven && consent.revokedAt,
+  );
   return ['COMPLETED', 'CANCELLED'].includes(activeCase?.status)
-    || (!activeCase && candidate.status === 'VERIFICATION_IN_PROGRESS');
+    || (!activeCase && candidate.status === 'VERIFICATION_IN_PROGRESS' && !consentRevoked);
 };
 
 const getCandidateFormConfig = (candidate) =>
@@ -453,6 +459,70 @@ const issue = async ({ candidateId, companyId, expiresInDays }) => {
   return { ...toStaffStatus({ ...invitation, lastSentAt }), emailSent, status: toDto(invitation) };
 };
 
+const unlockForCorrections = async ({ candidateId, companyId, clientId, expiresInDays }) => {
+  const candidate = await prisma.candidate.findFirst({
+    where: { id: candidateId, companyId, ...(clientId ? { clientId } : {}), isDeleted: false },
+    include: {
+      company: true,
+      client: { select: { id: true, name: true, supportEmail: true, supportPhone: true, candidateFormConfig: true } },
+      subclient: { select: { id: true, supportEmail: true, supportPhone: true, candidateFormConfig: true } },
+      consents: { where: { consentType: 'BGV_CONSENT' }, orderBy: { createdAt: 'desc' } },
+      bgvCases: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        include: { checks: { include: { documents: true } }, consents: true },
+      },
+    },
+  });
+  if (!candidate) throw new NotFoundError('Candidate not found');
+  if (!candidate.email) throw new BadRequestError('Candidate email is required before activating a correction link.');
+
+  const activeCase = candidate.bgvCases[0];
+  if (activeCase && ['COMPLETED', 'CANCELLED'].includes(activeCase.status)) {
+    throw new ConflictError('A completed or cancelled BGV case cannot be reopened for corrections.');
+  }
+  const days = Number(expiresInDays ?? getCandidateFormConfig(candidate).invitationExpiryDays);
+  if (!Number.isInteger(days) || days < 1 || days > MAX_INVITATION_DAYS) {
+    throw new BadRequestError(`Link expiry must be between 1 and ${MAX_INVITATION_DAYS} days.`);
+  }
+
+  const token = createToken();
+  const activatedAt = new Date();
+  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  const invitation = await prisma.$transaction(async (transaction) => {
+    await transaction.candidateConsent.updateMany({
+      where: { candidateId, consentType: 'BGV_CONSENT', consentGiven: true, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return transaction.candidatePortalInvitation.upsert({
+      where: { candidateId },
+      create: { candidateId, tokenHash: hashToken(token), encryptedToken: encryptToken(token), activatedAt, expiresAt },
+      update: {
+        tokenHash: hashToken(token),
+        encryptedToken: encryptToken(token),
+        activatedAt,
+        expiresAt,
+        revokedAt: null,
+        lastSentAt: null,
+        lastRemindedAt: null,
+        reminderCount: 0,
+      },
+    });
+  });
+
+  const emailSent = await sendInvitationEmail({
+    candidate,
+    token,
+    reminder: false,
+    pendingCount: pendingFor(candidate).pending.length,
+  });
+  const lastSentAt = emailSent ? new Date() : invitation.lastSentAt;
+  if (emailSent) {
+    await prisma.candidatePortalInvitation.update({ where: { candidateId }, data: { lastSentAt } });
+  }
+  return { ...toStaffStatus({ ...invitation, lastSentAt }), emailSent };
+};
+
 const remind = async ({ candidateId, companyId, clientId }) => {
   const candidate = await prisma.candidate.findFirst({
     where: { id: candidateId, companyId, ...(clientId ? { clientId } : {}), isDeleted: false },
@@ -716,9 +786,10 @@ const recordConsent = async (token, payload, request) => {
   const activeCase = invitation.candidate.bgvCases[0];
   if (activeCase && ['COMPLETED', 'CANCELLED'].includes(activeCase.status)) throw new ConflictError('This candidate form is locked because the BGV case is finalized.');
   if (payload.consentGiven !== true) throw new BadRequestError('Consent must be explicitly accepted.');
-  const existing = activeCase?.consents.find((consent) => consent.consentType === 'BGV_CONSENT')
-    || invitation.candidate.consents?.find((consent) => consent.consentType === 'BGV_CONSENT' && (!activeCase || !consent.caseId));
-  if (existing?.consentGiven && !existing.revokedAt) {
+  const existingConsents = [...(activeCase?.consents || []), ...(invitation.candidate.consents || [])];
+  if (existingConsents.some((consent) =>
+    consent.consentType === 'BGV_CONSENT' && consent.consentGiven && !consent.revokedAt,
+  )) {
     throw new ConflictError('Consent has already been recorded.');
   }
   const progress = pendingFor(invitation.candidate);
@@ -734,13 +805,9 @@ const recordConsent = async (token, payload, request) => {
     consentedAt: new Date(),
     revokedAt: null,
   };
-  if (existing) {
-    await prisma.candidateConsent.update({ where: { id: existing.id }, data: { ...data, ...(activeCase ? { caseId: activeCase.id } : {}) } });
-  } else {
-    await prisma.candidateConsent.create({
-      data: { candidateId: invitation.candidateId, caseId: activeCase?.id || null, consentType: 'BGV_CONSENT', ...data },
-    });
-  }
+  await prisma.candidateConsent.create({
+    data: { candidateId: invitation.candidateId, caseId: activeCase?.id || null, consentType: 'BGV_CONSENT', ...data },
+  });
   return getPortal(token);
 };
 
@@ -834,4 +901,41 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
   return { document, status: await getPortal(token) };
 };
 
-module.exports = { issue, remind, getPortal, getCandidateFormTemplate, getStaffStatus, lock, updateProfile, recordConsent, assertPortalEditable, addDocument };
+const deleteCustomFormDocument = async (token, documentId) => {
+  const invitation = await findInvitation(token);
+  if (areUploadsLocked(invitation.candidate)) {
+    throw new ConflictError('Document uploads are locked after the verification case is completed or cancelled.');
+  }
+  if (!/^[0-9a-f-]{36}$/i.test(documentId || '')) throw new NotFoundError('Uploaded form not found.');
+
+  const document = await prisma.candidateDocument.findFirst({
+    where: { id: documentId, candidateId: invitation.candidateId },
+    select: { id: true, documentType: true, documentNumber: true, fileUrl: true },
+  });
+  if (!document || document.documentType !== 'OTHER' || !document.documentNumber?.startsWith('CUSTOM_FORM:')) {
+    throw new NotFoundError('Uploaded form not found.');
+  }
+
+  if (!/^[a-f0-9]{64}$/i.test(token)) throw new NotFoundError('Uploaded form not found.');
+  const expectedPrefix = `/uploads/candidate-documents/portal/${token}/`;
+  if (!document.fileUrl.startsWith(expectedPrefix)) throw new BadRequestError('Uploaded form file path is invalid.');
+  const fileName = document.fileUrl.slice(expectedPrefix.length);
+  if (!fileName || path.basename(fileName) !== fileName || fileName === '.' || fileName === '..') {
+    throw new BadRequestError('Uploaded form file path is invalid.');
+  }
+
+  const portalUploadDirectory = path.resolve(process.cwd(), 'uploads', 'candidate-documents', 'portal', token);
+  const filePath = path.resolve(portalUploadDirectory, fileName);
+  if (path.dirname(filePath) !== portalUploadDirectory) throw new BadRequestError('Uploaded form file path is invalid.');
+
+  const deleted = await prisma.candidateDocument.deleteMany({
+    where: { id: document.id, candidateId: invitation.candidateId },
+  });
+  if (!deleted.count) throw new NotFoundError('Uploaded form not found.');
+  await fs.unlink(filePath).catch((error) => {
+    if (error.code !== 'ENOENT') throw error;
+  });
+  return getPortal(token);
+};
+
+module.exports = { issue, unlockForCorrections, remind, getPortal, getCandidateFormTemplate, getStaffStatus, lock, updateProfile, recordConsent, assertPortalEditable, addDocument, deleteCustomFormDocument };

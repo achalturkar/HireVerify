@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { ApiError, activateCandidatePortal, downloadCandidateExcel, downloadCandidateFormPdf, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
+import { ApiError, activateCandidatePortal, downloadCandidateExcel, downloadCandidateFormPdf, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, unlockCandidatePortalForCorrections, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import CandidateSubmittedDetails from '@/src/components/CandidateSubmittedDetails';
 import { listBGVCases } from '@/src/lib/api/bgv';
@@ -379,6 +379,7 @@ export default function CandidateDetailPage() {
   const [docFilter, setDocFilter] = useState<Category | 'all'>('all');
   const [confirmLock, setConfirmLock] = useState(false);
   const [confirmReplace, setConfirmReplace] = useState(false);
+  const [confirmCorrectionsUnlock, setConfirmCorrectionsUnlock] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -493,18 +494,19 @@ export default function CandidateDetailPage() {
   const verifiedCount = documents.filter((document) => /(VERIFIED|APPROVED|ACCEPTED|COMPLETED)/i.test(document.verificationStatus)).length;
   const rejectedCount = documents.filter((document) => /(REJECT|FAIL|INVALID)/i.test(document.verificationStatus)).length;
   const reviewCount = documents.length - verifiedCount - rejectedCount;
-  const caseConsent = bgvCases
-    .flatMap((bgvCase) => (bgvCase.consents ?? []).map((consent) => ({ ...consent, caseNumber: bgvCase.caseNumber })))
-    .sort((a, b) => new Date(b.consentedAt || b.createdAt || 0).getTime() - new Date(a.consentedAt || a.createdAt || 0).getTime())[0];
-  const standaloneConsent = candidate?.consents
-    ?.map((consent) => ({ ...consent, caseNumber: null as string | null }))
-    .sort((a, b) => new Date(b.consentedAt || b.createdAt || 0).getTime() - new Date(a.consentedAt || a.createdAt || 0).getTime())[0];
-  const latestConsent = caseConsent || standaloneConsent;
+  const consentHistory = [
+    ...bgvCases.flatMap((bgvCase) => (bgvCase.consents ?? []).map((consent) => ({ ...consent, caseNumber: bgvCase.caseNumber }))),
+    ...(candidate?.consents ?? []).map((consent) => ({ ...consent, caseNumber: null as string | null })),
+  ].sort((a, b) => new Date(b.consentedAt || b.createdAt || 0).getTime() - new Date(a.consentedAt || a.createdAt || 0).getTime());
+  const latestConsent = consentHistory[0];
   const consentStatus = latestConsent?.consentGiven && !latestConsent.revokedAt
     ? 'Yes'
     : latestConsent?.revokedAt
       ? 'Revoked'
       : 'No';
+  const correctionUnlockAvailable = canUpdateCandidate
+    && consentStatus === 'Yes'
+    && !['COMPLETED', 'CANCELLED'].includes(bgvCases[0]?.status ?? '');
 
   const run = async (action: () => Promise<void>, fallback: string) => {
     setBusy(true);
@@ -568,6 +570,20 @@ export default function CandidateDetailPage() {
       setPortal(result);
       setNotice(locked ? 'Portal link locked. The candidate can no longer open it.' : 'Portal link unlocked.');
     }, 'Could not update portal access.');
+  };
+
+  const unlockPortalForCorrections = () => {
+    setConfirmCorrectionsUnlock(false);
+    if (!daysValid) return;
+    void run(async () => {
+      const result = await unlockCandidatePortalForCorrections(id, parsedDays, accessToken);
+      setPortal({ ...result, revokedAt: null, reminderCount: 0, lastRemindedAt: null });
+      await load();
+      const until = formatDateTime(result.expiresAt) ?? '';
+      setNotice(result.emailSent
+        ? `Existing consent revoked. The correction link is active until ${until}, and the candidate must consent again.`
+        : `Existing consent revoked and the correction link is active until ${until}, but the email could not be delivered. Share the active link below; the candidate must consent again.`);
+    }, 'Could not unlock the candidate portal for corrections.');
   };
 
   const copyActivePortalLink = async () => {
@@ -1039,12 +1055,12 @@ export default function CandidateDetailPage() {
             )}
           </Panel>
 
-          <Panel title="Manage access" description="Only company admins can activate, resend, extend or lock this link.">
+          <Panel title="Manage access" description="Company admins can manage this link or unlock a candidate to correct submitted information.">
             <div className="space-y-5">
-              {(state !== 'locked' || needsResend) && (
+              {(state !== 'locked' || needsResend || correctionUnlockAvailable) && (
                 <div className="space-y-4">
                   <DurationPicker value={daysInput} onChange={setDaysInput} valid={daysValid} />
-                  {newExpiry && <p className="text-sm text-[var(--muted)]">{needsResend ? 'The new link will' : 'The link will'} stay active until <span className="font-medium text-[var(--foreground)]">{formatDateTime(newExpiry)}</span>.</p>}
+                  {newExpiry && <p className="text-sm text-[var(--muted)]">{needsResend || correctionUnlockAvailable ? 'The new link will' : 'The link will'} stay active until <span className="font-medium text-[var(--foreground)]">{formatDateTime(newExpiry)}</span>.</p>}
                 </div>
               )}
 
@@ -1079,6 +1095,11 @@ export default function CandidateDetailPage() {
                     {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Unlock size={15} aria-hidden="true" />}Unlock link
                   </button>
                 )}
+                {correctionUnlockAvailable && !confirmCorrectionsUnlock && (
+                  <button type="button" onClick={() => setConfirmCorrectionsUnlock(true)} disabled={busy || !daysValid} className="inline-flex items-center gap-2 rounded-lg border border-amber-300 px-4 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-50">
+                    <Unlock size={15} aria-hidden="true" />Unlock for corrections
+                  </button>
+                )}
                 {(state === 'active' || state === 'expiring') && !confirmLock && (
                   <button type="button" onClick={() => setConfirmLock(true)} disabled={busy} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2.5 text-sm font-semibold hover:bg-[var(--surface-muted)] disabled:opacity-50">
                     <Lock size={15} aria-hidden="true" />Lock link
@@ -1092,6 +1113,16 @@ export default function CandidateDetailPage() {
                   <div className="flex shrink-0 gap-2">
                     <button type="button" onClick={() => setLocked(true)} disabled={busy} className="rounded-lg bg-red-600 px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-50">Lock link</button>
                     <button type="button" onClick={() => setConfirmLock(false)} className="rounded-lg border border-red-200 bg-white px-3.5 py-2 text-sm font-semibold text-red-800">Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {confirmCorrectionsUnlock && (
+                <div role="alertdialog" aria-label="Confirm unlock for corrections" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-amber-900">Unlock this portal for corrections? The current consent will be revoked, the old link will stop working, and a new link will be emailed. The candidate must review the changes and submit consent again. Completed or cancelled cases cannot be reopened.</p>
+                  <div className="flex shrink-0 gap-2">
+                    <button type="button" onClick={unlockPortalForCorrections} disabled={busy || !daysValid} className="rounded-lg bg-amber-700 px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-50">Revoke consent and unlock</button>
+                    <button type="button" onClick={() => setConfirmCorrectionsUnlock(false)} disabled={busy} className="rounded-lg border border-amber-200 bg-white px-3.5 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50">Cancel</button>
                   </div>
                 </div>
               )}

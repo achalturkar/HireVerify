@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
@@ -39,6 +39,8 @@ import CandidateDocumentUpload from '@/src/components/candidate-portal/Candidate
 import CandidateFormTemplateUpload from '@/src/components/candidate-portal/CandidateFormTemplateUpload';
 import { formatCandidateName, splitCandidateName } from '@/src/lib/candidate-name';
 import { resolveLogoUrl } from '@/src/lib/logo';
+import { candidateDocumentStatusLabel } from '@/src/lib/candidate-document-status';
+import { candidateDocumentTypeLabel, getDisplayableCustomForms } from '@/src/lib/candidate-portal-forms';
 import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
 import type { CandidateCustomForm, CandidateFormConfig, CandidateFormRequiredFieldKey, CandidateIdentityFieldKey } from '@/src/types/client';
 
@@ -438,13 +440,13 @@ const toForm = (candidate: Record<string, unknown>): FormState =>
       : '',
   });
 
-const validateFields = (form: FormState, fields: FieldDef[]): Record<string, string> => {
+const validateFields = (form: FormState, fields: FieldDef[], allowMissingRequired = false): Record<string, string> => {
   const errors: Record<string, string> = {};
   fields.forEach((field) => {
     if (field.readOnly) return;
     const raw = (form[field.key] ?? '').trim();
     if (!raw) {
-      if (field.required) errors[field.key] = `${field.label} is required.`;
+      if (field.required && !allowMissingRequired) errors[field.key] = `${field.label} is required.`;
       return;
     }
     const problem = field.validate?.(field.normalize ? field.normalize(raw) : raw);
@@ -480,9 +482,9 @@ const tabForPending = (item: PendingItem): TabKey => {
 
 const statusStyle = (status: string): { label: string; className: string; icon: LucideIcon } => {
   const value = status.toUpperCase();
-  if (/(VERIFIED|APPROVED|ACCEPTED|COMPLETED)/.test(value)) return { label: humanize(status), className: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: CheckCircle2 };
-  if (/(REJECT|FAIL|INVALID)/.test(value)) return { label: humanize(status), className: 'bg-red-50 text-red-700 ring-red-200', icon: XCircle };
-  return { label: humanize(status), className: 'bg-amber-50 text-amber-700 ring-amber-200', icon: Clock };
+  if (/(VERIFIED|APPROVED|ACCEPTED|COMPLETED)/.test(value)) return { label: candidateDocumentStatusLabel(status), className: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: CheckCircle2 };
+  if (/(REJECT|FAIL|INVALID)/.test(value)) return { label: candidateDocumentStatusLabel(status), className: 'bg-red-50 text-red-700 ring-red-200', icon: XCircle };
+  return { label: candidateDocumentStatusLabel(status), className: 'bg-amber-50 text-amber-700 ring-amber-200', icon: Clock };
 };
 
 /* ------------------------------------------------------------------ */
@@ -615,7 +617,7 @@ function SaveBar({ dirty, saving, label, onSave, bare = false, readOnly = false 
             {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Save size={15} aria-hidden="true" />}
             {label}
           </button>
-          <span className="text-xs text-slate-500">{dirty ? 'You have unsaved changes.' : 'All changes saved.'}</span>
+          <span className="text-xs text-slate-500">{saving ? 'Saving changes...' : dirty ? 'Changes save automatically. You can also save now.' : 'All changes saved.'}</span>
         </>}
     </div>
   );
@@ -632,7 +634,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function DocumentList({ documents, emptyText, hideType = false }: { documents: PortalDocument[]; emptyText: string; hideType?: boolean }) {
+function DocumentList({ documents, emptyText, hideType = false, customForms = [] }: { documents: PortalDocument[]; emptyText: string; hideType?: boolean; customForms?: CandidateCustomForm[] }) {
   if (!documents.length) {
     return <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">{emptyText}</p>;
   }
@@ -650,7 +652,7 @@ function DocumentList({ documents, emptyText, hideType = false }: { documents: P
                   <p className="truncate text-sm font-semibold text-slate-900">{document.fileName}</p>
                 ) : (
                   <>
-                    <p className="text-sm font-semibold text-slate-900">{humanize(document.documentType)}</p>
+                    <p className="text-sm font-semibold text-slate-900">{candidateDocumentTypeLabel(document, customForms)}</p>
                     <p className="truncate text-sm text-slate-600">{document.fileName}</p>
                   </>
                 )}
@@ -894,6 +896,9 @@ export default function CandidatePortalPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const profileReadOnly = portal?.progress.formLocked ?? false;
+  const saveSectionRef = useRef<(section: SectionKey, automatic: boolean) => Promise<boolean>>(async () => false);
+  const autoSaveBlockedSignature = useRef<string | null>(null);
 
   // syncForm is only true on the first load, so uploads and saves never wipe edits in other sections.
   const fetchPortal = useCallback(
@@ -987,6 +992,8 @@ export default function CandidatePortalPage() {
     && (category !== 'POLICE_VERIFICATION' || candidateFormConfig.sections.policeVerification.enabled)
     && (category !== 'IDENTITY' || IDENTITY_FIELDS.some((field) => identityConfigFor(field.key)?.enabled !== false)),
   );
+  const bgvForms = getDisplayableCustomForms('BGV', customForms);
+  const policeVerificationForms = getDisplayableCustomForms('POLICE_VERIFICATION', customForms);
   const visibleTabs = TABS.filter(({ key }) => {
     if (key === 'address') {
       const addressConfig = candidateFormConfig.address;
@@ -1010,10 +1017,8 @@ export default function CandidatePortalPage() {
       && (isCategoryRequested('EDUCATION') || portal?.progress.pending.some((item) => item.category === 'EDUCATION'));
     if (key === 'employment') return candidateFormConfig.sections.employment.enabled
       && (isCategoryRequested('EMPLOYMENT') || portal?.progress.pending.some((item) => item.category === 'EMPLOYMENT'));
-    if (key === 'policeVerification') return candidateFormConfig.sections.policeVerification.enabled
-      && isCategoryRequested('POLICE_VERIFICATION')
-      && customFormsFor('POLICE_VERIFICATION').length > 0;
-    if (key === 'bgv') return customFormsFor('BGV').length > 0;
+    if (key === 'policeVerification') return policeVerificationForms.length > 0;
+    if (key === 'bgv') return bgvForms.length > 0;
     if (key === 'cibil') return customFormsFor('CIBIL').length > 0;
     if (key === 'otherChecks') return customFormsFor('OTHER_CHECKS').length > 0;
     return true;
@@ -1057,6 +1062,7 @@ export default function CandidatePortalPage() {
     return result;
   }, [form, baseline, effectiveSectionFields, pastEmployments, pastEmploymentBaseline, educationRecords, educationBaseline]);
   const anyDirty = SECTIONS.some((section) => dirtyBySection[section]);
+  const autoSaveSignature = JSON.stringify([form, pastEmployments, educationRecords]);
 
   useEffect(() => {
     if (!anyDirty) return undefined;
@@ -1064,6 +1070,21 @@ export default function CandidatePortalPage() {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [anyDirty]);
+
+  useEffect(() => {
+    if (!anyDirty || saving || profileReadOnly || autoSaveBlockedSignature.current === autoSaveSignature) return undefined;
+    const activeSection = SECTIONS.find((item) => item === currentTab);
+    const section = activeSection && dirtyBySection[activeSection]
+      ? activeSection
+      : SECTIONS.find((item) => dirtyBySection[item]);
+    if (!section) return undefined;
+    const timer = window.setTimeout(() => {
+      void saveSectionRef.current(section, true).then((saved) => {
+        if (!saved) autoSaveBlockedSignature.current = autoSaveSignature;
+      });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [anyDirty, autoSaveSignature, currentTab, dirtyBySection, profileReadOnly, saving]);
 
   const pendingByTab = useMemo(() => {
     const flags: Record<TabKey, boolean> = { overview: false, details: false, family: false, identity: false, address: false, education: false, employment: false, policeVerification: false, bgv: false, cibil: false, otherChecks: false, documents: false, consent: false };
@@ -1139,7 +1160,7 @@ export default function CandidatePortalPage() {
     ));
 
   // Each tab saves only its own fields, so one section can never block another.
-  const saveSection = (section: SectionKey) => {
+  const saveSection = async (section: SectionKey, automatic = false): Promise<boolean> => {
     const fields = effectiveSectionFields[section];
     const found = section === 'education'
       ? Object.fromEntries(educationRecords.flatMap((record) => educationRecordFields.flatMap((field) => {
@@ -1149,7 +1170,7 @@ export default function CandidatePortalPage() {
           : value.trim() ? field.validate?.(value.trim()) : null;
         return problem ? [[`education_${record.id}_${field.key}`, problem]] : [];
       })))
-      : validateFields(form, fields);
+      : validateFields(form, fields, automatic);
     if (section === 'employment') {
       pastEmployments.forEach((record, index) => {
         const recordStarted = Object.values(record).some((value) => value.trim());
@@ -1175,13 +1196,15 @@ export default function CandidatePortalPage() {
       return { ...next, ...found };
     });
     if (Object.keys(found).length) {
-      setMessage('');
-      setError('Please correct the highlighted fields.');
-      const firstError = Object.keys(found)[0];
-      setActiveTab(section === 'education' || firstError.startsWith('past_')
-        ? section
-        : SECTION_OF_KEY[firstError] ?? section);
-      return;
+      if (!automatic) {
+        setMessage('');
+        setError('Please correct the highlighted fields.');
+        const firstError = Object.keys(found)[0];
+        setActiveTab(section === 'education' || firstError.startsWith('past_')
+          ? section
+          : SECTION_OF_KEY[firstError] ?? section);
+      }
+      return false;
     }
     const payload: Record<string, unknown> = {};
     const saved: FormState = {};
@@ -1243,15 +1266,24 @@ export default function CandidatePortalPage() {
         .map((record) => ({ ...record, isCurrent: false }));
       payload.employmentHistory = [currentEmployer, ...pastRecords];
     }
-    void run(async () => {
+    return run(async () => {
       await api.patch(`/candidate-portal/${token}/profile`, payload);
       setBaseline((previous) => ({ ...previous, ...saved }));
-      setForm((previous) => ({ ...previous, ...saved }));
+      setForm((previous) => {
+        const next = { ...previous };
+        Object.entries(saved).forEach(([key, value]) => {
+          if ((previous[key] ?? '') === (form[key] ?? '')) next[key] = value;
+        });
+        return next;
+      });
       if (section === 'employment') setPastEmploymentBaseline(pastEmployments);
       if (section === 'education') setEducationBaseline(educationRecords);
       setMessage(`${SECTION_LABEL[section]} saved.`);
     });
   };
+  useEffect(() => {
+    saveSectionRef.current = saveSection;
+  });
 
   const saveAndPreview = async () => {
     const enabledSections = SECTIONS.filter((section) => (
@@ -1529,7 +1561,6 @@ export default function CandidatePortalPage() {
     });
   }
 
-  const profileReadOnly = portal.progress.formLocked;
   const uploadReadOnly = portal.progress.uploadsLocked;
   const sectionPanel = (section: SectionKey, icon: LucideIcon, title: string, description: string, saveLabel: string, extra?: ReactNode) => (
     <SectionCard icon={icon} title={title} description={description}>
@@ -1959,10 +1990,10 @@ export default function CandidatePortalPage() {
               <h2 className="text-lg font-semibold">Police verification forms</h2>
               <p className="mt-1 text-sm text-slate-600">Download each client-provided form, complete it and upload the completed copy.</p>
             </div>
-            {customFormsFor('POLICE_VERIFICATION').map((form) => (
-              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
+            {policeVerificationForms.map((form) => (
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} downloadAvailable={form.enabled} uploadAvailable={form.enabled} />
             ))}
-            {customFormsFor('POLICE_VERIFICATION').length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">No police verification form is currently requested.</p>}
+            {policeVerificationForms.length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">No police verification form is currently requested.</p>}
           </div>
         )}
 
@@ -1972,8 +2003,8 @@ export default function CandidatePortalPage() {
               <h2 className="text-lg font-semibold">BGV forms</h2>
               <p className="mt-1 text-sm text-slate-600">Download each form provided by the client, complete it and upload the completed copy.</p>
             </div>
-            {customFormsFor('BGV').map((form) => (
-              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
+            {bgvForms.map((form) => (
+              <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} downloadAvailable={form.enabled} uploadAvailable={form.enabled} />
             ))}
           </div>
         )}
@@ -2016,7 +2047,7 @@ export default function CandidatePortalPage() {
             ))}
             <div className="px-1 pt-2">
               <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded documents ({portal.documents.length})</h3>
-              <DocumentList documents={portal.documents} emptyText="Nothing uploaded yet. Documents you add above will appear here." />
+              <DocumentList documents={portal.documents} emptyText="Nothing uploaded yet. Documents you add above will appear here." customForms={customForms} />
             </div>
           </div>
         )}
@@ -2176,7 +2207,7 @@ export default function CandidatePortalPage() {
                       <h3 className="text-sm font-semibold text-slate-900">Uploaded documents</h3>
                       <button type="button" onClick={() => setActiveTab('documents')} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>View documents</button>
                     </div>
-                    <DocumentList documents={portal.documents} emptyText="No documents uploaded yet." />
+                    <DocumentList documents={portal.documents} emptyText="No documents uploaded yet." customForms={customForms} />
                   </section>
                 </div>
               </SectionCard>

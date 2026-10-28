@@ -2,6 +2,7 @@
 
 const asyncHandler = require('../../utils/asyncHandler');
 const { success, created } = require('../../utils/response');
+const { writeAudit } = require('../../utils/audit');
 const service = require('./candidate-portal.service');
 
 const issue = asyncHandler(async (req, res) => {
@@ -22,6 +23,25 @@ const lock = asyncHandler(async (req, res) => {
 	const data = await service.lock({ candidateId: req.params.candidateId, companyId: req.user.companyId, locked: req.body.locked !== false });
 	return success(res, { message: 'Portal access updated.', data }, 'Portal access updated.');
 });
+const unlockForCorrections = asyncHandler(async (req, res) => {
+	const data = await service.unlockForCorrections({
+		candidateId: req.params.candidateId,
+		companyId: req.user.companyId,
+		clientId: req.user.clientId,
+		expiresInDays: req.body.expiresInDays,
+	});
+	await writeAudit({
+		req,
+		action: 'CANDIDATE_PORTAL_CORRECTIONS_UNLOCKED',
+		entity: 'Candidate',
+		entityId: req.params.candidateId,
+		metadata: { emailSent: data.emailSent, expiresAt: data.expiresAt },
+	});
+	const message = data.emailSent
+		? 'Candidate portal unlocked for corrections and a new link was emailed.'
+		: 'Candidate portal unlocked for corrections, but the email could not be delivered.';
+	return success(res, { message, data }, message);
+});
 const validateUpload = asyncHandler(async (req, _res, next) => {
 	await service.assertPortalEditable(req.params.token);
 	next();
@@ -40,5 +60,6 @@ const downloadFormTemplate = asyncHandler(async (req, res, next) => {
 const updateProfile = asyncHandler(async (req, res) => success(res, await service.updateProfile(req.params.token, req.body), 'Details updated.'));
 const consent = asyncHandler(async (req, res) => success(res, await service.recordConsent(req.params.token, req.body, req), 'Consent recorded.'));
 const uploadDocument = asyncHandler(async (req, res) => created(res, await service.addDocument(req.params.token, req.file, req.body.documentType || 'OTHER', req.body.documentNumber, req.body.customFormId, req.body.documentCategory), 'Document uploaded.'));
+const deleteCustomFormDocument = asyncHandler(async (req, res) => success(res, await service.deleteCustomFormDocument(req.params.token, req.params.documentId), 'Uploaded form deleted.'));
 
-module.exports = { issue, remind, status, lock, validateUpload, getPortal, downloadFormTemplate, updateProfile, consent, uploadDocument };
+module.exports = { issue, remind, status, lock, unlockForCorrections, validateUpload, getPortal, downloadFormTemplate, updateProfile, consent, uploadDocument, deleteCustomFormDocument };
