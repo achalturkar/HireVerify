@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { ApiError, activateCandidatePortal, downloadCandidateExcel, downloadCandidateFormPdf, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, unlockCandidatePortalForCorrections, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
+import { ApiError, activateCandidatePortal, downloadCandidateExcel, downloadCandidateFormPdf, extendCandidatePortal, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, unlockCandidatePortalForCorrections, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import CandidateSubmittedDetails from '@/src/components/CandidateSubmittedDetails';
 import { listBGVCases } from '@/src/lib/api/bgv';
@@ -525,17 +525,28 @@ export default function CandidateDetailPage() {
     }
   };
 
-  // Activate, extend and resend all issue a fresh expiry from today.
-  // If your API has a separate "send invitation email" endpoint, call it inside the resend case.
   const issueLink = (mode: 'activate' | 'extend' | 'resend') => {
     if (!daysValid) return;
     void run(async () => {
-      const result = await activateCandidatePortal(id, parsedDays, accessToken);
-      setPortal({ ...result, revokedAt: null, reminderCount: portal?.reminderCount || 0, lastRemindedAt: portal?.lastRemindedAt || null });
+      const result = mode === 'extend'
+        ? await extendCandidatePortal(id, parsedDays, accessToken)
+        : await activateCandidatePortal(id, parsedDays, accessToken);
+      setPortal({
+        ...result,
+        revokedAt: null,
+        reminderCount: 'reminderCount' in result ? result.reminderCount : portal?.reminderCount || 0,
+        lastRemindedAt: 'lastRemindedAt' in result ? result.lastRemindedAt : portal?.lastRemindedAt || null,
+      });
       const until = formatDateTime(result.expiresAt) ?? '';
       setNotice(result.emailSent
-        ? mode === 'resend' ? `Invitation sent. The new link is active until ${until}.` : mode === 'extend' ? `Link extended until ${until}.` : `Portal link activated until ${until}.`
-        : `Portal access is active until ${until}, but the email could not be delivered. Use the active link below to share it with the candidate.`);
+        ? mode === 'resend'
+          ? `Invitation sent. A new link is active until ${until}.`
+          : mode === 'extend'
+            ? `Link extended until ${until}. The candidate's existing link remains unchanged.`
+            : `Portal link activated until ${until}.`
+        : mode === 'extend'
+          ? `The existing link remains active and is extended until ${until}, but the email could not be delivered.`
+          : `Portal access is active until ${until}, but the email could not be delivered. Use the active link below to share it with the candidate.`);
     }, 'Could not update portal access.');
   };
 

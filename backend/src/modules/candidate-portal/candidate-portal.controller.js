@@ -9,6 +9,10 @@ const issue = asyncHandler(async (req, res) => {
 	const data = await service.issue({ candidateId: req.params.candidateId, companyId: req.user.companyId, expiresInDays: req.body.expiresInDays });
 	return created(res, { message: 'Portal link activated.', data }, 'Portal link activated.');
 });
+const extend = asyncHandler(async (req, res) => {
+	const data = await service.extend({ candidateId: req.params.candidateId, companyId: req.user.companyId, expiresInDays: req.body.expiresInDays });
+	return success(res, { message: 'Portal link extended without changing the link.', data }, 'Portal link extended without changing the link.');
+});
 const remind = asyncHandler(async (req, res) => {
 	const result = await service.remind({ candidateId: req.params.candidateId, companyId: req.user.companyId });
 	const message = result.emailSent ? 'Reminder sent.' : 'Reminder email could not be delivered.';
@@ -62,4 +66,4 @@ const consent = asyncHandler(async (req, res) => success(res, await service.reco
 const uploadDocument = asyncHandler(async (req, res) => created(res, await service.addDocument(req.params.token, req.file, req.body.documentType || 'OTHER', req.body.documentNumber, req.body.customFormId, req.body.documentCategory), 'Document uploaded.'));
 const deletePortalDocument = asyncHandler(async (req, res) => success(res, await service.deletePortalDocument(req.params.token, req.params.documentId), 'Uploaded document deleted.'));
 
-module.exports = { issue, remind, status, lock, unlockForCorrections, validateUpload, getPortal, downloadFormTemplate, updateProfile, consent, uploadDocument, deletePortalDocument };
+module.exports = { issue, extend, remind, status, lock, unlockForCorrections, validateUpload, getPortal, downloadFormTemplate, updateProfile, consent, uploadDocument, deletePortalDocument };

@@ -382,6 +382,14 @@ export async function activateCandidatePortal(id: string, expiresInDays: number,
   return json.data.data as CandidatePortalIssueResult;
 }
 
+export async function extendCandidatePortal(id: string, expiresInDays: number, accessToken?: string | null): Promise<CandidatePortalReminderResult> {
+  const json = await authFetch(`/candidate-portal/invitations/${id}/extend`, accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ expiresInDays }),
+  });
+  return json.data.data as CandidatePortalReminderResult;
+}
+
 export async function unlockCandidatePortalForCorrections(id: string, expiresInDays: number, accessToken?: string | null): Promise<CandidatePortalIssueResult> {
   const json = await authFetch(`/candidate-portal/invitations/${id}/unlock-for-corrections`, accessToken, {
     method: 'POST',

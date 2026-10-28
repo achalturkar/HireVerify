@@ -52,6 +52,7 @@ const uploadCandidateDocument = (req, res, next) => {
 
 const router = express.Router();
 router.post('/invitations/:candidateId', authenticate, requireRole({ companyAdmin: true }), authorize('candidate.update'), controller.issue);
+router.post('/invitations/:candidateId/extend', authenticate, requireRole({ companyAdmin: true }), authorize('candidate.update'), controller.extend);
 router.post('/invitations/:candidateId/remind', authenticate, requireRole({ companyAdmin: true }), authorize('candidate.update'), controller.remind);
 router.get('/invitations/:candidateId/status', authenticate, requireRole({ companyAdmin: true }), authorize('candidate.view'), controller.status);
 router.patch('/invitations/:candidateId/lock', authenticate, requireRole({ companyAdmin: true }), authorize('candidate.update'), controller.lock);

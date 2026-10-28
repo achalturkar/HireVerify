@@ -568,6 +568,56 @@ const issue = async ({ candidateId, companyId, expiresInDays }) => {
   return { ...toStaffStatus({ ...invitation, lastSentAt }), emailSent, status: toDto(invitation) };
 };
 
+const extend = async ({ candidateId, companyId, expiresInDays }) => {
+  const candidate = await prisma.candidate.findFirst({
+    where: { id: candidateId, ...(companyId ? { companyId } : {}), isDeleted: false },
+    include: {
+      company: true,
+      client: { select: { id: true, name: true, supportEmail: true, supportPhone: true, candidateFormConfig: true } },
+      subclient: { select: { id: true, supportEmail: true, supportPhone: true, candidateFormConfig: true } },
+      bgvCases: { orderBy: { createdAt: 'desc' }, take: 1, include: { checks: { include: { documents: true } }, consents: true } },
+    },
+  });
+  if (!candidate) throw new NotFoundError('Candidate not found');
+  if (!candidate.email) throw new BadRequestError('Candidate email is required before extending a portal link.');
+
+  const invitation = await prisma.candidatePortalInvitation.findUnique({ where: { candidateId } });
+  if (!invitation) throw new NotFoundError('Candidate portal has not been activated.');
+  if (invitation.revokedAt) throw new BadRequestError('This portal link is locked. Unlock it before extending.');
+  if (invitation.expiresAt <= new Date()) {
+    throw new BadRequestError('This portal link has expired. Resend the invitation to create a new link.');
+  }
+  const token = decryptToken(invitation.encryptedToken);
+  if (!token) {
+    throw new BadRequestError('This link cannot be extended because it predates secure link storage. Resend the invitation to create a new link.');
+  }
+  const clientExpiryDays = getCandidateFormConfig(candidate).invitationExpiryDays;
+  const days = Number(expiresInDays ?? clientExpiryDays);
+  if (!Number.isInteger(days) || days < 1 || days > MAX_INVITATION_DAYS) {
+    throw new BadRequestError(`Link expiry must be between 1 and ${MAX_INVITATION_DAYS} days.`);
+  }
+
+  const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  const updatedInvitation = await prisma.candidatePortalInvitation.update({
+    where: { candidateId },
+    data: { expiresAt },
+  });
+  const status = pendingFor(candidate);
+  const emailSent = await sendInvitationEmail({
+    candidate,
+    token,
+    reminder: true,
+    pendingCount: status.pending.length,
+  });
+  const finalInvitation = emailSent
+    ? await prisma.candidatePortalInvitation.update({
+      where: { candidateId },
+      data: { lastSentAt: new Date(), lastRemindedAt: new Date(), reminderCount: { increment: 1 } },
+    })
+    : updatedInvitation;
+  return { ...toStaffStatus(finalInvitation), emailSent };
+};
+
 const unlockForCorrections = async ({ candidateId, companyId, clientId, expiresInDays }) => {
   const candidate = await prisma.candidate.findFirst({
     where: { id: candidateId, companyId, ...(clientId ? { clientId } : {}), isDeleted: false },
@@ -1068,4 +1118,4 @@ const deletePortalDocument = async (token, documentId) => {
   return status;
 };
 
-module.exports = { issue, unlockForCorrections, remind, getPortal, getCandidateFormTemplate, getStaffStatus, lock, getCandidateIntakeStatus, updateProfile, recordConsent, assertPortalEditable, addDocument, deletePortalDocument };
+module.exports = { issue, extend, unlockForCorrections, remind, getPortal, getCandidateFormTemplate, getStaffStatus, lock, getCandidateIntakeStatus, updateProfile, recordConsent, assertPortalEditable, addDocument, deletePortalDocument };
