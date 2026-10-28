@@ -29,6 +29,7 @@ export interface CandidatePortalSummary {
 
 export interface CandidateEmploymentRecord {
   isCurrent: boolean;
+  isFresher?: boolean;
   employerName: string | null;
   employeeId: string | null;
   designation: string | null;

@@ -1,7 +1,7 @@
 {
   "planHash": "4d20fa3c2072066853b1648971a5b1d2aec96f023c93f356ab22c7d255e6e5cd",
   "phase": "standalone",
-  "recordedAtUtc": "2026-10-28T05:44:03.8771310Z",
+  "recordedAtUtc": "2026-10-28T07:51:25.4389930Z",
   "retryCount": 1,
   "resetBaseline": false,
   "complete": true,
@@ -20,7 +20,7 @@
         "skippedReason": null,
         "exitCode": 0,
         "outputSample": "\r\n\u003E frontend@0.1.0 lint\r\n\u003E eslint app/candidate-portal/[token]/page.tsx src/lib/candidate-document-status.ts src/lib/candidate-document-status.test.ts\r\n\r\n",
-        "durationMs": 12247
+        "durationMs": 8951
       },
       {
         "name": "typescript-no-emit",
@@ -32,7 +32,7 @@
         "skippedReason": null,
         "exitCode": 0,
         "outputSample": "",
-        "durationMs": 6003
+        "durationMs": 5829
       },
       {
         "name": "production-build",
@@ -43,8 +43,8 @@
         "skipped": false,
         "skippedReason": null,
         "exitCode": 0,
-        "outputSample": "\r\n\u003E frontend@0.1.0 build\r\n\u003E next build --webpack\r\n\r\n\u25B2 Next.js 16.2.12 (webpack)\r\n- Environments: .env.local\r\n\r\n  Creating an optimized production build ...\r\n\u2713 Compiled successfully in 14.8s\r\n  Running TypeScript ...\r\n  Finished TypeScript in 23.7s ...\r\n  Collecting page data using 11 workers ...\r\n  Generating static pages using 11 workers (0/62) ...\r\n  Generating static pages using 11 workers (15/62) \r\n  Generating static pages using 11 workers (30/62) \r\n  Generating static pages using 11 workers (46/62) \r\n\u2713 Generating static pages using 11 workers (62/62) in 1823ms\r\n  Finalizing page optimization ...\r\n  Collecting build traces ...\r\n\r\nRoute (app)\r\n\u250C \u25CB /\r\n\u251C \u25CB /_not-found\r\n\u251C \u0192 /candidate-portal/[token]\r\n\u251C \u0192 /candidate/[id]\r\n\u251C \u25CB /client-portal\r\n\u251C \u25CB /client-portal/account\r\n\u251C \u25CB /client-portal/candidates\r\n\u251C \u0192 /client-portal/candidates/[id]\r\n\u251C \u25CB /client-portal/cases\r\n\u251C \u0192 /client-portal/cases/[id]\r\n\u251C \u25CB /client-portal/invoices\r\n\u251C \u25CB /client-portal/reports\r\n\u251C \u25CB /client-portal/requests\r\n\u251C \u25CB /client-portal/subclients\r\n\u251C \u25CB /company\r\n\u251C \u25CB /company/analytics\r\n\u251C \u25CB /company/audit\r\n\u251C \u25CB /company/bgv-cases\r\n\u251C \u0192 /company/bgv-cases/[id]\r\n\u251C \u0192 /company/candidate/[id]\r\n\u251C \u25CB /company/candidates\r\n\u251C \u25CB /company/client-requests\r\n\u251C \u25CB /company/clients\r\n\u251C \u0192 /company/clients/[id]\r\n\u251C \u25CB /company/dashboard\r\n\u251C \u25CB /company/document-verification\r\n\u251C \u25CB /company/government-portals\r\n\u251C \u25CB /company/help\r\n\u251C \u25CB /company/invoices\r\n\u251C \u25CB /company/manual-bgv\r\n\u251C \u25CB /company/marketing\r\n\u251C \u25CB /company/profile\r\n\u251C \u25CB /company/reports\r\n\u251C \u25CB /company/roles\r\n\u251C \u25CB /company/settings\r\n\u251C \u25CB /company/users\r\n\u251C \u25CB /company/verifications\r\n\u251C \u25CB /company/verifiers\r\n\u251C \u25CB /contact\r\n\u251C \u25CB /forgot-password\r\n\u251C \u25CB /login\r\n\u251C \u25CB /marketing/unsubscribe\r\n\u251C \u25CB /opengraph-image\r\n\u251C \u25CB /reset-password\r\n\u251C \u25CB /robots.txt\r\n\u251C \u25CB /signup\r\n\u251C \u25CB /sitemap.xml\r\n\u251C \u25CB /subclient-portal\r\n\u251C \u25CB /subclient-portal/account\r\n\u251C \u25CB /subclient-portal/candidates\r\n\u251C \u25CB /subclient-portal/cases\r\n\u251C \u0192 /subclient-portal/cases/[id]\r\n\u251C \u25CB /subclient-portal/reports\r\n\u251C \u25CB /super-admin/audit\r\n\u251C \u25CB /super-admin/bgv\r\n\u251C \u25CB /super-admin/candidate\r\n\u251C \u0192 /super-admin/candidate/[id]\r\n\u251C \u25CB /super-admin/change-password\r\n\u251C \u25CB /super-admin/client\r\n\u251C \u25CB /super-admin/companies\r\n\u251C \u0192 /super-admin/companies/[id]\r\n\u251C \u25CB /super-admin/dashboard\r\n\u251C \u25CB /super-admin/invoices\r\n\u251C \u25CB /super-admin/locations\r\n\u251C \u25CB /super-admin/permissions\r\n\u251C \u25CB /super-admin/profile\r\n\u251C \u25CB /super-admin/roles\r\n\u251C \u25CB /super-admin/settings\r\n\u251C \u25CB /super-admin/users\r\n\u2514 \u25CB /super-admin/verification-checks\r\n\r\n\r\n\u25CB  (Static)   prerendered as static content\r\n\u0192  (Dynamic)  server-rendered on demand\r\n\r\n",
-        "durationMs": 65973
+        "outputSample": "\r\n\u003E frontend@0.1.0 build\r\n\u003E next build --webpack\r\n\r\n\u25B2 Next.js 16.2.12 (webpack)\r\n- Environments: .env.local\r\n\r\n  Creating an optimized production build ...\r\n\u2713 Compiled successfully in 12.0s\r\n  Running TypeScript ...\r\n  Finished TypeScript in 22.6s ...\r\n  Collecting page data using 11 workers ...\r\n  Generating static pages using 11 workers (0/62) ...\r\n  Generating static pages using 11 workers (15/62) \r\n  Generating static pages using 11 workers (30/62) \r\n  Generating static pages using 11 workers (46/62) \r\n\u2713 Generating static pages using 11 workers (62/62) in 2.4s\r\n  Finalizing page optimization ...\r\n  Collecting build traces ...\r\n\r\nRoute (app)\r\n\u250C \u25CB /\r\n\u251C \u25CB /_not-found\r\n\u251C \u0192 /candidate-portal/[token]\r\n\u251C \u0192 /candidate/[id]\r\n\u251C \u25CB /client-portal\r\n\u251C \u25CB /client-portal/account\r\n\u251C \u25CB /client-portal/candidates\r\n\u251C \u0192 /client-portal/candidates/[id]\r\n\u251C \u25CB /client-portal/cases\r\n\u251C \u0192 /client-portal/cases/[id]\r\n\u251C \u25CB /client-portal/invoices\r\n\u251C \u25CB /client-portal/reports\r\n\u251C \u25CB /client-portal/requests\r\n\u251C \u25CB /client-portal/subclients\r\n\u251C \u25CB /company\r\n\u251C \u25CB /company/analytics\r\n\u251C \u25CB /company/audit\r\n\u251C \u25CB /company/bgv-cases\r\n\u251C \u0192 /company/bgv-cases/[id]\r\n\u251C \u0192 /company/candidate/[id]\r\n\u251C \u25CB /company/candidates\r\n\u251C \u25CB /company/client-requests\r\n\u251C \u25CB /company/clients\r\n\u251C \u0192 /company/clients/[id]\r\n\u251C \u25CB /company/dashboard\r\n\u251C \u25CB /company/document-verification\r\n\u251C \u25CB /company/government-portals\r\n\u251C \u25CB /company/help\r\n\u251C \u25CB /company/invoices\r\n\u251C \u25CB /company/manual-bgv\r\n\u251C \u25CB /company/marketing\r\n\u251C \u25CB /company/profile\r\n\u251C \u25CB /company/reports\r\n\u251C \u25CB /company/roles\r\n\u251C \u25CB /company/settings\r\n\u251C \u25CB /company/users\r\n\u251C \u25CB /company/verifications\r\n\u251C \u25CB /company/verifiers\r\n\u251C \u25CB /contact\r\n\u251C \u25CB /forgot-password\r\n\u251C \u25CB /login\r\n\u251C \u25CB /marketing/unsubscribe\r\n\u251C \u25CB /opengraph-image\r\n\u251C \u25CB /reset-password\r\n\u251C \u25CB /robots.txt\r\n\u251C \u25CB /signup\r\n\u251C \u25CB /sitemap.xml\r\n\u251C \u25CB /subclient-portal\r\n\u251C \u25CB /subclient-portal/account\r\n\u251C \u25CB /subclient-portal/candidates\r\n\u251C \u25CB /subclient-portal/cases\r\n\u251C \u0192 /subclient-portal/cases/[id]\r\n\u251C \u25CB /subclient-portal/reports\r\n\u251C \u25CB /super-admin/audit\r\n\u251C \u25CB /super-admin/bgv\r\n\u251C \u25CB /super-admin/candidate\r\n\u251C \u0192 /super-admin/candidate/[id]\r\n\u251C \u25CB /super-admin/change-password\r\n\u251C \u25CB /super-admin/client\r\n\u251C \u25CB /super-admin/companies\r\n\u251C \u0192 /super-admin/companies/[id]\r\n\u251C \u25CB /super-admin/dashboard\r\n\u251C \u25CB /super-admin/invoices\r\n\u251C \u25CB /super-admin/locations\r\n\u251C \u25CB /super-admin/permissions\r\n\u251C \u25CB /super-admin/profile\r\n\u251C \u25CB /super-admin/roles\r\n\u251C \u25CB /super-admin/settings\r\n\u251C \u25CB /super-admin/users\r\n\u2514 \u25CB /super-admin/verification-checks\r\n\r\n\r\n\u25CB  (Static)   prerendered as static content\r\n\u0192  (Dynamic)  server-rendered on demand\r\n\r\n",
+        "durationMs": 61815
       },
       {
         "name": "tests-pass",
@@ -55,8 +55,8 @@
         "skipped": false,
         "skippedReason": null,
         "exitCode": 0,
-        "outputSample": "\r\n\u003E frontend@0.1.0 test\r\n\u003E vitest run\r\n\r\n\r\n\u001B[1m\u001B[46m RUN \u001B[49m\u001B[22m \u001B[36mv3.2.4 \u001B[39m\u001B[90mC:/Users/Roshan Verma/Desktop/BGV/frontend\u001B[39m\r\n\r\n \u001B[32m\u2713\u001B[39m src/lib/candidate-document-status.test.ts \u001B[2m(\u001B[22m\u001B[2m2 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 3\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m src/lib/candidate-portal-forms.test.ts \u001B[2m(\u001B[22m\u001B[2m4 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 6\u001B[2mms\u001B[22m\u001B[39m\r\n\r\n\u001B[2m Test Files \u001B[22m \u001B[1m\u001B[32m2 passed\u001B[39m\u001B[22m\u001B[90m (2)\u001B[39m\r\n\u001B[2m      Tests \u001B[22m \u001B[1m\u001B[32m6 passed\u001B[39m\u001B[22m\u001B[90m (6)\u001B[39m\r\n\u001B[2m   Start at \u001B[22m 11:13:59\r\n\u001B[2m   Duration \u001B[22m 843ms\u001B[2m (transform 148ms, setup 0ms, collect 176ms, tests 9ms, environment 0ms, prepare 472ms)\u001B[22m\r\n\r\n",
-        "durationMs": 2442,
+        "outputSample": "\r\n\u003E frontend@0.1.0 test\r\n\u003E vitest run\r\n\r\n\r\n\u001B[1m\u001B[46m RUN \u001B[49m\u001B[22m \u001B[36mv3.2.4 \u001B[39m\u001B[90mC:/Users/Roshan Verma/Desktop/BGV/frontend\u001B[39m\r\n\r\n \u001B[32m\u2713\u001B[39m src/lib/candidate-document-status.test.ts \u001B[2m(\u001B[22m\u001B[2m2 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 5\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m src/lib/candidate-portal-forms.test.ts \u001B[2m(\u001B[22m\u001B[2m4 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 7\u001B[2mms\u001B[22m\u001B[39m\r\n\r\n\u001B[2m Test Files \u001B[22m \u001B[1m\u001B[32m2 passed\u001B[39m\u001B[22m\u001B[90m (2)\u001B[39m\r\n\u001B[2m      Tests \u001B[22m \u001B[1m\u001B[32m6 passed\u001B[39m\u001B[22m\u001B[90m (6)\u001B[39m\r\n\u001B[2m   Start at \u001B[22m 13:21:20\r\n\u001B[2m   Duration \u001B[22m 1.12s\u001B[2m (transform 200ms, setup 0ms, collect 216ms, tests 12ms, environment 1ms, prepare 547ms)\u001B[22m\r\n\r\n",
+        "durationMs": 2573,
         "testResults": {
           "testFramework": "vitest",
           "runnerDetectedFrom": "package_json",
@@ -76,8 +76,8 @@
         "skipped": false,
         "skippedReason": null,
         "exitCode": 1,
-        "outputSample": "server exited before responding (exit=1)\n--- server output ---\n\r\n\u003E frontend@0.1.0 dev\r\n\u003E next dev --webpack --hostname 127.0.0.1 --port 3010\r\n\r\n\u25B2 Next.js 16.2.12 (webpack)\r\n- Local:         http://127.0.0.1:3010\r\n- Network:       http://127.0.0.1:3010\r\n- Environments: .env.local\r\n\u2713 Ready in 1093ms\r\n\u2A2F Another next dev server is already running.\r\n\r\n- Local:        http://localhost:3000\r\n- PID:          6840\r\n- Dir:          C:\\Users\\Roshan Verma\\Desktop\\BGV\\frontend\r\n- Log:          .next\\dev\\logs\\next-development.log\r\n\r\nRun taskkill /PID 6840 /F to stop it.\r\n\u001B[?25h\r\n",
-        "durationMs": 3658
+        "outputSample": "server exited before responding (exit=1)\n--- server output ---\n\r\n\u003E frontend@0.1.0 dev\r\n\u003E next dev --webpack --hostname 127.0.0.1 --port 3010\r\n\r\n\u25B2 Next.js 16.2.12 (webpack)\r\n- Local:         http://127.0.0.1:3010\r\n- Network:       http://127.0.0.1:3010\r\n- Environments: .env.local\r\n\u2713 Ready in 941ms\r\n\u2A2F Another next dev server is already running.\r\n\r\n- Local:        http://localhost:3000\r\n- PID:          6840\r\n- Dir:          C:\\Users\\Roshan Verma\\Desktop\\BGV\\frontend\r\n- Log:          .next\\dev\\logs\\next-development.log\r\n\r\nRun taskkill /PID 6840 /F to stop it.\r\n\u001B[?25h\r\n",
+        "durationMs": 3375
       }
     ],
     "executions": [

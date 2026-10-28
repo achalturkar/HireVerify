@@ -132,6 +132,9 @@ export type CandidateFormConfig = Record<CandidateIdentityFieldKey, {
   };
   customForms: CandidateCustomForm[];
   employmentDocuments: CandidateEmploymentDocumentConfig[];
+  requireEmploymentDocumentPerEmployer: boolean;
+  requiredEmploymentEmployerCount: number;
+  includeCurrentEmployerInDocumentRequirements: boolean;
   educationDocuments: CandidateEducationDocumentConfig[];
 };
 
@@ -163,6 +166,9 @@ export const DEFAULT_CANDIDATE_FORM_CONFIG: CandidateFormConfig = {
   },
   customForms: [],
   employmentDocuments: CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.map(({ type }) => ({ type, enabled: true, required: false })),
+  requireEmploymentDocumentPerEmployer: false,
+  requiredEmploymentEmployerCount: 3,
+  includeCurrentEmployerInDocumentRequirements: true,
   educationDocuments: CANDIDATE_EDUCATION_DOCUMENT_TYPES.map(({ type }) => ({ type, enabled: true, required: false })),
 };
 

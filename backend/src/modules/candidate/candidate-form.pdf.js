@@ -202,6 +202,17 @@ const createCandidateFormPdf = async (candidate) => {
       }
     }
   };
+  const addAdditionalFields = (record, excludedKeys) => {
+    const additionalEntries = Object.entries(record || {})
+      .filter(([key, value]) => !excludedKeys.has(key)
+        && value !== null
+        && value !== undefined
+        && value !== ''
+        && (typeof value !== 'object' || value instanceof Date || Array.isArray(value)))
+      .filter(([, value]) => !Array.isArray(value) || value.every((item) => item === null || ['string', 'number', 'boolean'].includes(typeof item)))
+      .map(([key, value]) => [formatLabel(key), value]);
+    if (additionalEntries.length) addFields(additionalEntries);
+  };
 
   doc.fillColor(COLORS.navy).font('Helvetica-Bold').fontSize(19)
     .text('Background verification details', { align: 'center' });
@@ -273,12 +284,15 @@ const createCandidateFormPdf = async (candidate) => {
       ['Year of passing', record.yearOfPassing],
       ['Grade or percentage', record.gradeOrPercentage],
     ]);
+    addAdditionalFields(record, new Set(['id', 'qualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage']));
   });
 
   addSection('Employment details');
   const employmentHistory = Array.isArray(candidate.employmentHistory) ? candidate.employmentHistory : [];
+  const isFresher = employmentHistory.some((record) => record?.isCurrent === true && record.isFresher === true);
   const currentEmployment = {
     isCurrent: true,
+    isFresher,
     employerName: candidate.currentEmployer,
     employeeId: candidate.employeeId,
     designation: candidate.employeeDesignation,
@@ -290,7 +304,8 @@ const createCandidateFormPdf = async (candidate) => {
     employerHrName: candidate.employerHrName,
     employerHrPhone: candidate.employerHrPhone,
   };
-  [currentEmployment, ...employmentHistory.filter((record) => record && record.isCurrent !== true)].forEach((record, index) => {
+  if (isFresher) addFields([['Candidate type', 'Fresher']]);
+  [currentEmployment, ...(isFresher ? [] : employmentHistory.filter((record) => record && record.isCurrent !== true))].forEach((record, index) => {
     addSubheading(`Employer ${index + 1}  ·  ${record.isCurrent ? 'Current' : 'Past'}`);
     addFields([
       ['Employer name', record.employerName],
@@ -304,6 +319,10 @@ const createCandidateFormPdf = async (candidate) => {
       ['Employer HR contact name', record.employerHrName],
       ['Employer HR contact number', record.employerHrPhone],
     ]);
+    addAdditionalFields(record, new Set([
+      'id', 'isCurrent', 'isFresher', 'employerName', 'employeeId', 'designation', 'department',
+      'employmentType', 'startDate', 'endDate', 'workLocation', 'employerHrName', 'employerHrPhone',
+    ]));
   });
 
   addSection('Address details');
@@ -326,6 +345,30 @@ const createCandidateFormPdf = async (candidate) => {
     ['Consent statement version', consent?.consentVersion],
     ['Consent statement', consent?.consentText],
   ]);
+
+  const knownCandidateFields = new Set([
+    'id', 'companyId', 'clientId', 'subclientId', 'candidateCode', 'fullName', 'firstName', 'middleName', 'lastName',
+    'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount',
+    'candidateNotes', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber',
+    'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage',
+    'educationHistory', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate',
+    'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'employmentHistory', 'currentAddress',
+    'permanentAddress', 'addressVerificationLocations', 'status', 'isDeleted', 'deletedAt', 'createdById', 'updatedById',
+    'createdAt', 'updatedAt', 'bgvCaseCount', 'portalLinkExpiryDays', 'client', 'company', 'subclient', 'documents',
+    'consents', 'portalInvitation',
+  ]);
+  const additionalCandidateFields = Object.entries(candidate)
+    .filter(([key, value]) => !knownCandidateFields.has(key)
+      && value !== null
+      && value !== undefined
+      && value !== ''
+      && (typeof value !== 'object' || value instanceof Date || Array.isArray(value)))
+    .filter(([, value]) => !Array.isArray(value) || value.every((item) => item === null || ['string', 'number', 'boolean'].includes(typeof item)))
+    .map(([key, value]) => [formatLabel(key), value]);
+  if (additionalCandidateFields.length) {
+    addSection('Additional candidate information');
+    addFields(additionalCandidateFields);
+  }
 
   doc.addPage();
   doc.fillColor(COLORS.navy).font('Helvetica-Bold').fontSize(18)

@@ -934,7 +934,9 @@ export default function CandidateDetailPage() {
 
       {tab === 'employment' && (
         <div className="space-y-5">
-          <Panel title="Employment information" description="Employment details submitted for verification.">
+          <Panel title="Employment information" description={candidate.employmentHistory?.some((record) => record.isCurrent && record.isFresher)
+            ? 'Candidate marked as a fresher; past employment details and required employment documents are not requested.'
+            : 'Employment details submitted for verification.'}>
             {profileValues && <EditableFields rows={[
               { key: 'currentEmployer', label: 'Current employer' }, { key: 'employeeId', label: 'Employee ID' }, { key: 'employeeDesignation', label: 'Designation' },
               { key: 'employeeDepartment', label: 'Department' }, { key: 'employmentType', label: 'Employment type' }, { key: 'joiningDate', label: 'Joining date', type: 'date' },
@@ -942,9 +944,11 @@ export default function CandidateDetailPage() {
               { key: 'employerHrPhone', label: 'Employer HR contact number' },
             ]} editing={editingProfile} values={profileValues} onChange={(key, value) => setProfileValues((current) => current ? { ...current, [key]: value } : current)} />}
           </Panel>
-          {candidate.employmentHistory?.length ? <Panel title="Employment history" description="All current and past employment records submitted by the candidate.">
+          {candidate.employmentHistory?.length ? <Panel title="Employment history" description="Employment records submitted by the candidate.">
             <div className="space-y-4">
-              {candidate.employmentHistory.map((record, index) => {
+              {candidate.employmentHistory
+                .filter((record) => !candidate.employmentHistory?.some((current) => current.isCurrent && current.isFresher) || record.isCurrent)
+                .map((record, index) => {
                 const rows: [string, unknown][] = ([
                   ['Employer', record.employerName], ['Employee ID', record.employeeId], ['Designation', record.designation],
                   ['Department', record.department], ['Employment type', record.employmentType],

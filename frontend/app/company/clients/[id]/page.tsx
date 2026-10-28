@@ -390,15 +390,41 @@ export default function ClientDetailPage() {
 
   const updateEmploymentDocument = (type: string, property: 'enabled' | 'required', value: boolean) => {
     setCandidateFormSaved(false);
+    setCandidateFormConfig((current) => {
+      const employmentDocuments = current.employmentDocuments.map((document) => document.type === type
+        ? { ...document, [property]: value, ...(property === 'enabled' && !value ? { required: false } : {}) }
+        : document);
+      return {
+        ...current,
+        employmentDocuments,
+        requireEmploymentDocumentPerEmployer: employmentDocuments.some((document) => document.enabled)
+          ? current.requireEmploymentDocumentPerEmployer
+          : false,
+      };
+    });
+  };
+
+  const updateEmploymentDocumentPerEmployerRequirement = (required: boolean) => {
+    setCandidateFormSaved(false);
     setCandidateFormConfig((current) => ({
       ...current,
-      employmentDocuments: current.employmentDocuments.map((document) => document.type === type
-        ? {
-          ...document,
-          [property]: value,
-          ...(property === 'enabled' && !value ? { required: false } : {}),
-        }
-        : document),
+      requireEmploymentDocumentPerEmployer: required,
+    }));
+  };
+
+  const updateRequiredEmploymentEmployerCount = (count: number) => {
+    setCandidateFormSaved(false);
+    setCandidateFormConfig((current) => ({
+      ...current,
+      requiredEmploymentEmployerCount: count,
+    }));
+  };
+
+  const updateIncludeCurrentEmployerInDocumentRequirements = (include: boolean) => {
+    setCandidateFormSaved(false);
+    setCandidateFormConfig((current) => ({
+      ...current,
+      includeCurrentEmployerInDocumentRequirements: include,
     }));
   };
 
@@ -1477,7 +1503,12 @@ export default function ClientDetailPage() {
                   ]} />}
                   {selectedPreviewTab === 'employment' && <CandidateFormPreviewFields title="Employment details and upload types" fields={[
                     ...candidateRequiredFieldsFor('employment').map((field) => `${field.label}${candidateFormConfig.fields[field.key]?.required ? ' *' : ''}`),
-                    ...employmentDocs.map((document) => `${CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? document.type}${document.required ? ' *' : ''}`),
+                    ...employmentDocs.map((document) =>
+                      `${CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? document.type}${document.required ? ` · required for the first ${candidateFormConfig.requiredEmploymentEmployerCount} ${candidateFormConfig.includeCurrentEmployerInDocumentRequirements ? 'employers (including current)' : 'past employers'}` : ''}`,
+                    ),
+                    ...(candidateFormConfig.requireEmploymentDocumentPerEmployer
+                      ? [`At least one enabled employment document required for the first ${candidateFormConfig.requiredEmploymentEmployerCount} ${candidateFormConfig.includeCurrentEmployerInDocumentRequirements ? 'employers (including current)' : 'past employers'}`]
+                      : []),
                     ...previewForms.map((form) => `${form.name}${form.required ? ' *' : ''}`),
                   ]} />}
                   {selectedPreviewTab === 'police' && <CandidateFormPreviewFields title="Police verification forms" fields={previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)} />}
@@ -1643,20 +1674,60 @@ export default function ClientDetailPage() {
           </div>
           <div id="candidate-employment-document-settings" className="mt-6 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <h3 className="text-[13px] font-semibold">Employment document uploads</h3>
-            <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Choose which document types this client accepts. Candidates select a type first, then upload its file in the Employment tab.</p>
+            <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Choose which document types this client accepts, whether the current employer is included, and how many employers need documents.</p>
+            <label className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] p-3 text-[11px]">
+              <span className="font-medium">Apply employment document requirements to the first</span>
+              <select
+                value={candidateFormConfig.requiredEmploymentEmployerCount}
+                onChange={(event) => updateRequiredEmploymentEmployerCount(Number(event.target.value))}
+                disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.employment.enabled}
+                className="rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-[11px]"
+              >
+                {Array.from({ length: 10 }, (_, index) => index + 1).map((count) => (
+                  <option key={count} value={count}>{count}</option>
+                ))}
+              </select>
+              <span className="font-medium">{candidateFormConfig.includeCurrentEmployerInDocumentRequirements ? 'employers (including the current employer)' : 'past employers (current employer excluded)'}</span>
+            </label>
+            <label className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--border)] p-3 text-[11px]">
+              <input
+                type="checkbox"
+                checked={candidateFormConfig.includeCurrentEmployerInDocumentRequirements}
+                onChange={(event) => updateIncludeCurrentEmployerInDocumentRequirements(event.target.checked)}
+                disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.employment.enabled}
+                className="mt-0.5 accent-[var(--primary)]"
+              />
+              <span>
+                <span className="block font-semibold">Include current employer in required document count</span>
+                <span className="mt-0.5 block text-[var(--muted)]">When unchecked, the selected count applies to past employers only.</span>
+              </span>
+            </label>
+            <label className={`mt-3 flex items-start gap-2 rounded-lg border border-[var(--border)] p-3 text-[11px] ${!candidateFormConfig.employmentDocuments.some((document) => document.enabled) ? 'opacity-50' : ''}`}>
+              <input
+                type="checkbox"
+                checked={candidateFormConfig.requireEmploymentDocumentPerEmployer}
+                onChange={(event) => updateEmploymentDocumentPerEmployerRequirement(event.target.checked)}
+                disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.employment.enabled || !candidateFormConfig.employmentDocuments.some((document) => document.enabled)}
+                className="mt-0.5 accent-[var(--primary)]"
+              />
+              <span>
+                <span className="block font-semibold">Candidate must upload at least one enabled employment document</span>
+                <span className="mt-0.5 block text-[var(--muted)]">Any one enabled type satisfies this requirement for each of the selected employers. Individual “Candidate must upload” selections below are still required for those employers.</span>
+              </span>
+            </label>
             <div className="mt-3 space-y-2">
               {CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.map(({ type, label }) => {
                 const document = candidateFormConfig.employmentDocuments.find((item) => item.type === type);
                 const enabled = document?.enabled ?? false;
                 const required = document?.required ?? false;
                 return (
-                  <div key={type} className="grid gap-3 rounded-lg border border-[var(--border)] p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+                  <div key={type} className="grid gap-3 rounded-lg border border-[var(--border)] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                     <label className="flex items-center gap-2 text-[12px] font-medium">
                       <input type="checkbox" checked={enabled} onChange={(event) => updateEmploymentDocument(type, 'enabled', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.employment.enabled} className="accent-[var(--primary)]" />
                       {label}{required && <span className="font-bold text-red-600" aria-hidden="true">*</span>}
                     </label>
                     <label className={`flex items-center gap-2 text-[11px] ${!enabled ? 'opacity-50' : ''}`}>
-                      <input type="checkbox" checked={required} onChange={(event) => updateEmploymentDocument(type, 'required', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !enabled} className="accent-[var(--primary)]" />
+                      <input type="checkbox" checked={required} onChange={(event) => updateEmploymentDocument(type, 'required', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !enabled || !candidateFormConfig.sections.employment.enabled} className="accent-[var(--primary)]" />
                       Candidate must upload
                     </label>
                   </div>

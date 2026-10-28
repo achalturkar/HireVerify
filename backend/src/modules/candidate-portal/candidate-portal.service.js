@@ -12,6 +12,7 @@ const { IDENTITY_FIELDS, EMPLOYMENT_DOCUMENT_TYPES, ADDRESS_DOCUMENT_TYPES, norm
 const { findTemplatePath } = require('../client/candidate-form-storage');
 
 const MAX_INVITATION_DAYS = 30;
+const CURRENT_EMPLOYMENT_RECORD_ID = 'employment-current';
 const portalTokenKey = crypto.createHash('sha256').update(`candidate-portal:${config.jwt.accessSecret}`).digest();
 const DOCUMENT_TYPES = new Set(['PAN', 'UAN', 'AADHAAR', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID', 'EDUCATION_CERTIFICATE', 'EXPERIENCE_LETTER', 'SALARY_SLIP', 'FORM_16', 'RELIEVING_LETTER', 'OFFER_LETTER', 'APPOINTMENT_LETTER', 'INCREMENT_LETTER', 'PROMOTION_LETTER', 'BANK_STATEMENT', 'PF_STATEMENT', 'EMPLOYMENT_CONTRACT', ...ADDRESS_DOCUMENT_TYPES, 'OTHER']);
 const EMPLOYMENT_HISTORY_FIELDS = {
@@ -32,6 +33,13 @@ const EDUCATION_HISTORY_FIELDS = {
   yearOfPassing: 4,
   gradeOrPercentage: 50,
 };
+const hasEmploymentHistoryDetails = (record) => Object.entries(record || {}).some(([field, value]) =>
+  field !== 'id' && field !== 'isCurrent' && value !== null && value !== undefined && value !== '',
+);
+const employmentHistoryRecordId = (record, index) =>
+  typeof record.id === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(record.id)
+    ? record.id
+    : `employment-past-${index + 1}`;
 const CHECKS_FOR_FORM_CATEGORY = {
   IDENTITY: new Set(['IDENTITY', 'IDENTITY_VERIFICATION', 'PAN', 'AADHAAR', 'UAN', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID', 'DOCUMENT', 'DOCUMENT_FORGERY']),
   EDUCATION: new Set(['EDUCATION', 'EDUCATION_VERIFICATION']),
@@ -237,6 +245,8 @@ const pendingFor = (candidate) => {
   const employmentRequested = !activeCase || selectedChecks.length === 0
     || selectedChecks.some((type) => CHECKS_FOR_FORM_CATEGORY.EMPLOYMENT.has(type));
   if (candidateFormConfig.sections.employment.enabled && employmentRequested) {
+    const storedEmploymentHistory = Array.isArray(candidate.employmentHistory) ? candidate.employmentHistory : [];
+    const isFresher = storedEmploymentHistory.some((record) => record?.isCurrent === true && record.isFresher === true);
     const currentEmploymentValues = {
       employerName: candidate.currentEmployer,
       employeeId: candidate.employeeId,
@@ -248,29 +258,74 @@ const pendingFor = (candidate) => {
       employerHrName: candidate.employerHrName,
       employerHrPhone: candidate.employerHrPhone,
     };
-    for (const [field, value] of Object.entries(currentEmploymentValues)) {
-      if (requiredFields[field]?.required && (value === null || value === undefined || value === '')) {
-        pending.push({ key: `field-current-employment-${field}`, label: `Provide your current employer ${field.replaceAll(/([A-Z])/g, ' $1').toLowerCase()}`, type: 'profile', category: 'EMPLOYMENT' });
+    if (!isFresher) {
+      for (const [field, value] of Object.entries(currentEmploymentValues)) {
+        if (requiredFields[field]?.required && (value === null || value === undefined || value === '')) {
+          pending.push({ key: `field-current-employment-${field}`, label: `Provide your current employer ${field.replaceAll(/([A-Z])/g, ' $1').toLowerCase()}`, type: 'profile', category: 'EMPLOYMENT' });
+        }
       }
     }
-    const storedEmploymentHistory = Array.isArray(candidate.employmentHistory) ? candidate.employmentHistory : [];
-    storedEmploymentHistory.filter((record) => record && record.isCurrent !== true
-      && Object.values(record).some((value) => value !== null && value !== undefined && value !== '')).forEach((record, index) => {
+    storedEmploymentHistory.filter((record) => !isFresher && record && record.isCurrent !== true
+      && hasEmploymentHistoryDetails(record)).forEach((record, index) => {
       for (const [field, value] of Object.entries(record)) {
         if (field === 'isCurrent' || field === 'id' || !requiredFields[field]?.required || (value !== null && value !== undefined && value !== '')) continue;
         pending.push({ key: `field-past-employment-${index}-${field}`, label: `Provide ${field.replaceAll(/([A-Z])/g, ' $1').toLowerCase()} for past employer ${index + 1}`, type: 'profile', category: 'EMPLOYMENT' });
       }
     });
-    for (const document of candidateFormConfig.employmentDocuments) {
-      if (!document.enabled || !document.required) continue;
-      if (!existingDocuments.some((item) => item.documentType === document.type)) {
-        pending.push({
-          key: `employment-document-${document.type}`,
-          label: `Upload your ${document.type.replaceAll('_', ' ').toLowerCase()}`,
-          type: 'document',
-          documentType: document.type,
-          category: 'EMPLOYMENT',
-        });
+    const requiredEmploymentDocumentTypes = isFresher ? [] : candidateFormConfig.employmentDocuments
+      .filter((document) => document.enabled && document.required)
+      .map((document) => document.type);
+    const enabledEmploymentDocumentTypes = isFresher ? [] : candidateFormConfig.employmentDocuments
+      .filter((document) => document.enabled)
+      .map((document) => document.type);
+    if (requiredEmploymentDocumentTypes.length > 0
+      || (candidateFormConfig.requireEmploymentDocumentPerEmployer && enabledEmploymentDocumentTypes.length > 0)) {
+      const employmentDocuments = candidate.documents || [];
+      const pastEmployerRecords = storedEmploymentHistory
+        .filter((record) => record && record.isCurrent !== true)
+        .map((record, index) => ({ ...record, id: employmentHistoryRecordId(record, index) }))
+        .filter((record) => hasEmploymentHistoryDetails(record)
+          || employmentDocuments.some((document) => document.documentNumber === record.id));
+      const employerRecords = candidateFormConfig.includeCurrentEmployerInDocumentRequirements
+        ? [
+          { id: CURRENT_EMPLOYMENT_RECORD_ID, employerName: candidate.currentEmployer, isCurrent: true },
+          ...pastEmployerRecords,
+        ].slice(0, candidateFormConfig.requiredEmploymentEmployerCount)
+        : pastEmployerRecords.slice(0, candidateFormConfig.requiredEmploymentEmployerCount);
+      for (const employer of employerRecords) {
+        const employerLabel = employer.employerName || (employer.isCurrent ? 'your current employer' : 'this past employer');
+        for (const documentType of requiredEmploymentDocumentTypes) {
+          const uploaded = employmentDocuments.some((document) =>
+            document.documentType === documentType
+            && (document.documentNumber === employer.id
+              || (employer.id === CURRENT_EMPLOYMENT_RECORD_ID && !document.documentNumber)),
+          );
+          if (!uploaded) {
+            pending.push({
+              key: `employment-document-${employer.id}-${documentType}`,
+              label: `Upload ${documentType.replaceAll('_', ' ').toLowerCase()} for ${employerLabel}`,
+              type: 'document',
+              documentType,
+              employerId: employer.id,
+              category: 'EMPLOYMENT',
+            });
+          }
+        }
+        if (candidateFormConfig.requireEmploymentDocumentPerEmployer
+          && !employmentDocuments.some((document) =>
+            enabledEmploymentDocumentTypes.includes(document.documentType)
+            && (document.documentNumber === employer.id
+              || (employer.id === CURRENT_EMPLOYMENT_RECORD_ID && !document.documentNumber)),
+          )) {
+          pending.push({
+            key: `employment-document-any-${employer.id}`,
+            label: `Upload at least one enabled employment document for ${employerLabel}`,
+            type: 'document',
+            documentType: enabledEmploymentDocumentTypes[0],
+            employerId: employer.id,
+            category: 'EMPLOYMENT',
+          });
+        }
       }
     }
   }
@@ -382,7 +437,9 @@ const toDto = (invitation) => {
   const { activeCase, pending, consentComplete, consentReady, formLocked, uploadsLocked, profileComplete } = pendingFor(candidate);
   const storedEmploymentHistory = Array.isArray(candidate.employmentHistory) ? candidate.employmentHistory : [];
   const currentEmployment = {
+    id: CURRENT_EMPLOYMENT_RECORD_ID,
     isCurrent: true,
+    isFresher: storedEmploymentHistory.some((record) => record?.isCurrent === true && record.isFresher === true),
     employerName: candidate.currentEmployer,
     employeeId: candidate.employeeId,
     designation: candidate.employeeDesignation,
@@ -449,7 +506,12 @@ const toDto = (invitation) => {
       currentEmployer: candidate.currentEmployer,
       employerHrName: candidate.employerHrName,
       employerHrPhone: candidate.employerHrPhone,
-      employmentHistory: [currentEmployment, ...storedEmploymentHistory.filter((item) => item && item.isCurrent !== true)],
+      employmentHistory: [
+        currentEmployment,
+        ...storedEmploymentHistory
+          .filter((item) => item && item.isCurrent !== true)
+          .map((item, index) => ({ ...item, id: employmentHistoryRecordId(item, index) })),
+      ],
       currentAddress: candidate.currentAddress,
       permanentAddress: candidate.permanentAddress,
       addressVerificationLocations: candidate.addressVerificationLocations || [],
@@ -772,7 +834,21 @@ const updateProfile = async (token, payload) => {
       if (!record || typeof record !== 'object' || Array.isArray(record) || record.isCurrent !== (index === 0)) {
         throw new BadRequestError('The first employment record must be current and all other records must be past employment.');
       }
-      const normalized = { isCurrent: index === 0 };
+      const suppliedId = typeof record.id === 'string' ? record.id.trim() : '';
+      if (record.id !== undefined
+        && (typeof record.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(suppliedId))) {
+        throw new BadRequestError('Each employment record must have a valid ID.');
+      }
+      const normalized = {
+        id: index === 0 ? CURRENT_EMPLOYMENT_RECORD_ID : suppliedId || `employment-past-${index}`,
+        isCurrent: index === 0,
+      };
+      if (index === 0) {
+        if (record.isFresher !== undefined && typeof record.isFresher !== 'boolean') {
+          throw new BadRequestError('The fresher selection must be a boolean.');
+        }
+        normalized.isFresher = record.isFresher === true;
+      }
       for (const [field, maxLength] of Object.entries(EMPLOYMENT_HISTORY_FIELDS)) {
         const value = record[field];
         if (value !== undefined && value !== null && typeof value !== 'string') {
@@ -795,6 +871,9 @@ const updateProfile = async (token, payload) => {
       normalized.endDate = endDate ? endDate.toISOString().slice(0, 10) : null;
       return normalized;
     });
+    if (new Set(data.employmentHistory.map((record) => record.id)).size !== data.employmentHistory.length) {
+      throw new BadRequestError('Employment record IDs must be unique.');
+    }
     const current = data.employmentHistory[0];
     data.currentEmployer = current.employerName;
     data.employeeId = current.employeeId;

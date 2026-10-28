@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
+import { candidatePortalFileUrl } from '@/src/lib/candidate-portal-forms';
 
 type FieldDefinition = { key: string; label: string };
 type SectionDefinition = { title: string; fields: FieldDefinition[] };
@@ -28,8 +29,11 @@ const sections: SectionDefinition[] = [
       { key: 'maritalStatus', label: 'Marital status' },
       { key: 'spouseName', label: 'Spouse name' },
       { key: 'childrenCount', label: 'Number of children' },
-      { key: 'candidateNotes', label: 'Notes for the verification team' },
     ],
+  },
+  {
+    title: 'Candidate notes',
+    fields: [{ key: 'candidateNotes', label: 'Notes for the verification team' }],
   },
   {
     title: 'Identity details',
@@ -111,10 +115,12 @@ const identityKeys = new Set([
 function isFilled(value: unknown): boolean {
   if (value === null || value === undefined) return false;
   if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'object') return false;
   return String(value).trim() !== '';
 }
 
 function displayValue(value: unknown, key: string, revealIdentity: boolean): string {
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (Array.isArray(value)) {
     return value.map((item) => String(item).replaceAll('_', ' ')).join(', ');
   }
@@ -153,26 +159,64 @@ function recordValues(value: unknown): Map<string, unknown> | null {
   return new Map<string, unknown>(Object.entries(value));
 }
 
+function additionalFields(values: Map<string, unknown>, knownKeys: Set<string>, excludedKeys: Set<string> = new Set()): FieldDefinition[] {
+  return Array.from(values.keys())
+    .filter((key) => !knownKeys.has(key) && !excludedKeys.has(key) && isFilled(values.get(key)))
+    .map((key) => ({
+      key,
+      label: key.replace(/([a-z])([A-Z])/g, '$1 $2').replaceAll('_', ' ').replace(/^./, (character) => character.toUpperCase()),
+    }));
+}
+
 export default function CandidateSubmittedDetails({ candidate }: { candidate: object }) {
   const [revealIdentity, setRevealIdentity] = useState(false);
   const values = new Map<string, unknown>(Object.entries(candidate));
   const educationRecords = Array.isArray(values.get('educationHistory')) ? values.get('educationHistory') as unknown[] : [];
   const employmentRecords = Array.isArray(values.get('employmentHistory')) ? values.get('employmentHistory') as unknown[] : [];
+  const isFresher = employmentRecords.some((record) => {
+    const fields = recordValues(record);
+    return fields?.get('isCurrent') === true && fields.get('isFresher') === true;
+  });
   const populatedSections = sections
     .map((section) => ({ ...section, rows: fieldRows(values, section.fields, revealIdentity) }))
     .filter((section) => section.rows.length > 0);
+  const knownCandidateKeys = new Set(sections.flatMap((section) => section.fields.map((field) => field.key)));
+  const excludedCandidateKeys = new Set([
+    'id', 'companyId', 'clientId', 'subclientId', 'createdById', 'updatedById', 'createdAt', 'updatedAt',
+    'candidateCode', 'status', 'isDeleted', 'deletedAt', 'documents', 'consents', 'portalInvitation',
+    'client', 'company', 'subclient', 'bgvCases', 'bgvCaseCount', 'portalLinkExpiryDays',
+    'educationHistory', 'employmentHistory', 'addressVerificationLocations',
+  ]);
+  const extraCandidateFields = additionalFields(values, knownCandidateKeys, excludedCandidateKeys);
   const populatedEducation = educationRecords
     .map(recordValues)
     .filter((record): record is Map<string, unknown> => record !== null)
-    .map((record) => ({ record, rows: fieldRows(record, educationFields, revealIdentity) }))
-    .filter(({ rows }) => rows.length > 0);
+    .map((record) => ({
+      record,
+      rows: fieldRows(record, educationFields, revealIdentity),
+      extraRows: fieldRows(record, additionalFields(record, new Set(educationFields.map((field) => field.key)), new Set(['id'])), revealIdentity),
+    }))
+    .filter(({ rows, extraRows }) => rows.length > 0 || extraRows.length > 0);
   const populatedEmployment = employmentRecords
     .map(recordValues)
     .filter((record): record is Map<string, unknown> => record !== null)
-    .map((record) => ({ record, rows: fieldRows(record, employmentFields, revealIdentity) }))
-    .filter(({ rows }) => rows.length > 0);
+    .filter((record) => !isFresher || record.get('isCurrent') === true)
+    .map((record) => ({
+      record,
+      rows: fieldRows(record, employmentFields, revealIdentity),
+      extraRows: fieldRows(
+        record,
+        additionalFields(record, new Set(employmentFields.map((field) => field.key)), new Set(['id', 'isCurrent', 'isFresher'])),
+        revealIdentity,
+      ),
+    }))
+    .filter(({ rows, extraRows, record }) => rows.length > 0 || extraRows.length > 0 || (record.get('isCurrent') === true && record.get('isFresher') === true));
+  const documentRecords = values.get('documents');
+  const documents = Array.isArray(documentRecords)
+    ? documentRecords.map(recordValues).filter((record): record is Map<string, unknown> => record !== null)
+    : [];
 
-  if (!populatedSections.length && !populatedEducation.length && !populatedEmployment.length) {
+  if (!populatedSections.length && !populatedEducation.length && !populatedEmployment.length && !extraCandidateFields.length && !documents.length) {
     return <p className="rounded-xl border border-dashed border-[var(--border)] px-4 py-8 text-center text-sm text-[var(--muted)]">The candidate has not submitted profile details yet.</p>;
   }
 
@@ -192,30 +236,79 @@ export default function CandidateSubmittedDetails({ candidate }: { candidate: ob
           <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">{section.rows}</dl>
         </section>
       ))}
+      {extraCandidateFields.length > 0 && (
+        <section className="rounded-xl border border-[var(--border)] p-4">
+          <h3 className="mb-4 text-sm font-semibold">Additional submitted details</h3>
+          <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+            {fieldRows(values, extraCandidateFields, revealIdentity)}
+          </dl>
+        </section>
+      )}
       {populatedEducation.length > 0 && (
         <section className="rounded-xl border border-[var(--border)] p-4">
           <h3 className="mb-4 text-sm font-semibold">Education history</h3>
           <div className="space-y-4">
-            {populatedEducation.map(({ record, rows }, index) => (
+            {populatedEducation.map(({ record, rows, extraRows }, index) => (
               <dl key={`education-${index}`} className="grid gap-x-6 gap-y-4 rounded-lg border border-[var(--border)] p-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="sm:col-span-2 lg:col-span-3"><h4 className="text-xs font-semibold">{String(record.get('qualification') || `Education record ${index + 1}`)}</h4></div>
                 {rows}
+                {extraRows}
               </dl>
             ))}
           </div>
         </section>
       )}
-      {populatedEmployment.length > 0 && (
+      {(populatedEmployment.length > 0 || isFresher) && (
         <section className="rounded-xl border border-[var(--border)] p-4">
-          <h3 className="mb-4 text-sm font-semibold">Employment history</h3>
+          <h3 className="mb-2 text-sm font-semibold">Employment history</h3>
+          {isFresher && <p className="mb-4 text-xs text-[var(--muted)]">Candidate marked as a fresher; past employment details are not requested.</p>}
           <div className="space-y-4">
-            {populatedEmployment.map(({ record, rows }, index) => (
+            {populatedEmployment.map(({ record, rows, extraRows }, index) => (
               <dl key={`employment-${index}`} className="grid gap-x-6 gap-y-4 rounded-lg border border-[var(--border)] p-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="sm:col-span-2 lg:col-span-3"><h4 className="text-xs font-semibold">{record.get('isCurrent') ? 'Current employment' : String(record.get('employerName') || `Past employment ${index}`)}</h4></div>
                 {rows}
+                {record.get('isCurrent') === true && record.get('isFresher') === true && (
+                  <div>
+                    <dt className="text-xs font-medium text-[var(--muted)]">Candidate type</dt>
+                    <dd className="mt-1 whitespace-pre-wrap break-words text-sm">Fresher</dd>
+                  </div>
+                )}
+                {extraRows}
               </dl>
             ))}
           </div>
+        </section>
+      )}
+      {documents.length > 0 && (
+        <section className="rounded-xl border border-[var(--border)] p-4">
+          <h3 className="mb-4 text-sm font-semibold">Uploaded documents</h3>
+          <ul className="divide-y divide-[var(--border)]">
+            {documents.map((document, index) => {
+              const fileUrl = document.get('fileUrl');
+              const fileName = document.get('fileName');
+              const documentType = document.get('documentType');
+              return (
+                <li key={String(document.get('id') || `${documentType}-${index}`)} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+                  <div>
+                    <p className="font-medium">{String(documentType || 'Document').replaceAll('_', ' ')}</p>
+                    <p className="mt-0.5 text-xs text-[var(--muted)]">
+                      {String(fileName || 'File name unavailable')}
+                      {isFilled(document.get('documentNumber')) && ` · Reference ${String(document.get('documentNumber'))}`}
+                      {isFilled(document.get('uploadedAt')) && ` · Uploaded ${String(document.get('uploadedAt')).slice(0, 10)}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-[var(--muted)]">{String(document.get('verificationStatus') || 'Uploaded').replaceAll('_', ' ')}</span>
+                    {typeof fileUrl === 'string' && fileUrl && (
+                      <a href={candidatePortalFileUrl(fileUrl)} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[var(--primary)] hover:underline">
+                        Open file
+                      </a>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
     </div>

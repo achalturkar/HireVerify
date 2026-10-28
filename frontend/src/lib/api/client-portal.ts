@@ -111,6 +111,7 @@ export interface PortalCandidateDetail extends PortalCandidate {
   addressVerificationLocations: ('current' | 'permanent')[];
   employmentHistory: {
     isCurrent: boolean;
+    isFresher?: boolean;
     employerName: string | null;
     employeeId: string | null;
     designation: string | null;

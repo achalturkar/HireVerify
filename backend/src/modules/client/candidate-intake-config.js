@@ -88,6 +88,9 @@ DEFAULT_CANDIDATE_FORM_CONFIG.employmentDocuments = EMPLOYMENT_DOCUMENT_TYPES.ma
   enabled: true,
   required: false,
 }));
+DEFAULT_CANDIDATE_FORM_CONFIG.requireEmploymentDocumentPerEmployer = false;
+DEFAULT_CANDIDATE_FORM_CONFIG.requiredEmploymentEmployerCount = 3;
+DEFAULT_CANDIDATE_FORM_CONFIG.includeCurrentEmployerInDocumentRequirements = true;
 DEFAULT_CANDIDATE_FORM_CONFIG.educationDocuments = EDUCATION_DOCUMENT_TYPES.map((type) => ({
   type,
   enabled: true,
@@ -142,6 +145,13 @@ const normalizeConfig = (value) => {
     const enabled = document ? document.enabled === true : true;
     return { type, enabled, required: enabled && document?.required === true };
   });
+  const requireEmploymentDocumentPerEmployer = source.requireEmploymentDocumentPerEmployer === true;
+  const requiredEmploymentEmployerCount = Number.isInteger(source.requiredEmploymentEmployerCount)
+    && source.requiredEmploymentEmployerCount >= 1
+    && source.requiredEmploymentEmployerCount <= 10
+    ? source.requiredEmploymentEmployerCount
+    : 3;
+  const includeCurrentEmployerInDocumentRequirements = source.includeCurrentEmployerInDocumentRequirements !== false;
   const sourceEducationDocuments = Array.isArray(source.educationDocuments) ? source.educationDocuments : [];
   const educationDocuments = EDUCATION_DOCUMENT_TYPES.map((type) => {
     const document = sourceEducationDocuments.find((item) => item && item.type === type);
@@ -162,18 +172,48 @@ const normalizeConfig = (value) => {
       return { type, enabled, required: enabled && document?.required === true };
     }),
   };
-  return { ...identities, invitationExpiryDays, fields, sections, address, customForms, employmentDocuments, educationDocuments };
+  return {
+    ...identities,
+    invitationExpiryDays,
+    fields,
+    sections,
+    address,
+    customForms,
+    employmentDocuments,
+    requireEmploymentDocumentPerEmployer,
+    requiredEmploymentEmployerCount,
+    includeCurrentEmployerInDocumentRequirements,
+    educationDocuments,
+  };
 };
 
 const validateConfig = (value, clientId) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new BadRequestError('Candidate form configuration must be an object.');
   }
-  const allowedKeys = new Set([...IDENTITY_FIELDS.map(({ key }) => key), 'invitationExpiryDays', 'fields', 'sections', 'address', 'customForms', 'employmentDocuments', 'educationDocuments']);
+  const allowedKeys = new Set([...IDENTITY_FIELDS.map(({ key }) => key), 'invitationExpiryDays', 'fields', 'sections', 'address', 'customForms', 'employmentDocuments', 'requireEmploymentDocumentPerEmployer', 'requiredEmploymentEmployerCount', 'includeCurrentEmployerInDocumentRequirements', 'educationDocuments']);
   for (const [key, field] of Object.entries(value)) {
     if (key === 'invitationExpiryDays') {
       if (!Number.isInteger(field) || field < 1 || field > 30) {
         throw new BadRequestError('Candidate portal link validity must be a whole number from 1 to 30 days.');
+      }
+      continue;
+    }
+    if (key === 'requireEmploymentDocumentPerEmployer') {
+      if (typeof field !== 'boolean') {
+        throw new BadRequestError('The legacy employment document requirement setting must be a boolean.');
+      }
+      continue;
+    }
+    if (key === 'requiredEmploymentEmployerCount') {
+      if (!Number.isInteger(field) || field < 1 || field > 10) {
+        throw new BadRequestError('The number of employers requiring documents must be a whole number from 1 to 10.');
+      }
+      continue;
+    }
+    if (key === 'includeCurrentEmployerInDocumentRequirements') {
+      if (typeof field !== 'boolean') {
+        throw new BadRequestError('The current employer document requirement setting must be a boolean.');
       }
       continue;
     }
@@ -274,8 +314,9 @@ const validateConfig = (value, clientId) => {
       for (const document of field) {
         if (!document || typeof document !== 'object' || Array.isArray(document)
           || !EMPLOYMENT_DOCUMENT_TYPES.includes(document.type)
-          || typeof document.enabled !== 'boolean' || typeof document.required !== 'boolean'
-          || (document.required && !document.enabled)
+          || typeof document.enabled !== 'boolean'
+          || (document.required !== undefined && typeof document.required !== 'boolean')
+          || (document.required === true && !document.enabled)
           || Object.keys(document).some((property) => !['type', 'enabled', 'required'].includes(property))) {
           throw new BadRequestError('An employment document setting is invalid.');
         }
@@ -315,6 +356,9 @@ const validateConfig = (value, clientId) => {
     }
   }
   const normalized = normalizeConfig(value);
+  if (normalized.requireEmploymentDocumentPerEmployer && !normalized.employmentDocuments.some((document) => document.enabled)) {
+    throw new BadRequestError('Enable at least one employment document type before requiring one document per employer.');
+  }
   for (const form of normalized.customForms) {
     if (!/^[0-9a-f-]{36}$/i.test(form.id || '')
       || typeof form.name !== 'string' || !form.name.trim() || form.name.trim().length > 100

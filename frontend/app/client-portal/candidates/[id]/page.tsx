@@ -246,7 +246,13 @@ export default function ClientPortalCandidatePage() {
         {activeTab === 'identity' && !editing && <button type="button" onClick={() => setRevealedIds((value) => !value)} className="mt-4 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px]">{revealedIds ? 'Hide identity numbers' : 'Reveal identity numbers'}</button>}
       </section>}
 
-      {activeTab === 'employment' && candidate.employmentHistory.some((record) => !record.isCurrent) && (
+      {activeTab === 'employment' && candidate.employmentHistory.some((record) => record.isCurrent && record.isFresher) && (
+        <p className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">Candidate marked as a fresher; past employment details and required employment documents are not requested.</p>
+      )}
+
+      {activeTab === 'employment'
+        && !candidate.employmentHistory.some((record) => record.isCurrent && record.isFresher)
+        && candidate.employmentHistory.some((record) => !record.isCurrent) && (
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
           <h3 className="text-[14px] font-semibold">Past employment history</h3>
           <div className="mt-4 space-y-4">

@@ -58,7 +58,9 @@ type PortalDocument = {
 };
 
 type EmploymentRecord = {
+  id: string;
   isCurrent: boolean;
+  isFresher?: boolean;
   employerName: string | null;
   employeeId: string | null;
   designation: string | null;
@@ -71,6 +73,7 @@ type EmploymentRecord = {
   employerHrPhone?: string | null;
 };
 type PastEmploymentForm = {
+  id: string;
   employerName: string;
   employeeId: string;
   designation: string;
@@ -92,7 +95,7 @@ type EducationRecord = {
   gradeOrPercentage: string;
 };
 
-type PendingItem = { key: string; label: string; type: string; documentType?: string; customFormId?: string; category?: string };
+type PendingItem = { key: string; label: string; type: string; documentType?: string; employerId?: string; customFormId?: string; category?: string };
 
 type PortalData = {
   candidate: Record<string, unknown> & { status?: string; employmentHistory?: EmploymentRecord[]; educationHistory?: EducationRecord[]; addressVerificationLocations?: string[] };
@@ -256,9 +259,13 @@ const PAST_EMPLOYMENT_FIELDS: FieldDef[] = [
   { key: 'employerHrName', label: 'Employer HR contact name' },
   { key: 'employerHrPhone', label: 'Employer HR contact number', type: 'tel', validate: (value) => (/^[+()\-\s\d]{7,18}$/.test(value) ? null : 'Enter a valid HR contact number.') },
 ];
+const CURRENT_EMPLOYMENT_RECORD_ID = 'employment-current';
 const emptyPastEmployment = (): PastEmploymentForm => ({
+  id: `employment-past-${crypto.randomUUID()}`,
   employerName: '', employeeId: '', designation: '', department: '', employmentType: '', startDate: '', endDate: '', workLocation: '', employerHrName: '', employerHrPhone: '',
 });
+const hasPastEmploymentDetails = (record: PastEmploymentForm) =>
+  Object.entries(record).some(([key, value]) => key !== 'id' && value.trim() !== '');
 const emptyEducationRecord = (): EducationRecord => ({
   id: crypto.randomUUID(),
   qualification: '',
@@ -293,7 +300,8 @@ const toEducationRecords = (candidate: PortalData['candidate']): EducationRecord
   return Object.values(legacy).some((value) => value !== '' && value !== 'legacy-education') ? [legacy] : [];
 };
 const toPastEmploymentForms = (records: EmploymentRecord[] = []): PastEmploymentForm[] => {
-  const pastRecords = records.filter((record) => !record.isCurrent).map((record) => ({
+  const pastRecords = records.filter((record) => !record.isCurrent).map((record, index) => ({
+    id: record.id || `employment-past-${index + 1}`,
     employerName: record.employerName ?? '',
     employeeId: record.employeeId ?? '',
     designation: record.designation ?? '',
@@ -438,6 +446,14 @@ const toForm = (candidate: Record<string, unknown>): FormState =>
     addressVerificationLocations: Array.isArray(candidate.addressVerificationLocations)
       ? candidate.addressVerificationLocations.filter((location): location is string => typeof location === 'string').join(',')
       : '',
+    isFresher: Array.isArray(candidate.employmentHistory)
+      && candidate.employmentHistory.some((record) =>
+        record !== null && typeof record === 'object' && !Array.isArray(record)
+        && 'isCurrent' in record && record.isCurrent === true
+        && 'isFresher' in record && record.isFresher === true,
+      )
+      ? 'true'
+      : 'false',
   });
 
 const validateFields = (form: FormState, fields: FieldDef[], allowMissingRequired = false): Record<string, string> => {
@@ -695,12 +711,13 @@ function DocumentList({ documents, emptyText, hideType = false, customForms = []
 /* ------------------------------------------------------------------ */
 type QueuedFile = { id: string; file: File; documentType: string; status: 'queued' | 'uploading' | 'failed'; error?: string };
 
-function AttachmentUploader({ token, title = '', description = '', types, requiredTypes = [], variant = 'card', documentNumber = '', onUploaded, readOnly = false, documentCategory }: {
+function AttachmentUploader({ token, title = '', description = '', types, requiredTypes = [], requireAnyType = false, variant = 'card', documentNumber = '', onUploaded, readOnly = false, documentCategory }: {
   token: string;
   title?: string;
   description?: string;
   types: string[];
   requiredTypes?: string[];
+  requireAnyType?: boolean;
   variant?: 'card' | 'inline';
   /** Sent with each file, so an ID copy carries the number typed beside it. */
   documentNumber?: string;
@@ -780,6 +797,11 @@ function AttachmentUploader({ token, title = '', description = '', types, requir
       {requiredTypes.length > 0 && (
         <p className="mb-3 text-xs text-slate-600">
           <RequiredMark /> Required upload{requiredTypes.length > 1 ? 's' : ''}: {requiredTypes.map(documentTypeLabel).join(', ')}.
+        </p>
+      )}
+      {requireAnyType && types.length > 0 && (
+        <p className="mb-3 text-xs text-slate-600">
+          <RequiredMark /> Upload at least one of these document types for this employer: {types.map(documentTypeLabel).join(', ')}.
         </p>
       )}
       <label
@@ -897,12 +919,13 @@ function IdentityCard({ title, field, value, error, documents, token, onChange, 
 /* ------------------------------------------------------------------ */
 export default function CandidatePortalPage() {
   const { token } = useParams<{ token: string }>();
+  const initialPastEmployment = useMemo(() => emptyPastEmployment(), []);
   const [portal, setPortal] = useState<PortalData | null>(null);
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>({});
   const [baseline, setBaseline] = useState<FormState>({});
-  const [pastEmployments, setPastEmployments] = useState<PastEmploymentForm[]>([emptyPastEmployment()]);
-  const [pastEmploymentBaseline, setPastEmploymentBaseline] = useState<PastEmploymentForm[]>([emptyPastEmployment()]);
+  const [pastEmployments, setPastEmployments] = useState<PastEmploymentForm[]>([initialPastEmployment]);
+  const [pastEmploymentBaseline, setPastEmploymentBaseline] = useState<PastEmploymentForm[]>([initialPastEmployment]);
   const [educationRecords, setEducationRecords] = useState<EducationRecord[]>([]);
   const [educationBaseline, setEducationBaseline] = useState<EducationRecord[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -1068,8 +1091,11 @@ export default function CandidatePortalPage() {
           ? candidateFormConfig.address.currentAddressRequired
           : candidateFormConfig.address.permanentAddressRequired,
       })),
-    employment: EMPLOYMENT_FIELDS.map((field) => configuredField(field, employmentRequirementKey(field.key))),
-  }), [candidateFormConfig, configuredField, employmentRequirementKey, form.maritalStatus]);
+    employment: EMPLOYMENT_FIELDS.map((field) => {
+      const configured = configuredField(field, employmentRequirementKey(field.key));
+      return form.isFresher === 'true' ? { ...configured, required: false } : configured;
+    }),
+  }), [candidateFormConfig, configuredField, employmentRequirementKey, form.isFresher, form.maritalStatus]);
 
   const dirtyBySection = useMemo(() => {
     const result = {} as Record<SectionKey, boolean>;
@@ -1077,7 +1103,9 @@ export default function CandidatePortalPage() {
       result[section] = effectiveSectionFields[section].some((field) => (form[field.key] ?? '') !== (baseline[field.key] ?? ''));
     });
     result.address = result.address || (form.addressVerificationLocations ?? '') !== (baseline.addressVerificationLocations ?? '');
-    result.employment = result.employment || JSON.stringify(pastEmployments) !== JSON.stringify(pastEmploymentBaseline);
+    result.employment = result.employment
+      || (form.isFresher ?? 'false') !== (baseline.isFresher ?? 'false')
+      || JSON.stringify(pastEmployments) !== JSON.stringify(pastEmploymentBaseline);
     result.education = JSON.stringify(educationRecords) !== JSON.stringify(educationBaseline);
     return result;
   }, [form, baseline, effectiveSectionFields, pastEmployments, pastEmploymentBaseline, educationRecords, educationBaseline]);
@@ -1117,6 +1145,15 @@ export default function CandidatePortalPage() {
 
   const educationDocuments = useMemo(() => (portal?.documents ?? []).filter((document) => EDUCATION_TYPES.includes(document.documentType)), [portal]);
   const employmentDocuments = useMemo(() => (portal?.documents ?? []).filter((document) => EMPLOYMENT_TYPES.includes(document.documentType)), [portal]);
+  const currentEmployerDocuments = employmentDocuments.filter((document) =>
+    document.documentNumber === CURRENT_EMPLOYMENT_RECORD_ID || !document.documentNumber,
+  );
+  const knownPastEmployerIds = new Set(pastEmployments.map((record) => record.id));
+  const otherEmploymentDocuments = employmentDocuments.filter((document) =>
+    Boolean(document.documentNumber)
+    && document.documentNumber !== CURRENT_EMPLOYMENT_RECORD_ID
+    && !knownPastEmployerIds.has(document.documentNumber || ''),
+  );
   const addressDocuments = useMemo(() => (portal?.documents ?? []).filter((document) => ADDRESS_TYPES.includes(document.documentType)), [portal]);
   const addressUploadTypes = Array.from(new Set([
     ...candidateFormConfig.address.documents.filter((document) => document.enabled).map((document) => document.type),
@@ -1136,12 +1173,22 @@ export default function CandidatePortalPage() {
       .filter((item): item is PendingItem & { documentType: string } => item.category === 'EMPLOYMENT' && Boolean(item.documentType))
       .map((item) => item.documentType),
   ]));
-  const requiredEmploymentUploadTypes = Array.from(new Set([
-    ...candidateFormConfig.employmentDocuments.filter((document) => document.enabled && document.required).map((document) => document.type),
-    ...(portal?.progress.pending ?? [])
-      .filter((item): item is PendingItem & { documentType: string } => item.category === 'EMPLOYMENT' && Boolean(item.documentType))
-      .map((item) => item.documentType),
-  ]));
+  const isEmploymentEmployerRequirementApplied = (employerIndex: number) => (
+    employerIndex === 0
+      ? candidateFormConfig.includeCurrentEmployerInDocumentRequirements
+      : employerIndex - (candidateFormConfig.includeCurrentEmployerInDocumentRequirements ? 1 : 0)
+        < candidateFormConfig.requiredEmploymentEmployerCount
+  );
+  const requiredEmploymentTypesFor = (employerIndex: number) => isEmploymentEmployerRequirementApplied(employerIndex)
+    && form.isFresher !== 'true' ? Array.from(new Set(
+      candidateFormConfig.employmentDocuments
+        .filter((document) => document.enabled && document.required)
+        .map((document) => document.type),
+    ))
+    : [];
+  const requireAnyEmploymentDocument = candidateFormConfig.requireEmploymentDocumentPerEmployer;
+  const requireAnyEmploymentDocumentFor = (employerIndex: number) =>
+    form.isFresher !== 'true' && requireAnyEmploymentDocument && isEmploymentEmployerRequirementApplied(employerIndex);
   const requiredEducationUploadTypes = (portal?.progress.pending ?? []).flatMap((item) =>
     item.category === 'EDUCATION' && item.documentType ? [item.documentType] : [],
   );
@@ -1198,8 +1245,8 @@ export default function CandidatePortalPage() {
       })))
       : validateFields(form, fields, automatic);
     if (section === 'employment') {
-      pastEmployments.forEach((record, index) => {
-        const recordStarted = Object.values(record).some((value) => value.trim());
+      if (form.isFresher !== 'true') pastEmployments.forEach((record, index) => {
+        const recordStarted = hasPastEmploymentDetails(record);
         pastEmploymentFields.forEach((field) => {
           const value = record[field.key as keyof PastEmploymentForm].trim();
           const problem = !value && recordStarted && field.required
@@ -1274,8 +1321,11 @@ export default function CandidatePortalPage() {
       saved.gradeOrPercentage = first?.gradeOrPercentage || '';
     }
     if (section === 'employment') {
+      saved.isFresher = form.isFresher === 'true' ? 'true' : 'false';
       const currentEmployer = {
+        id: CURRENT_EMPLOYMENT_RECORD_ID,
         isCurrent: true,
+        isFresher: form.isFresher === 'true',
         employerName: form.currentEmployer?.trim() || null,
         employeeId: form.employeeId?.trim() || null,
         designation: form.employeeDesignation?.trim() || null,
@@ -1288,7 +1338,8 @@ export default function CandidatePortalPage() {
         employerHrPhone: form.employerHrPhone?.trim() || null,
       };
       const pastRecords = pastEmployments
-        .filter((record) => Object.values(record).some((value) => value.trim()))
+        .filter((record) => hasPastEmploymentDetails(record)
+          || employmentDocuments.some((document) => document.documentNumber === record.id))
         .map((record) => ({ ...record, isCurrent: false }));
       payload.employmentHistory = [currentEmployer, ...pastRecords];
     }
@@ -1336,8 +1387,8 @@ export default function CandidatePortalPage() {
       });
     }
     if (candidateFormConfig.sections.employment.enabled) {
-      pastEmployments.forEach((record, index) => {
-        const recordStarted = Object.values(record).some((value) => value.trim());
+      if (form.isFresher !== 'true') pastEmployments.forEach((record, index) => {
+        const recordStarted = hasPastEmploymentDetails(record);
         pastEmploymentFields.forEach((field) => {
           const value = record[field.key as keyof PastEmploymentForm].trim();
           const problem = !value && recordStarted && field.required
@@ -1386,7 +1437,9 @@ export default function CandidatePortalPage() {
       }
       if (candidateFormConfig.sections.employment.enabled) {
         payload.employmentHistory = [{
+          id: CURRENT_EMPLOYMENT_RECORD_ID,
           isCurrent: true,
+          isFresher: form.isFresher === 'true',
           employerName: form.currentEmployer?.trim() || null,
           employeeId: form.employeeId?.trim() || null,
           designation: form.employeeDesignation?.trim() || null,
@@ -1398,7 +1451,8 @@ export default function CandidatePortalPage() {
           employerHrName: form.employerHrName?.trim() || null,
           employerHrPhone: form.employerHrPhone?.trim() || null,
         }, ...pastEmployments
-          .filter((record) => Object.values(record).some((value) => value.trim()))
+          .filter((record) => hasPastEmploymentDetails(record)
+            || employmentDocuments.some((document) => document.documentNumber === record.id))
           .map((record) => ({ ...record, isCurrent: false }))];
       }
       const saved = { ...form };
@@ -1573,19 +1627,27 @@ export default function CandidatePortalPage() {
   }
   if (visibleTabs.some(({ key }) => key === 'employment')) {
     const enabledEmploymentDocuments = candidateFormConfig.employmentDocuments.filter((document) => document.enabled);
+    const isFresher = form.isFresher === 'true';
     overviewInstructions.push({
       tab: 'employment',
       title: 'Employment history',
-      description: 'Enter your current employer first, then add past employers from most recent to oldest. You can enter up to 10 employers total.',
-      details: [
-        ...effectiveSectionFields.employment.map((field) => `${field.label}${field.required ? ' (required)' : ''}`),
-        'Past employer name, role and employment dates',
-        'Employer HR contact name and phone number',
-        ...enabledEmploymentDocuments.map((document) => {
-          const label = CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? humanize(document.type);
-          return `${label}${document.required ? ' (required)' : ' (optional)'}`;
-        }),
-      ],
+      description: isFresher
+        ? 'You indicated that you are a fresher. Past employment details and required employment documents are not needed.'
+        : 'Enter your current employer first, then add past employers from most recent to oldest. You can enter up to 10 employers total.',
+      details: isFresher
+        ? effectiveSectionFields.employment.map((field) => field.label)
+        : [
+          ...effectiveSectionFields.employment.map((field) => `${field.label}${field.required ? ' (required)' : ''}`),
+          'Past employer name, role and employment dates',
+          'Employer HR contact name and phone number',
+          ...enabledEmploymentDocuments.map((document) => {
+            const label = CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? humanize(document.type);
+            return `${label}${document.required ? ` (required for the first ${candidateFormConfig.requiredEmploymentEmployerCount} ${candidateFormConfig.includeCurrentEmployerInDocumentRequirements ? 'employers including current' : 'past employers'})` : ' (optional)'}`;
+          }),
+          ...(candidateFormConfig.requireEmploymentDocumentPerEmployer
+            ? [`At least one enabled employment document required for the first ${candidateFormConfig.requiredEmploymentEmployerCount} ${candidateFormConfig.includeCurrentEmployerInDocumentRequirements ? 'employers including current' : 'past employers'}`]
+            : []),
+        ],
     });
   }
   if (portal.case) {
@@ -1975,12 +2037,57 @@ export default function CandidatePortalPage() {
 
         {currentTab === 'employment' && (
           <div role="tabpanel" id="panel-employment" aria-labelledby="tab-employment" className="space-y-5">
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={form.isFresher === 'true'}
+                onChange={(event) => {
+                  setForm((previous) => ({
+                    ...previous,
+                    isFresher: event.target.checked ? 'true' : 'false',
+                  }));
+                  if (event.target.checked) {
+                    setFieldErrors((previous) => Object.fromEntries(
+                      Object.entries(previous).filter(([key]) => !key.startsWith('past_')),
+                    ));
+                  }
+                }}
+                disabled={profileReadOnly}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+              />
+              <span>
+                <span className="block font-semibold text-slate-900">I am a fresher</span>
+                <span className="mt-1 block text-xs text-slate-500">Select this if you have no past employment. Past employment details and required employment documents will not be requested.</span>
+              </span>
+            </label>
             {sectionPanel('employment', BriefcaseBusiness, 'Current employer', 'Add your current employer and role details.', 'Save employment details')}
-            {candidateFormConfig.sections.employment.enabled && (
+            {candidateFormConfig.sections.employment.enabled && employmentUploadTypes.length > 0 && (
+              <>
+                <AttachmentUploader
+                  token={token}
+                  title="Current employer documents"
+                  description={form.isFresher === 'true'
+                    ? 'These documents are optional because you indicated that you are a fresher.'
+                    : 'Upload the employment document types requested for your current employer.'}
+                  types={employmentUploadTypes}
+                  requiredTypes={requiredEmploymentTypesFor(0)}
+                  requireAnyType={requireAnyEmploymentDocumentFor(0)}
+                  documentCategory="EMPLOYMENT"
+                  documentNumber={CURRENT_EMPLOYMENT_RECORD_ID}
+                  onUploaded={afterUpload}
+                  readOnly={uploadReadOnly}
+                />
+                <div className="px-1">
+                  <h3 className="mb-2 text-sm font-semibold text-slate-900">Attached to your current employer ({currentEmployerDocuments.length})</h3>
+                  <DocumentList documents={currentEmployerDocuments} emptyText="No document attached to your current employer." onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
+                </div>
+              </>
+            )}
+            {candidateFormConfig.sections.employment.enabled && form.isFresher !== 'true' && (
               <SectionCard icon={BriefcaseBusiness} title="Past employers" description="Add your previous employment, starting with your most recent past employer. You can include up to 9 past employers.">
                 <div className="space-y-4">
                   {pastEmployments.map((employment, index) => (
-                    <div key={`past-employer-${index}`} className="rounded-xl border border-slate-200 p-4">
+                    <div key={employment.id} className="rounded-xl border border-slate-200 p-4">
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <h3 className="text-sm font-semibold text-slate-900">Past employer {index + 1}</h3>
                         {pastEmployments.length > 1 && (
@@ -1993,7 +2100,7 @@ export default function CandidatePortalPage() {
                         {pastEmploymentFields.map((field) => (
                           <Field
                             key={`${index}-${field.key}`}
-                              def={{ ...field, required: Object.values(employment).some((value) => value.trim()) && field.required, key: `past-${index}-${field.key}` }}
+                            def={{ ...field, required: hasPastEmploymentDetails(employment) && field.required, key: `past-${index}-${field.key}` }}
                             value={employment[field.key as keyof PastEmploymentForm]}
                             error={fieldErrors[`past_${index}_${field.key}`]}
                             disabled={profileReadOnly}
@@ -2003,6 +2110,30 @@ export default function CandidatePortalPage() {
                           />
                         ))}
                       </div>
+                      {employmentUploadTypes.length > 0 && (
+                        <div className="mt-4 border-t border-slate-100 pt-4">
+                          {pastEmploymentBaseline.some((record) => record.id === employment.id) ? (
+                            <AttachmentUploader
+                              token={token}
+                              title={`Documents for past employer ${index + 1}`}
+                              description="Upload the employment document types requested for this employer."
+                              types={employmentUploadTypes}
+                              requiredTypes={requiredEmploymentTypesFor(index + 1)}
+                              requireAnyType={requireAnyEmploymentDocumentFor(index + 1)}
+                              documentCategory="EMPLOYMENT"
+                              documentNumber={employment.id}
+                              onUploaded={afterUpload}
+                              readOnly={uploadReadOnly}
+                            />
+                          ) : (
+                            <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">Save this employer’s details before uploading its documents.</p>
+                          )}
+                          <div className="mt-3">
+                            <p className="mb-2 text-xs font-medium text-slate-500">Attached documents</p>
+                            <DocumentList documents={employmentDocuments.filter((document) => document.documentNumber === employment.id)} emptyText="No document attached to this employer." onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                   {1 + pastEmployments.length < 10 && (
@@ -2014,18 +2145,18 @@ export default function CandidatePortalPage() {
                 </div>
               </SectionCard>
             )}
-            {candidateFormConfig.sections.employment.enabled && employmentUploadTypes.length > 0 ? (
-              <AttachmentUploader token={token} title="Employment documents" description="Select the document type first, then attach the matching file. Required document types are marked with a red asterisk." types={employmentUploadTypes} requiredTypes={requiredEmploymentUploadTypes} documentCategory="EMPLOYMENT" onUploaded={afterUpload} readOnly={uploadReadOnly} />
-            ) : (
+            {candidateFormConfig.sections.employment.enabled && employmentUploadTypes.length === 0 && (
               <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">This client has not requested employment document uploads.</p>
             )}
             {customFormsFor('EMPLOYMENT').map((form) => (
               <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} />
             ))}
-            <div className="px-1">
-              <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded employment documents ({employmentDocuments.length})</h3>
-              <DocumentList documents={employmentDocuments} emptyText="No employment documents uploaded yet." onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
-            </div>
+            {otherEmploymentDocuments.length > 0 && (
+              <div className="px-1">
+                <h3 className="mb-2 text-sm font-semibold text-slate-900">Other employment documents ({otherEmploymentDocuments.length})</h3>
+                <DocumentList documents={otherEmploymentDocuments} emptyText="" onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
+              </div>
+            )}
           </div>
         )}
 
@@ -2223,20 +2354,21 @@ export default function CandidatePortalPage() {
                       workLocation: form.workLocation,
                       employerHrName: form.employerHrName,
                       employerHrPhone: form.employerHrPhone,
-                    }, ...pastEmployments.filter((record) => Object.values(record).some((value) => value.trim()))].map((record, index) => (
+                    }, ...(form.isFresher === 'true' ? [] : pastEmployments.filter((record) => hasPastEmploymentDetails(record)
+                      || employmentDocuments.some((document) => document.documentNumber === record.id)))].map((record, index) => (
                       <dl key={`review-employment-${index}`} className="mb-3 grid gap-3 rounded-xl border border-slate-200 p-4 sm:grid-cols-2">
                         <div className="sm:col-span-2"><h4 className="text-sm font-medium text-slate-800">{index === 0 ? 'Current employer' : `Past employer ${index}`}</h4></div>
                         {[
-                          { key: 'employerName', label: 'Employer', value: record.employerName, required: candidateFormConfig.fields.employerName.required },
-                          { key: 'employeeId', label: 'Employee ID', value: record.employeeId, required: candidateFormConfig.fields.employeeId.required },
-                          { key: 'designation', label: 'Designation', value: record.designation, required: candidateFormConfig.fields.designation.required },
-                          { key: 'department', label: 'Department', value: record.department, required: candidateFormConfig.fields.department.required },
-                          { key: 'employmentType', label: 'Employment type', value: record.employmentType ? humanize(record.employmentType) : '', required: candidateFormConfig.fields.employmentType.required },
-                          { key: 'startDate', label: 'Start date', value: record.startDate ? formatDate(record.startDate) : '', required: candidateFormConfig.fields.startDate.required },
-                          { key: 'endDate', label: 'End date', value: index === 0 || !record.endDate ? '' : formatDate(record.endDate), required: index > 0 && candidateFormConfig.fields.endDate.required },
-                          { key: 'workLocation', label: 'Work location', value: record.workLocation, required: candidateFormConfig.fields.workLocation.required },
-                          { key: 'employerHrName', label: 'Employer HR contact name', value: record.employerHrName, required: candidateFormConfig.fields.employerHrName.required },
-                          { key: 'employerHrPhone', label: 'Employer HR contact number', value: record.employerHrPhone, required: candidateFormConfig.fields.employerHrPhone.required },
+                          { key: 'employerName', label: 'Employer', value: record.employerName, required: form.isFresher !== 'true' && candidateFormConfig.fields.employerName.required },
+                          { key: 'employeeId', label: 'Employee ID', value: record.employeeId, required: form.isFresher !== 'true' && candidateFormConfig.fields.employeeId.required },
+                          { key: 'designation', label: 'Designation', value: record.designation, required: form.isFresher !== 'true' && candidateFormConfig.fields.designation.required },
+                          { key: 'department', label: 'Department', value: record.department, required: form.isFresher !== 'true' && candidateFormConfig.fields.department.required },
+                          { key: 'employmentType', label: 'Employment type', value: record.employmentType ? humanize(record.employmentType) : '', required: form.isFresher !== 'true' && candidateFormConfig.fields.employmentType.required },
+                          { key: 'startDate', label: 'Start date', value: record.startDate ? formatDate(record.startDate) : '', required: form.isFresher !== 'true' && candidateFormConfig.fields.startDate.required },
+                          { key: 'endDate', label: 'End date', value: index === 0 || !record.endDate ? '' : formatDate(record.endDate), required: form.isFresher !== 'true' && index > 0 && candidateFormConfig.fields.endDate.required },
+                          { key: 'workLocation', label: 'Work location', value: record.workLocation, required: form.isFresher !== 'true' && candidateFormConfig.fields.workLocation.required },
+                          { key: 'employerHrName', label: 'Employer HR contact name', value: record.employerHrName, required: form.isFresher !== 'true' && candidateFormConfig.fields.employerHrName.required },
+                          { key: 'employerHrPhone', label: 'Employer HR contact number', value: record.employerHrPhone, required: form.isFresher !== 'true' && candidateFormConfig.fields.employerHrPhone.required },
                         ].map(({ key, label, value, required }) => (
                           <div key={key}>
                             <dt className="text-xs font-medium text-slate-500">{label}{required && <span className="ml-1 font-bold text-red-600" aria-hidden="true">*</span>}</dt>
