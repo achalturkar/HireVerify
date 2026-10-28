@@ -19,7 +19,7 @@ import ClientFormModal from '@/src/components/layout/company/client/ClientFormMo
 import ClientConfirmDialog from '@/src/components/layout/company/client/ClientConfirmDialog';
 import ClientAnalyticsPanel from '@/src/components/layout/company/client/ClientAnalyticsPanel';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
-import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, CANDIDATE_FORM_REQUIRED_FIELD_GROUPS, CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
+import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EDUCATION_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, CANDIDATE_FORM_REQUIRED_FIELD_GROUPS, CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
 import { setClientPortalScope } from '@/src/lib/api/client-portal';
 import type { CandidateCustomForm, CandidateCustomFormCategory, CandidateFormConfig, CandidateFormRequiredFieldKey, CandidateIdentityFieldKey, Client, ClientFormValues, ClientPortalAccountMethod, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
 import type { Candidate, CandidateFormValues, CandidateStatus, PaginationMeta } from '@/src/types/candidate';
@@ -398,6 +398,16 @@ export default function ClientDetailPage() {
           [property]: value,
           ...(property === 'enabled' && !value ? { required: false } : {}),
         }
+        : document),
+    }));
+  };
+
+  const updateEducationDocument = (type: string, property: 'enabled' | 'required', value: boolean) => {
+    setCandidateFormSaved(false);
+    setCandidateFormConfig((current) => ({
+      ...current,
+      educationDocuments: current.educationDocuments.map((document) => document.type === type
+        ? { ...document, [property]: value, ...(property === 'enabled' && !value ? { required: false } : {}) }
         : document),
     }));
   };
@@ -1354,6 +1364,7 @@ export default function ClientDetailPage() {
                 ['candidate-required-fields', 'Required fields'],
                 ['candidate-address-settings', 'Address'],
                 ['candidate-identity-settings', 'Identity'],
+                ['candidate-education-document-settings', 'Education docs'],
                 ['candidate-employment-document-settings', 'Employment docs'],
                 ['candidate-custom-form-settings', 'Templates'],
                 ['candidate-live-preview', 'Preview'],
@@ -1385,7 +1396,7 @@ export default function ClientDetailPage() {
               { key: 'address', label: 'Address', enabled: candidateFormConfig.sections.address.enabled && (candidateFormConfig.address.currentAddressEnabled || candidateFormConfig.address.permanentAddressEnabled || candidateFormConfig.address.documents.some((document) => document.enabled)) },
               { key: 'bgv', label: 'BGV forms', enabled: candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'BGV') },
               { key: 'cibil', label: 'CIBIL', enabled: candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'CIBIL') },
-              { key: 'education', label: 'Education', enabled: candidateFormConfig.sections.education.enabled || candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'EDUCATION') },
+              { key: 'education', label: 'Education', enabled: candidateFormConfig.sections.education.enabled || candidateFormConfig.educationDocuments.some((document) => document.enabled) || candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'EDUCATION') },
               { key: 'employment', label: 'Employment', enabled: candidateFormConfig.sections.employment.enabled && (candidateFormConfig.employmentDocuments.some((document) => document.enabled) || candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'EMPLOYMENT')) },
               { key: 'police', label: 'Police verification', enabled: candidateFormConfig.sections.policeVerification.enabled && candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'POLICE_VERIFICATION') },
               { key: 'otherChecks', label: 'Other checks', enabled: candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'OTHER_CHECKS') },
@@ -1461,6 +1472,7 @@ export default function ClientDetailPage() {
                   ]} />}
                   {selectedPreviewTab === 'education' && <CandidateFormPreviewFields title="Education details and requested forms" fields={[
                     ...candidateRequiredFieldsFor('education').map((field) => `${field.label}${candidateFormConfig.fields[field.key]?.required ? ' *' : ''}`),
+                    ...candidateFormConfig.educationDocuments.filter((document) => document.enabled).map((document) => `${CANDIDATE_EDUCATION_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? document.type}${document.required ? ' *' : ''}`),
                     ...previewForms.map((form) => `${form.name}${form.required ? ' *' : ''}`),
                   ]} />}
                   {selectedPreviewTab === 'employment' && <CandidateFormPreviewFields title="Employment details and upload types" fields={[
@@ -1606,6 +1618,29 @@ export default function ClientDetailPage() {
               );
             })}
           </div>
+          <div id="candidate-education-document-settings" className="mt-6 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
+            <h3 className="text-[13px] font-semibold">Education document uploads</h3>
+            <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Choose whether candidates can attach education certificates or marksheets to each education record, and whether each record must include one before consent.</p>
+            <div className="mt-3 space-y-2">
+              {CANDIDATE_EDUCATION_DOCUMENT_TYPES.map(({ type, label }) => {
+                const document = candidateFormConfig.educationDocuments.find((item) => item.type === type);
+                const enabled = document?.enabled ?? false;
+                const required = document?.required ?? false;
+                return (
+                  <div key={type} className="grid gap-3 rounded-lg border border-[var(--border)] p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+                    <label className="flex items-center gap-2 text-[12px] font-medium">
+                      <input type="checkbox" checked={enabled} onChange={(event) => updateEducationDocument(type, 'enabled', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.education.enabled} className="accent-[var(--primary)]" />
+                      {label}{required && <span className="font-bold text-red-600" aria-hidden="true">*</span>}
+                    </label>
+                    <label className={`flex items-center gap-2 text-[11px] ${!enabled ? 'opacity-50' : ''}`}>
+                      <input type="checkbox" checked={required} onChange={(event) => updateEducationDocument(type, 'required', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.education.enabled || !enabled} className="accent-[var(--primary)]" />
+                      Candidate must upload
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           <div id="candidate-employment-document-settings" className="mt-6 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <h3 className="text-[13px] font-semibold">Employment document uploads</h3>
             <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Choose which document types this client accepts. Candidates select a type first, then upload its file in the Employment tab.</p>
@@ -1631,7 +1666,7 @@ export default function ClientDetailPage() {
           </div>
           <div id="candidate-custom-form-settings" className="mt-6 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <h3 className="text-[13px] font-semibold">Client-specific candidate forms</h3>
-            <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Upload a PDF or Microsoft Word (DOC/DOCX) template for candidates to download, complete and upload back. Templates are scoped to this client and limited to 10 MB each.</p>
+            <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Upload a PDF or Microsoft Word (DOC/DOCX) template for candidates to download, complete and upload back. Mark BGV or PCC forms required to show them in the candidate’s pending documents and prevent consent until they are uploaded. Templates are scoped to this client and limited to 10 MB each.</p>
             {candidateFormConfig.customForms.length > 0 && (
               <div className="mt-3 space-y-2">
                 {candidateFormConfig.customForms.map((form) => (
@@ -1653,7 +1688,7 @@ export default function ClientDetailPage() {
                     </label>
                     <label className={`flex items-center gap-1.5 text-[11px] ${!form.enabled ? 'opacity-50' : ''}`}>
                       <input type="checkbox" checked={form.required} onChange={(event) => updateCustomForm(form.id, 'required', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !form.enabled} className="accent-[var(--primary)]" />
-                      Required
+                      Required before consent
                     </label>
                     <button type="button" onClick={() => void deleteCandidateTemplate(form.id)} disabled={!canManageAccess || candidateFormSaving} aria-label={`Remove ${form.name}`} className="rounded-md p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50"><Trash2 size={15} /></button>
                   </div>

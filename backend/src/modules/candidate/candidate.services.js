@@ -8,6 +8,7 @@ const { parseDateValue } = require('../../utils/date');
 const { IDENTITY_FIELDS, normalizeConfig, normalizeIdentityValue, validateIdentityValues } = require('../client/candidate-intake-config');
 const { normalizeCandidateName, hasCandidateName } = require('../../utils/candidate-name');
 const { createCandidateFormPdf } = require('./candidate-form.pdf');
+const candidatePortalService = require('../candidate-portal/candidate-portal.service');
 
 const toDto = (candidate) => ({
   id: candidate.id,
@@ -27,7 +28,12 @@ const toDto = (candidate) => ({
     primaryColor: candidate.company.primaryColor,
   } : null,
   subclientId: candidate.subclientId || null,
-  subclient: candidate.subclient || null,
+  subclient: candidate.subclient ? {
+    id: candidate.subclient.id,
+    name: candidate.subclient.name,
+    clientCode: candidate.subclient.clientCode,
+    serviceRates: candidate.subclient.serviceRates,
+  } : null,
   candidateCode: candidate.candidateCode,
   portalLinkExpiryDays: normalizeConfig(candidate.client?.candidateFormConfig).invitationExpiryDays,
   fullName: candidate.fullName,
@@ -213,7 +219,13 @@ const list = async ({ companyId, query }) => {
     includeDeleted: query.includeDeleted === 'true',
   });
 
-  return { items: result.items.map(toDto), total: result.total };
+  return {
+    items: result.items.map((candidate) => toDto({
+      ...candidate,
+      status: candidatePortalService.getCandidateIntakeStatus(candidate),
+    })),
+    total: result.total,
+  };
 };
 
 const listForExport = async ({ companyId, query }) => repo.listForExport({

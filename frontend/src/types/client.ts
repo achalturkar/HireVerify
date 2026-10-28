@@ -92,8 +92,17 @@ export const CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES = [
   { type: 'OTHER', label: 'Other employment document' },
 ] as const;
 export type CandidateEmploymentDocumentType = typeof CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES[number]['type'];
+export const CANDIDATE_EDUCATION_DOCUMENT_TYPES = [
+  { type: 'EDUCATION_CERTIFICATE', label: 'Education certificate or marksheet' },
+] as const;
+export type CandidateEducationDocumentType = typeof CANDIDATE_EDUCATION_DOCUMENT_TYPES[number]['type'];
 export type CandidateEmploymentDocumentConfig = {
   type: CandidateEmploymentDocumentType;
+  enabled: boolean;
+  required: boolean;
+};
+export type CandidateEducationDocumentConfig = {
+  type: CandidateEducationDocumentType;
   enabled: boolean;
   required: boolean;
 };
@@ -123,6 +132,7 @@ export type CandidateFormConfig = Record<CandidateIdentityFieldKey, {
   };
   customForms: CandidateCustomForm[];
   employmentDocuments: CandidateEmploymentDocumentConfig[];
+  educationDocuments: CandidateEducationDocumentConfig[];
 };
 
 export const DEFAULT_CANDIDATE_FORM_CONFIG: CandidateFormConfig = {
@@ -153,6 +163,7 @@ export const DEFAULT_CANDIDATE_FORM_CONFIG: CandidateFormConfig = {
   },
   customForms: [],
   employmentDocuments: CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.map(({ type }) => ({ type, enabled: true, required: false })),
+  educationDocuments: CANDIDATE_EDUCATION_DOCUMENT_TYPES.map(({ type }) => ({ type, enabled: true, required: false })),
 };
 
 export interface CompanyRef {

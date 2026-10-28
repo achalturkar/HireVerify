@@ -60,6 +60,6 @@ const downloadFormTemplate = asyncHandler(async (req, res, next) => {
 const updateProfile = asyncHandler(async (req, res) => success(res, await service.updateProfile(req.params.token, req.body), 'Details updated.'));
 const consent = asyncHandler(async (req, res) => success(res, await service.recordConsent(req.params.token, req.body, req), 'Consent recorded.'));
 const uploadDocument = asyncHandler(async (req, res) => created(res, await service.addDocument(req.params.token, req.file, req.body.documentType || 'OTHER', req.body.documentNumber, req.body.customFormId, req.body.documentCategory), 'Document uploaded.'));
-const deleteCustomFormDocument = asyncHandler(async (req, res) => success(res, await service.deleteCustomFormDocument(req.params.token, req.params.documentId), 'Uploaded form deleted.'));
+const deletePortalDocument = asyncHandler(async (req, res) => success(res, await service.deletePortalDocument(req.params.token, req.params.documentId), 'Uploaded document deleted.'));
 
-module.exports = { issue, remind, status, lock, unlockForCorrections, validateUpload, getPortal, downloadFormTemplate, updateProfile, consent, uploadDocument, deleteCustomFormDocument };
+module.exports = { issue, remind, status, lock, unlockForCorrections, validateUpload, getPortal, downloadFormTemplate, updateProfile, consent, uploadDocument, deletePortalDocument };

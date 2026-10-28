@@ -68,9 +68,15 @@ const list = async ({ companyId, skip, limit, search, clientId, subclientId, sta
       take: limit,
       orderBy: { [sortBy]: sortOrder },
       include: {
-        client: { select: { id: true, name: true, clientCode: true, contactEmail: true, contactPhone: true } },
-        subclient: { select: { id: true, name: true, clientCode: true, serviceRates: true } },
+        client: { select: { id: true, name: true, clientCode: true, contactEmail: true, contactPhone: true, candidateFormConfig: true } },
+        subclient: { select: { id: true, name: true, clientCode: true, serviceRates: true, candidateFormConfig: true } },
         _count: { select: { bgvCases: true } },
+        documents: true,
+        bgvCases: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { checks: { include: { documents: true } } },
+        },
       },
     }),
     prisma.candidate.count({ where }),

@@ -634,7 +634,15 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function DocumentList({ documents, emptyText, hideType = false, customForms = [] }: { documents: PortalDocument[]; emptyText: string; hideType?: boolean; customForms?: CandidateCustomForm[] }) {
+function DocumentList({ documents, emptyText, hideType = false, customForms = [], onDeleteDocument, deletingDocumentId = null, readOnly = false }: {
+  documents: PortalDocument[];
+  emptyText: string;
+  hideType?: boolean;
+  customForms?: CandidateCustomForm[];
+  onDeleteDocument?: (document: PortalDocument) => void;
+  deletingDocumentId?: string | null;
+  readOnly?: boolean;
+}) {
   if (!documents.length) {
     return <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">{emptyText}</p>;
   }
@@ -666,6 +674,12 @@ function DocumentList({ documents, emptyText, hideType = false, customForms = []
                 <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>
                   View file <ExternalLink size={12} aria-hidden="true" />
                 </a>
+              )}
+              {onDeleteDocument && document.fileUrl && /^\/uploads\/candidate-documents\/portal\/[a-f0-9]{64}\/[^/\\]+$/i.test(document.fileUrl) && !readOnly && (
+                <button type="button" onClick={() => onDeleteDocument(document)} disabled={Boolean(deletingDocumentId)} className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:underline disabled:opacity-50">
+                  {deletingDocumentId === document.id ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Trash2 size={12} aria-hidden="true" />}
+                  {deletingDocumentId === document.id ? 'Deleting…' : 'Delete file'}
+                </button>
               )}
             </div>
           </li>
@@ -837,7 +851,7 @@ function AttachmentUploader({ token, title = '', description = '', types, requir
 /* ------------------------------------------------------------------ */
 /* One card per ID: number field + upload + uploaded files             */
 /* ------------------------------------------------------------------ */
-function IdentityCard({ title, field, value, error, documents, token, onChange, onUploaded, documentRequired = false, readOnly = false, uploadReadOnly = false }: {
+function IdentityCard({ title, field, value, error, documents, token, onChange, onUploaded, onDeleteDocument, deletingDocumentId, documentRequired = false, readOnly = false, uploadReadOnly = false }: {
   title: string;
   field: FieldDef;
   value: string;
@@ -846,6 +860,8 @@ function IdentityCard({ title, field, value, error, documents, token, onChange, 
   token: string;
   onChange: (value: string) => void;
   onUploaded: (count: number) => void | Promise<void>;
+  onDeleteDocument: (document: PortalDocument) => void;
+  deletingDocumentId: string | null;
   documentRequired?: boolean;
   readOnly?: boolean;
   uploadReadOnly?: boolean;
@@ -869,7 +885,7 @@ function IdentityCard({ title, field, value, error, documents, token, onChange, 
         <div>
           <p className="mb-1.5 text-sm font-medium text-slate-700">Copy of {title}{documentRequired && <RequiredMark />}</p>
           <AttachmentUploader variant="inline" token={token} types={[docType]} documentNumber={numberForFile} onUploaded={onUploaded} readOnly={uploadReadOnly} />
-          {sorted.length > 0 && <div className="mt-3"><DocumentList documents={sorted} emptyText="" hideType /></div>}
+          {sorted.length > 0 && <div className="mt-3"><DocumentList documents={sorted} emptyText="" hideType onDeleteDocument={onDeleteDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} /></div>}
         </div>
       </div>
     </section>
@@ -893,6 +909,7 @@ export default function CandidatePortalPage() {
   const [consent, setConsent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
@@ -1014,13 +1031,16 @@ export default function CandidatePortalPage() {
     }
     if (key === 'family') return candidateFormConfig.sections.family.enabled;
     if (key === 'education') return candidateFormConfig.sections.education.enabled
-      && (isCategoryRequested('EDUCATION') || portal?.progress.pending.some((item) => item.category === 'EDUCATION'));
+      && (candidateFormConfig.educationDocuments.some((document) => document.enabled)
+        || isCategoryRequested('EDUCATION')
+        || portal?.progress.pending.some((item) => item.category === 'EDUCATION'));
     if (key === 'employment') return candidateFormConfig.sections.employment.enabled
       && (isCategoryRequested('EMPLOYMENT') || portal?.progress.pending.some((item) => item.category === 'EMPLOYMENT'));
     if (key === 'policeVerification') return policeVerificationForms.length > 0;
     if (key === 'bgv') return bgvForms.length > 0;
     if (key === 'cibil') return customFormsFor('CIBIL').length > 0;
     if (key === 'otherChecks') return customFormsFor('OTHER_CHECKS').length > 0;
+    if (key === 'consent') return true;
     return true;
   });
   const visibleTabKeys = visibleTabs.map(({ key }) => key).join('|');
@@ -1125,6 +1145,12 @@ export default function CandidatePortalPage() {
   const requiredEducationUploadTypes = (portal?.progress.pending ?? []).flatMap((item) =>
     item.category === 'EDUCATION' && item.documentType ? [item.documentType] : [],
   );
+  const educationUploadTypes = Array.from(new Set([
+    ...candidateFormConfig.educationDocuments.filter((document) => document.enabled).map((document) => document.type),
+    ...(portal?.progress.pending ?? [])
+      .filter((item): item is PendingItem & { documentType: string } => item.category === 'EDUCATION' && Boolean(item.documentType))
+      .map((item) => item.documentType),
+  ]));
   const run = async (action: () => Promise<void>): Promise<boolean> => {
     setSaving(true);
     setError('');
@@ -1421,6 +1447,22 @@ export default function CandidatePortalPage() {
     return refreshPortal();
   };
 
+  const deleteUploadedDocument = async (document: PortalDocument) => {
+    if (!window.confirm(`Delete "${document.fileName}"? You can upload a replacement afterward.`)) return;
+    setDeletingDocumentId(document.id);
+    setError('');
+    setMessage('');
+    try {
+      await api.delete(`/candidate-portal/${token}/documents/${encodeURIComponent(document.id)}`);
+      await fetchPortal(false);
+      setMessage('Document deleted. You can upload a replacement.');
+    } catch (requestError: unknown) {
+      setError(requestMessage(requestError, 'Could not delete this document. Please try again.'));
+    } finally {
+      setDeletingDocumentId(null);
+    }
+  };
+
   if (loading) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-50 text-slate-600" aria-busy="true">
@@ -1445,14 +1487,13 @@ export default function CandidatePortalPage() {
   const { progress } = portal;
   const requiredConsentItems = progress.pending.filter((item) => (
     (item.type === 'profile' && item.key !== 'profile')
-    || (item.type === 'document' && Boolean(item.customFormId))
+    || item.type === 'document'
   ));
-  const requiredCustomFormItems = requiredConsentItems.filter((item) => item.type === 'document' && item.customFormId);
   const nameParts = splitFullName(form.fullName || '');
   const firstName = nameParts?.firstName || (typeof portal.candidate.firstName === 'string' ? portal.candidate.firstName : 'there');
   const companyLogo = resolveLogoUrl(portal.company.logoUrl);
   const companyMonogram = portal.company.name.trim().split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase() || 'C';
-  const requiredUploadItems = progress.pending.filter((item) => item.type === 'document' && !item.customFormId);
+  const requiredUploadItems = progress.pending.filter((item) => item.type === 'document');
   const overviewForms = (['BGV', 'IDENTITY', 'EDUCATION', 'EMPLOYMENT', 'POLICE_VERIFICATION', 'CIBIL', 'OTHER_CHECKS', 'OTHER'] as CandidateCustomForm['category'][])
     .flatMap((category) => customFormsFor(category));
   const overviewInstructions: { tab: TabKey; title: string; description: string; details: string[] }[] = [
@@ -1524,7 +1565,9 @@ export default function CandidatePortalPage() {
       description: 'Add each qualification as a separate record and attach its matching certificate or marksheet. Include any client-provided education form.',
       details: [
         ...educationRecordFields.map((field) => `${field.label}${field.required ? ' (required)' : ''}`),
-        `Separate certificate or marksheet for each record${requiredEducationUploadTypes.includes('EDUCATION_CERTIFICATE') ? ' (required)' : ''}`,
+        ...candidateFormConfig.educationDocuments.filter((document) => document.enabled).map((document) =>
+          `Separate certificate or marksheet for each record${document.required ? ' (required)' : ''}`,
+        ),
       ],
     });
   }
@@ -1768,6 +1811,8 @@ export default function CandidatePortalPage() {
                 token={token}
                 onChange={(value) => setField(item.fieldKey, value)}
                 onUploaded={afterUpload}
+                onDeleteDocument={deleteUploadedDocument}
+                deletingDocumentId={deletingDocumentId}
                 documentRequired={identityConfigFor(item.fieldKey)?.documentRequired}
                 readOnly={profileReadOnly}
                 uploadReadOnly={uploadReadOnly}
@@ -1841,7 +1886,7 @@ export default function CandidatePortalPage() {
               ) : <p className="text-sm text-slate-500">This client has not requested address verification documents.</p>}
               <div className="mt-4">
                 <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded address documents ({addressDocuments.length})</h3>
-                <DocumentList documents={addressDocuments} emptyText="No address documents uploaded yet." />
+                <DocumentList documents={addressDocuments} emptyText="No address documents uploaded yet." onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
               </div>
             </SectionCard>
           </div>
@@ -1878,12 +1923,12 @@ export default function CandidatePortalPage() {
                           />
                         ))}
                       </div>
-                      <div className="mt-5">
+                      {educationUploadTypes.length > 0 && <div className="mt-5">
                         <h4 className="mb-2 text-sm font-medium text-slate-700">Certificate or marksheet for this qualification{requiredEducationUploadTypes.includes('EDUCATION_CERTIFICATE') && <RequiredMark />}</h4>
                         <AttachmentUploader
                           variant="inline"
                           token={token}
-                          types={EDUCATION_TYPES}
+                          types={educationUploadTypes}
                           requiredTypes={requiredEducationUploadTypes}
                           documentNumber={record.id}
                           documentCategory="EDUCATION"
@@ -1891,9 +1936,9 @@ export default function CandidatePortalPage() {
                           readOnly={uploadReadOnly}
                         />
                         <div className="mt-3">
-                          <DocumentList documents={documents} emptyText="No document attached to this education record yet." />
+                          <DocumentList documents={documents} emptyText="No document attached to this education record yet." onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
                         </div>
-                      </div>
+                      </div>}
                     </section>
                   );
                 })}
@@ -1919,7 +1964,7 @@ export default function CandidatePortalPage() {
             </SectionCard>
             {educationDocuments.some((document) => !educationRecords.some((record) => record.id === document.documentNumber)) && (
               <SectionCard icon={Paperclip} title="Other education documents" description="Documents uploaded before the education records were added.">
-                <DocumentList documents={educationDocuments.filter((document) => !educationRecords.some((record) => record.id === document.documentNumber))} emptyText="No unassigned education documents." />
+                <DocumentList documents={educationDocuments.filter((document) => !educationRecords.some((record) => record.id === document.documentNumber))} emptyText="No unassigned education documents." onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
               </SectionCard>
             )}
             {customFormsFor('EDUCATION').map((form) => (
@@ -1979,7 +2024,7 @@ export default function CandidatePortalPage() {
             ))}
             <div className="px-1">
               <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded employment documents ({employmentDocuments.length})</h3>
-              <DocumentList documents={employmentDocuments} emptyText="No employment documents uploaded yet." />
+              <DocumentList documents={employmentDocuments} emptyText="No employment documents uploaded yet." onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
             </div>
           </div>
         )}
@@ -2047,7 +2092,7 @@ export default function CandidatePortalPage() {
             ))}
             <div className="px-1 pt-2">
               <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded documents ({portal.documents.length})</h3>
-              <DocumentList documents={portal.documents} emptyText="Nothing uploaded yet. Documents you add above will appear here." customForms={customForms} />
+              <DocumentList documents={portal.documents} emptyText="Nothing uploaded yet. Documents you add above will appear here." customForms={customForms} onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
             </div>
           </div>
         )}
@@ -2154,7 +2199,7 @@ export default function CandidatePortalPage() {
                             </dl>
                             <div className="mt-4">
                               <p className="mb-2 text-xs font-medium text-slate-500">Attached documents</p>
-                              <DocumentList documents={educationDocuments.filter((document) => document.documentNumber === record.id)} emptyText="No document attached to this record." />
+                              <DocumentList documents={educationDocuments.filter((document) => document.documentNumber === record.id)} emptyText="No document attached to this record." onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
                             </div>
                           </div>
                         ))}
@@ -2207,7 +2252,7 @@ export default function CandidatePortalPage() {
                       <h3 className="text-sm font-semibold text-slate-900">Uploaded documents</h3>
                       <button type="button" onClick={() => setActiveTab('documents')} className="text-xs font-semibold hover:underline" style={{ color: 'var(--accent)' }}>View documents</button>
                     </div>
-                    <DocumentList documents={portal.documents} emptyText="No documents uploaded yet." customForms={customForms} />
+                    <DocumentList documents={portal.documents} emptyText="No documents uploaded yet." customForms={customForms} onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
                   </section>
                 </div>
               </SectionCard>
@@ -2225,10 +2270,10 @@ export default function CandidatePortalPage() {
                 <p className="text-sm text-slate-600">This verification case is completed or cancelled. Contact {portal.company.name} if you need help.</p>
               </SectionCard>
             ) : !progress.consentReady ? (
-              <SectionCard icon={ShieldCheck} title="Complete required items before consent" description="Consent will be available after required profile fields and client-required forms are complete.">
+              <SectionCard icon={ShieldCheck} title="Complete required items before consent" description="Consent will be available after all required profile information and documents are submitted.">
                 <p className="text-sm leading-6 text-slate-700">
                   Please complete every outstanding item below.
-                  {requiredCustomFormItems.length > 0 && ' Client-required forms must be downloaded, completed, and uploaded before consent. This includes any required BGV or police verification (PCC) forms configured for your case.'}
+                  {' Required education and employment documents, as well as BGV and police verification (PCC) forms, must be uploaded before consent.'}
                 </p>
                 {requiredConsentItems.length > 0 ? (
                   <ul className="mt-4 space-y-2">
@@ -2244,7 +2289,7 @@ export default function CandidatePortalPage() {
                           className="shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-white"
                           style={{ backgroundColor: 'var(--accent)' }}
                         >
-                          {item.customFormId ? 'Complete this form' : 'Complete this section'}
+                          {item.type === 'document' ? (item.customFormId ? 'Complete this form' : 'Upload document') : 'Complete this section'}
                         </button>
                       </li>
                     ))}

@@ -65,6 +65,6 @@ router.get('/:token', controller.getPortal);
 router.patch('/:token/profile', controller.updateProfile);
 router.post('/:token/consent', controller.consent);
 router.post('/:token/documents', controller.validateUpload, uploadCandidateDocument, controller.uploadDocument);
-router.delete('/:token/documents/:documentId', controller.validateUpload, controller.deleteCustomFormDocument);
+router.delete('/:token/documents/:documentId', controller.validateUpload, controller.deletePortalDocument);
 
 module.exports = router;

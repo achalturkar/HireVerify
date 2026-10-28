@@ -38,6 +38,7 @@ const EMPLOYMENT_DOCUMENT_TYPES = [
   'EMPLOYMENT_CONTRACT',
   'OTHER',
 ];
+const EDUCATION_DOCUMENT_TYPES = ['EDUCATION_CERTIFICATE'];
 const CUSTOM_FORM_CATEGORIES = ['BGV', 'IDENTITY', 'EDUCATION', 'EMPLOYMENT', 'POLICE_VERIFICATION', 'CIBIL', 'OTHER_CHECKS', 'OTHER'];
 const CANDIDATE_FORM_REQUIRED_FIELDS = {
   phone: true,
@@ -83,6 +84,11 @@ DEFAULT_CANDIDATE_FORM_CONFIG.address = {
 };
 DEFAULT_CANDIDATE_FORM_CONFIG.customForms = [];
 DEFAULT_CANDIDATE_FORM_CONFIG.employmentDocuments = EMPLOYMENT_DOCUMENT_TYPES.map((type) => ({
+  type,
+  enabled: true,
+  required: false,
+}));
+DEFAULT_CANDIDATE_FORM_CONFIG.educationDocuments = EDUCATION_DOCUMENT_TYPES.map((type) => ({
   type,
   enabled: true,
   required: false,
@@ -136,6 +142,12 @@ const normalizeConfig = (value) => {
     const enabled = document ? document.enabled === true : true;
     return { type, enabled, required: enabled && document?.required === true };
   });
+  const sourceEducationDocuments = Array.isArray(source.educationDocuments) ? source.educationDocuments : [];
+  const educationDocuments = EDUCATION_DOCUMENT_TYPES.map((type) => {
+    const document = sourceEducationDocuments.find((item) => item && item.type === type);
+    const enabled = document ? document.enabled === true : true;
+    return { type, enabled, required: enabled && document?.required === true };
+  });
   const sourceAddress = source.address && typeof source.address === 'object' && !Array.isArray(source.address) ? source.address : {};
   const sourceAddressDocuments = Array.isArray(sourceAddress.documents) ? sourceAddress.documents : [];
   const address = {
@@ -150,14 +162,14 @@ const normalizeConfig = (value) => {
       return { type, enabled, required: enabled && document?.required === true };
     }),
   };
-  return { ...identities, invitationExpiryDays, fields, sections, address, customForms, employmentDocuments };
+  return { ...identities, invitationExpiryDays, fields, sections, address, customForms, employmentDocuments, educationDocuments };
 };
 
 const validateConfig = (value, clientId) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new BadRequestError('Candidate form configuration must be an object.');
   }
-  const allowedKeys = new Set([...IDENTITY_FIELDS.map(({ key }) => key), 'invitationExpiryDays', 'fields', 'sections', 'address', 'customForms', 'employmentDocuments']);
+  const allowedKeys = new Set([...IDENTITY_FIELDS.map(({ key }) => key), 'invitationExpiryDays', 'fields', 'sections', 'address', 'customForms', 'employmentDocuments', 'educationDocuments']);
   for (const [key, field] of Object.entries(value)) {
     if (key === 'invitationExpiryDays') {
       if (!Number.isInteger(field) || field < 1 || field > 30) {
@@ -272,6 +284,24 @@ const validateConfig = (value, clientId) => {
       }
       continue;
     }
+    if (key === 'educationDocuments') {
+      if (!Array.isArray(field) || field.length !== EDUCATION_DOCUMENT_TYPES.length) {
+        throw new BadRequestError('Education document settings are invalid.');
+      }
+      const types = new Set();
+      for (const document of field) {
+        if (!document || typeof document !== 'object' || Array.isArray(document)
+          || !EDUCATION_DOCUMENT_TYPES.includes(document.type)
+          || typeof document.enabled !== 'boolean' || typeof document.required !== 'boolean'
+          || (document.required && !document.enabled)
+          || Object.keys(document).some((property) => !['type', 'enabled', 'required'].includes(property))) {
+          throw new BadRequestError('An education document setting is invalid.');
+        }
+        if (types.has(document.type)) throw new BadRequestError('Education document types must be unique.');
+        types.add(document.type);
+      }
+      continue;
+    }
     if (!allowedKeys.has(key) || !field || typeof field !== 'object' || Array.isArray(field)) {
       throw new BadRequestError(`Candidate form configuration contains an unsupported field: ${key}.`);
     }
@@ -320,6 +350,7 @@ module.exports = {
   IDENTITY_FIELDS,
   CANDIDATE_FORM_SECTIONS,
   EMPLOYMENT_DOCUMENT_TYPES,
+  EDUCATION_DOCUMENT_TYPES,
   CANDIDATE_FORM_REQUIRED_FIELDS,
   CUSTOM_FORM_CATEGORIES,
   ADDRESS_DOCUMENT_TYPES,

@@ -17,15 +17,15 @@ const candidateSummaryCards = [
   { label: 'All candidates', status: '' as const, accent: 'var(--primary)', icon: Users },
   { label: 'Pending', status: 'PENDING' as const, accent: '#8891B8', icon: Clock3 },
   { label: 'Mail sent', status: 'INVITED' as const, accent: '#F2AE55', icon: Mail },
-  { label: 'Details updated', status: 'IN_PROGRESS' as const, accent: '#5EA8D9', icon: UserRound },
-  { label: 'Details completed', status: 'COMPLETED' as const, accent: '#269A78', icon: CheckCircle2 },
+  { label: 'In progress', status: 'IN_PROGRESS' as const, accent: '#5EA8D9', icon: UserRound },
+  { label: 'Intake complete', status: 'COMPLETED' as const, accent: '#269A78', icon: CheckCircle2 },
 ];
 const statusLabel: Record<CandidateStatus, string> = {
   PENDING: 'Pending',
   INVITED: 'Mail sent',
-  IN_PROGRESS: 'Details updated',
+  IN_PROGRESS: 'In progress',
   VERIFICATION_IN_PROGRESS: 'Verification in progress',
-  COMPLETED: 'Details completed',
+  COMPLETED: 'Intake complete',
   WITHDRAWN: 'Withdrawn',
   ON_HOLD: 'On hold',
 };

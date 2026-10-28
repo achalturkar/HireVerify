@@ -289,6 +289,36 @@ const pendingFor = (candidate) => {
       }]
       : [];
     const educationRecords = storedEducationHistory.length ? storedEducationHistory : legacyEducation;
+    const requiredEducationDocuments = candidateFormConfig.educationDocuments.filter((document) => document.enabled && document.required);
+    if (requiredEducationDocuments.length && educationRecords.length === 0) {
+      for (const document of requiredEducationDocuments) {
+        pending.push({
+          key: `education-document-record-${document.type}`,
+          label: `Add an education record and upload your ${document.type.replaceAll('_', ' ').toLowerCase()}`,
+          type: 'document',
+          documentType: document.type,
+          category: 'EDUCATION',
+        });
+      }
+    }
+    educationRecords.forEach((record, index) => {
+      for (const document of requiredEducationDocuments) {
+        const recordId = record.id || (educationRecords.length === 1 ? 'legacy-education' : null);
+        const uploaded = existingDocuments.some((item) =>
+          item.documentType === document.type
+          && (item.documentNumber === recordId || (!item.documentNumber && educationRecords.length === 1)),
+        );
+        if (!uploaded) {
+          pending.push({
+            key: `education-document-${index}-${document.type}`,
+            label: `Upload your ${document.type.replaceAll('_', ' ').toLowerCase()} for education record ${index + 1}`,
+            type: 'document',
+            documentType: document.type,
+            category: 'EDUCATION',
+          });
+        }
+      }
+    });
     const requiredEducationFields = Object.keys(requiredFields).filter((field) => (
       ['qualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage'].includes(field)
       && requiredFields[field]?.required
@@ -321,12 +351,29 @@ const pendingFor = (candidate) => {
 
   const profileComplete = Boolean(candidate.firstName && candidate.lastName && candidate.email)
     && !pending.some((item) => item.type === 'profile');
-  const requiredFormsComplete = !pending.some((item) => item.type === 'document' && item.customFormId);
+  const requiredDocumentsComplete = !pending.some((item) => item.type === 'document');
   if (!profileComplete) pending.push({ key: 'profile', label: 'Review and complete your details', type: 'profile' });
-  const consentReady = !consentComplete && profileComplete && requiredFormsComplete
+  const consentReady = !consentComplete && profileComplete && requiredDocumentsComplete
     && (!activeCase || !['COMPLETED', 'CANCELLED'].includes(activeCase.status));
   if (!consentComplete) pending.push({ key: 'consent', label: 'Give background verification consent', type: 'consent' });
   return { activeCase, pending, consentComplete, consentReady, formLocked, uploadsLocked, profileComplete };
+};
+
+const getCandidateIntakeStatus = (candidate) => {
+  if (!['IN_PROGRESS', 'COMPLETED'].includes(candidate.status)) return candidate.status;
+  const progress = pendingFor(candidate);
+  return progress.profileComplete && !progress.pending.some((item) => item.type === 'document')
+    ? 'COMPLETED'
+    : 'IN_PROGRESS';
+};
+
+const syncCandidateIntakeStatus = async (candidateId, currentStatus, progress) => {
+  if (!['PENDING', 'INVITED', 'IN_PROGRESS', 'COMPLETED'].includes(currentStatus)) return;
+  const requiredDocumentsComplete = !progress.pending.some((item) => item.type === 'document');
+  const status = progress.profileComplete && requiredDocumentsComplete ? 'COMPLETED' : 'IN_PROGRESS';
+  if (status !== currentStatus) {
+    await prisma.candidate.update({ where: { id: candidateId }, data: { status } });
+  }
 };
 
 const toDto = (invitation) => {
@@ -773,9 +820,9 @@ const updateProfile = async (token, payload) => {
   }
   if (!Object.keys(data).length) throw new BadRequestError('Provide at least one detail to update.');
   const candidateAfterUpdate = { ...invitation.candidate, ...data };
-  const { profileComplete } = pendingFor(candidateAfterUpdate);
+  const progress = pendingFor(candidateAfterUpdate);
   const nextStatus = ['PENDING', 'INVITED', 'IN_PROGRESS', 'COMPLETED'].includes(invitation.candidate.status)
-    ? profileComplete ? 'COMPLETED' : 'IN_PROGRESS'
+    ? progress.profileComplete && !progress.pending.some((item) => item.type === 'document') ? 'COMPLETED' : 'IN_PROGRESS'
     : invitation.candidate.status;
   await prisma.candidate.update({ where: { id: invitation.candidateId }, data: { ...data, status: nextStatus } });
   return getPortal(token);
@@ -837,7 +884,8 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
     }
   } else if (documentCategory === 'EDUCATION') {
     const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
-    if (!candidateFormConfig.sections.education.enabled || documentType !== 'EDUCATION_CERTIFICATE') {
+    const educationDocument = candidateFormConfig.educationDocuments.find((item) => item.type === documentType && item.enabled);
+    if (!candidateFormConfig.sections.education.enabled || !educationDocument) {
       await rejectDocumentUpload(file, 'This education document type is not enabled for this client.');
     }
   } else if (ADDRESS_DOCUMENT_TYPES.includes(documentType)) {
@@ -898,10 +946,12 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
   }
   const fileName = path.basename(file.originalname).replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 255) || 'document';
   const document = await prisma.candidateDocument.create({ data: { candidateId: invitation.candidateId, documentType, documentNumber: storedDocumentNumber, fileName, fileUrl: `/uploads/candidate-documents/portal/${token}/${path.basename(file.filename)}`, mimeType: file.mimetype, fileSize: file.size } });
-  return { document, status: await getPortal(token) };
+  const status = await getPortal(token);
+  await syncCandidateIntakeStatus(invitation.candidateId, invitation.candidate.status, status.progress);
+  return { document, status };
 };
 
-const deleteCustomFormDocument = async (token, documentId) => {
+const deletePortalDocument = async (token, documentId) => {
   const invitation = await findInvitation(token);
   if (areUploadsLocked(invitation.candidate)) {
     throw new ConflictError('Document uploads are locked after the verification case is completed or cancelled.');
@@ -910,21 +960,20 @@ const deleteCustomFormDocument = async (token, documentId) => {
 
   const document = await prisma.candidateDocument.findFirst({
     where: { id: documentId, candidateId: invitation.candidateId },
-    select: { id: true, documentType: true, documentNumber: true, fileUrl: true },
+    select: { id: true, fileUrl: true },
   });
-  if (!document || document.documentType !== 'OTHER' || !document.documentNumber?.startsWith('CUSTOM_FORM:')) {
+  if (!document) {
     throw new NotFoundError('Uploaded form not found.');
   }
 
-  if (!/^[a-f0-9]{64}$/i.test(token)) throw new NotFoundError('Uploaded form not found.');
-  const expectedPrefix = `/uploads/candidate-documents/portal/${token}/`;
-  if (!document.fileUrl.startsWith(expectedPrefix)) throw new BadRequestError('Uploaded form file path is invalid.');
-  const fileName = document.fileUrl.slice(expectedPrefix.length);
+  const portalFileMatch = /^\/uploads\/candidate-documents\/portal\/([a-f0-9]{64})\/([^/\\]+)$/i.exec(document.fileUrl);
+  if (!portalFileMatch) throw new BadRequestError('Only documents uploaded through this candidate portal can be deleted here.');
+  const [, uploadToken, fileName] = portalFileMatch;
   if (!fileName || path.basename(fileName) !== fileName || fileName === '.' || fileName === '..') {
     throw new BadRequestError('Uploaded form file path is invalid.');
   }
 
-  const portalUploadDirectory = path.resolve(process.cwd(), 'uploads', 'candidate-documents', 'portal', token);
+  const portalUploadDirectory = path.resolve(process.cwd(), 'uploads', 'candidate-documents', 'portal', uploadToken);
   const filePath = path.resolve(portalUploadDirectory, fileName);
   if (path.dirname(filePath) !== portalUploadDirectory) throw new BadRequestError('Uploaded form file path is invalid.');
 
@@ -935,7 +984,9 @@ const deleteCustomFormDocument = async (token, documentId) => {
   await fs.unlink(filePath).catch((error) => {
     if (error.code !== 'ENOENT') throw error;
   });
-  return getPortal(token);
+  const status = await getPortal(token);
+  await syncCandidateIntakeStatus(invitation.candidateId, invitation.candidate.status, status.progress);
+  return status;
 };
 
-module.exports = { issue, unlockForCorrections, remind, getPortal, getCandidateFormTemplate, getStaffStatus, lock, updateProfile, recordConsent, assertPortalEditable, addDocument, deleteCustomFormDocument };
+module.exports = { issue, unlockForCorrections, remind, getPortal, getCandidateFormTemplate, getStaffStatus, lock, getCandidateIntakeStatus, updateProfile, recordConsent, assertPortalEditable, addDocument, deletePortalDocument };
