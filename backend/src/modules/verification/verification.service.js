@@ -178,14 +178,103 @@ const executeStandalone = async ({ type, inputData, apiVersion }) => {
 };
 
 const buildStandalonePdf = async ({ type, inputData, apiVersion }) => {
+  const initiatedAt = inputData?.initiatedAt ? new Date(inputData.initiatedAt) : new Date();
   const response = await executeStandalone({ type, inputData, apiVersion });
-  const doc = new PDFDocument({ size: 'A4', margin: 48 });
-  doc.fillColor('#0B3B66').fontSize(22).font('Helvetica-Bold').text('HireVerify Verification Report');
-  doc.moveDown(0.5).fillColor('#667085').fontSize(10).font('Helvetica').text(`Type: ${type} | API: ${apiVersion} | Generated ${new Date().toLocaleString()}`);
-  doc.moveDown().strokeColor('#D0D5DD').moveTo(48, doc.y).lineTo(547, doc.y).stroke();
-  doc.moveDown().fillColor('#101828').fontSize(15).font('Helvetica-Bold').text(`${type} provider response`);
-  doc.moveDown(0.5).fontSize(9).font('Courier').text(JSON.stringify({ result: response.result, providerRequestId: response.providerRequestId, providerReferenceId: response.providerReferenceId, data: response.resultData }, null, 2), { width: 499 });
-  doc.moveDown(2).fillColor('#667085').fontSize(9).font('Helvetica').text('This document contains the response returned by the configured verification provider.');
+  const completedAt = new Date();
+  const doc = new PDFDocument({ size: 'A4', margin: 0, layout: 'portrait' });
+  const data = response?.resultData || {};
+  const rawPanDetails = data.rawPanDetails || {};
+  const address = data.address || rawPanDetails.address || {};
+  const addressText = typeof address === 'string'
+    ? address
+    : String(address.full || [address.line1, address.line2, address.streetName || address.street_name, address.city, address.state, address.zip || address.postalCode, address.country].filter(Boolean).join(' ') || 'Not available');
+
+  const toDisplay = (value) => value === null || value === undefined || value === '' ? '—' : typeof value === 'boolean' ? (value ? 'True' : 'False') : String(value);
+  const formatDateTime = (date) => Number.isNaN(date.getTime())
+    ? '—'
+    : date.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }).replace(/\//g, '-').replace(',', '').toLowerCase();
+  const flattenNameSplit = () => {
+    const split = rawPanDetails.full_name_split || data.fullNameSplit || [];
+    return Array.isArray(split) ? split.join(' | ') : '—';
+  };
+
+  const pageTitle = type === 'PAN' ? 'PAN Verification' : `${type} Verification`;
+  const rows = [
+    ['PAN Number', toDisplay(data.panNumber || rawPanDetails.pan_number || inputData?.pan || 'Not available')],
+    ['Name', toDisplay(data.fullName || rawPanDetails.full_name || 'Not available')],
+    ['Father Name', toDisplay(rawPanDetails.father_name || rawPanDetails.fatherName || '—')],
+    ['Verification Date', toDisplay(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-'))],
+    ['Verification Source', 'https://www.incometax.gov.in'],
+    ['Name Split', flattenNameSplit()],
+    ['Masked Aadhaar', toDisplay(rawPanDetails.masked_aadhaar || data.maskedAadhaar || '—')],
+    ['Aadhaar Linked', toDisplay(rawPanDetails.aadhaar_linked ?? data.aadhaarLinked ?? '—')],
+    ['Email', toDisplay(rawPanDetails.email || data.email || '—')],
+    ['Phone Number', toDisplay(rawPanDetails.phone_number || data.phoneNumber || '—')],
+    ['Gender', toDisplay(rawPanDetails.gender || data.gender || '—')],
+    ['Date of Birth', toDisplay(rawPanDetails.dob || data.dob || '—')],
+    ['Input DOB', toDisplay(rawPanDetails.input_dob || data.inputDob || '—')],
+    ['DOB Verified', toDisplay(rawPanDetails.dob_verified ?? data.dobVerified ?? '—')],
+    ['DOB Check', toDisplay(rawPanDetails.dob_check ?? data.dobCheck ?? '—')],
+    ['Category', toDisplay(rawPanDetails.category || data.category || '—')],
+    ['Less Info', toDisplay(rawPanDetails.less_info ?? data.lessInfo ?? '—')],
+    ['Address', addressText],
+    ['Client ID', toDisplay(data.clientId || rawPanDetails.client_id || '—')],
+  ];
+
+  const tableX = 15;
+  const tableW = doc.page.width - 36;
+  const labelW = tableW * 0.4;
+  const valueW = tableW - labelW;
+  const borderColor = '#C5CEDB';
+  const labelFill = '#E8EDF5';
+  const navy = '#1F417A';
+  const textInset = 7;
+  const drawCell = (x, y, width, height, text, { fill, bold = false, centered = false, italic = false } = {}) => {
+    doc.fillColor(fill).rect(x, y, width, height).fill();
+    doc.strokeColor(borderColor).lineWidth(0.55).rect(x, y, width, height).stroke();
+    doc.fillColor(navy).font(italic ? 'Helvetica-Oblique' : bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9)
+      .text(toDisplay(text), x + textInset, y + Math.max(6, (height - 10) / 2), {
+        width: width - textInset * 2,
+        height: height - 4,
+        align: centered ? 'center' : 'left',
+        ellipsis: true,
+      });
+  };
+
+  doc.fillColor('#FFFFFF').rect(0, 0, doc.page.width, doc.page.height).fill();
+  doc.fillColor('#EEF2F8').rect(tableX, 7, tableW, 41).fill();
+  doc.fillColor(navy).font('Helvetica-Bold').fontSize(16).text(pageTitle, tableX, 20, { align: 'center', width: tableW });
+
+  doc.fillColor(navy).rect(tableX, 56, tableW, 32).fill();
+  doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(11).text(pageTitle, tableX, 66, { align: 'center', width: tableW });
+
+  let y = 99;
+  const dateColumnW = tableW / 2;
+  const dateLabels = [['Initiated Date', formatDateTime(initiatedAt)], ['Completed Date', formatDateTime(completedAt)]];
+  dateLabels.forEach(([label], index) => drawCell(tableX + dateColumnW * index, y, dateColumnW, 24, label, { fill: labelFill, bold: true }));
+  y += 24;
+  dateLabels.forEach(([, value], index) => drawCell(tableX + dateColumnW * index, y, dateColumnW, 26, value, { fill: '#FFFFFF' }));
+  y += 26;
+
+  rows.forEach(([label, value]) => {
+    const displayValue = toDisplay(value);
+    doc.font('Helvetica').fontSize(9);
+    const textHeight = doc.heightOfString(displayValue, { width: valueW - textInset * 2 });
+    const rowHeight = Math.max(25, Math.ceil(textHeight + 12));
+    drawCell(tableX, y, labelW, rowHeight, label, { fill: labelFill, bold: true });
+    drawCell(tableX + labelW, y, valueW, rowHeight, displayValue, { fill: '#FFFFFF' });
+    y += rowHeight;
+  });
+
+  const disclaimerY = y + 13;
+  const disclaimer = 'Disclaimer: The content of this report has been sourced from the government of India websites & this report has been updated on the date of verification. The data might have been changed, deleted or modified from thereon.';
+  doc.fillColor('#667085').font('Helvetica-Oblique').fontSize(8).text(disclaimer, tableX, disclaimerY, { width: tableW, align: 'left' });
+
+  const footerY = doc.page.height - 35;
+  doc.strokeColor(navy).lineWidth(0.7).moveTo(tableX, footerY).lineTo(tableX + tableW, footerY).stroke();
+  doc.fillColor('#667085').font('Helvetica').fontSize(7).text('Confidential . © Brainhunt Ventures Pvt Ltd', tableX, footerY + 7, { width: tableW / 2 });
+  doc.text('Page 1 / 1', tableX + tableW / 2, footerY + 7, { width: tableW / 2, align: 'right' });
+
   return doc;
 };
 

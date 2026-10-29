@@ -10,8 +10,9 @@ const issue = asyncHandler(async (req, res) => {
 	return created(res, { message: 'Portal link activated.', data }, 'Portal link activated.');
 });
 const extend = asyncHandler(async (req, res) => {
-	const data = await service.extend({ candidateId: req.params.candidateId, companyId: req.user.companyId, expiresInDays: req.body.expiresInDays });
-	return success(res, { message: 'Portal link extended without changing the link.', data }, 'Portal link extended without changing the link.');
+	const data = await service.extend({ candidateId: req.params.candidateId, companyId: req.user.companyId, expiresInDays: req.body.expiresInDays, sendEmail: req.body.sendEmail === true });
+	const message = data.emailSent ? 'Portal link extended and emailed.' : req.body.sendEmail === true ? 'Portal link extended, but the email could not be delivered.' : 'Portal link extended without sending an email.';
+	return success(res, { message, data }, message);
 });
 const remind = asyncHandler(async (req, res) => {
 	const result = await service.remind({ candidateId: req.params.candidateId, companyId: req.user.companyId });

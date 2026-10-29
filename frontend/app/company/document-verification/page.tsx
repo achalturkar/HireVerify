@@ -25,6 +25,27 @@ function collectImageUrls(value: unknown, result: string[] = []) {
   return result;
 }
 
+function formatHumanValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return 'Not available';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function formatAddress(data: Record<string, unknown> | null | undefined) {
+  if (!data || typeof data !== 'object') return 'Not available';
+  const address = data as Record<string, unknown>;
+  const parts = [
+    address.full,
+    address.line1,
+    address.line2,
+    address.streetName || address.street_name,
+    [address.city, address.state, address.zip].filter(Boolean).join(', '),
+    address.country,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' • ') : 'Not available';
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -45,6 +66,18 @@ export default function DocumentVerificationPage() {
   const [error, setError] = useState<string | null>(null);
   const config = useMemo(() => checks.find((item) => item.type === activeType) || checks[0], [activeType]);
   const imageUrls = response ? collectImageUrls(response.resultData) : [];
+  const rawPanDetails = activeType === 'PAN' && response && typeof response.resultData.rawPanDetails === 'object' && response.resultData.rawPanDetails ? response.resultData.rawPanDetails as Record<string, unknown> : null;
+  const panSummary = activeType === 'PAN' && response ? {
+    fullName: (response.resultData.fullName as string | undefined) || (rawPanDetails?.full_name as string | undefined) || 'Not available',
+    panNumber: (response.resultData.panNumber as string | undefined) || (rawPanDetails?.pan_number as string | undefined) || 'Not available',
+    dob: (response.resultData.dob as string | undefined) || (rawPanDetails?.dob as string | undefined) || 'Not available',
+    gender: (response.resultData.gender as string | undefined) || (rawPanDetails?.gender as string | undefined) || 'Not available',
+    email: (response.resultData.email as string | undefined) || (rawPanDetails?.email as string | undefined) || 'Not available',
+    phoneNumber: (response.resultData.phoneNumber as string | undefined) || (rawPanDetails?.phone_number as string | undefined) || 'Not available',
+    category: (response.resultData.category as string | undefined) || (rawPanDetails?.category as string | undefined) || 'Not available',
+    aadhaarLinked: response.resultData.aadhaarLinked ?? rawPanDetails?.aadhaar_linked ?? null,
+    address: formatAddress(response.resultData.address as Record<string, unknown> | null | undefined),
+  } : null;
 
   const updateType = (type: StandaloneVerificationType) => {
     setActiveType(type);
@@ -100,7 +133,37 @@ export default function DocumentVerificationPage() {
     </section>
 
     {response && <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Provider response</p><p className="mt-1 text-2xl font-semibold">{response.result.replaceAll('_', ' ')}</p></div><button type="button" onClick={downloadPdf} disabled={pdfLoading} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3.5 py-2.5 text-[12px] font-semibold disabled:opacity-50">{pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}Download PDF</button></div><div className="mb-4 grid gap-3 sm:grid-cols-2"><div className="rounded-lg bg-[var(--surface-muted)] p-3"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Request ID</p><p className="mt-1 break-all font-mono text-[12px]">{response.providerRequestId || 'Not returned'}</p></div><div className="rounded-lg bg-[var(--surface-muted)] p-3"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Reference ID</p><p className="mt-1 break-all font-mono text-[12px]">{response.providerReferenceId || 'Not returned'}</p></div></div><div className="flex items-center gap-2 border-b border-[var(--border)] pb-2 text-[12px] font-semibold"><FileJson size={15} className="text-[var(--primary)]" />Formatted JSON response</div><pre className="mt-3 max-h-[620px] overflow-auto rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-[11px] leading-5">{JSON.stringify(response.resultData, null, 2)}</pre></div>
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Provider response</p>
+            <p className="mt-1 text-2xl font-semibold">{response.result.replaceAll('_', ' ')}</p>
+          </div>
+          <button type="button" onClick={downloadPdf} disabled={pdfLoading} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3.5 py-2.5 text-[12px] font-semibold disabled:opacity-50">{pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}Download PDF</button>
+        </div>
+
+        {panSummary && <div className="mb-5 rounded-2xl border border-[var(--primary)]/20 bg-[var(--primary)]/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">PAN verification status</p>
+              <h3 className="mt-1 text-xl font-semibold text-[var(--foreground)]">{panSummary.fullName}</h3>
+            </div>
+            <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${response.result === 'VERIFIED' ? 'bg-emerald-500/15 text-emerald-600' : response.result === 'NOT_VERIFIED' ? 'bg-rose-500/15 text-rose-600' : 'bg-amber-500/15 text-amber-600'}`}>{response.result.replaceAll('_', ' ')}</span>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl bg-[var(--surface-muted)] p-3"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">PAN</p><p className="mt-1 font-medium">{panSummary.panNumber}</p></div>
+            <div className="rounded-xl bg-[var(--surface-muted)] p-3"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">DOB</p><p className="mt-1 font-medium">{panSummary.dob}</p></div>
+            <div className="rounded-xl bg-[var(--surface-muted)] p-3"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Gender</p><p className="mt-1 font-medium">{panSummary.gender}</p></div>
+            <div className="rounded-xl bg-[var(--surface-muted)] p-3"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Aadhaar linked</p><p className="mt-1 font-medium">{formatHumanValue(panSummary.aadhaarLinked)}</p></div>
+            <div className="rounded-xl bg-[var(--surface-muted)] p-3 sm:col-span-2 xl:col-span-2"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Email</p><p className="mt-1 break-all font-medium">{panSummary.email}</p></div>
+            <div className="rounded-xl bg-[var(--surface-muted)] p-3 sm:col-span-2 xl:col-span-2"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Phone</p><p className="mt-1 break-all font-medium">{panSummary.phoneNumber}</p></div>
+            <div className="rounded-xl bg-[var(--surface-muted)] p-3 sm:col-span-2"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Category</p><p className="mt-1 font-medium">{panSummary.category}</p></div>
+            <div className="rounded-xl bg-[var(--surface-muted)] p-3 sm:col-span-2"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Address</p><p className="mt-1 text-sm leading-5">{panSummary.address}</p></div>
+          </div>
+        </div>}
+
+        <div className="mb-4 grid gap-3 sm:grid-cols-2"><div className="rounded-lg bg-[var(--surface-muted)] p-3"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Request ID</p><p className="mt-1 break-all font-mono text-[12px]">{response.providerRequestId || 'Not returned'}</p></div><div className="rounded-lg bg-[var(--surface-muted)] p-3"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Reference ID</p><p className="mt-1 break-all font-mono text-[12px]">{response.providerReferenceId || 'Not returned'}</p></div></div><div className="flex items-center gap-2 border-b border-[var(--border)] pb-2 text-[12px] font-semibold"><FileJson size={15} className="text-[var(--primary)]" />Formatted JSON response</div><pre className="mt-3 max-h-[620px] overflow-auto rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-[11px] leading-5">{JSON.stringify(response.resultData, null, 2)}</pre></div>
       {imageUrls.length > 0 && <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">Returned document images</p><div className="mt-4 space-y-4">{imageUrls.map((url) => <img key={url} src={url} alt="Document returned by provider" className="max-h-[420px] w-full rounded-lg border border-[var(--border)] object-contain" />)}</div></div>}
     </section>}
   </div>;

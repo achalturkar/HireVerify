@@ -1245,16 +1245,19 @@ export default function CandidatePortalPage() {
       })))
       : validateFields(form, fields, automatic);
     if (section === 'employment') {
-      if (form.isFresher !== 'true') pastEmployments.forEach((record, index) => {
-        const recordStarted = hasPastEmploymentDetails(record);
-        pastEmploymentFields.forEach((field) => {
-          const value = record[field.key as keyof PastEmploymentForm].trim();
-          const problem = !value && recordStarted && field.required
-            ? `${field.label} is required.`
-            : value ? field.validate?.(value) : null;
-          if (problem) found[`past_${index}_${field.key}`] = problem;
+      if (form.isFresher !== 'true') {
+        pastEmployments.forEach((record, index) => {
+          const recordStarted = hasPastEmploymentDetails(record);
+          pastEmploymentFields.forEach((field) => {
+            const value = record[field.key as keyof PastEmploymentForm].trim();
+            const isRequired = field.required && recordStarted;
+            const problem = !value && isRequired
+              ? `${field.label} is required.`
+              : value ? field.validate?.(value) : null;
+            if (problem) found[`past_${index}_${field.key}`] = problem;
+          });
         });
-      });
+      }
     }
     if (section === 'education' && educationRecords.length === 0 && educationRecordFields.some((field) => field.required)) {
       found.education_required = 'Add at least one education record to complete the required education fields.';
@@ -1387,16 +1390,23 @@ export default function CandidatePortalPage() {
       });
     }
     if (candidateFormConfig.sections.employment.enabled) {
-      if (form.isFresher !== 'true') pastEmployments.forEach((record, index) => {
-        const recordStarted = hasPastEmploymentDetails(record);
-        pastEmploymentFields.forEach((field) => {
-          const value = record[field.key as keyof PastEmploymentForm].trim();
-          const problem = !value && recordStarted && field.required
-            ? `${field.label} is required.`
-            : value ? field.validate?.(value) : null;
-          if (problem) found[`past_${index}_${field.key}`] = problem;
+      if (form.isFresher !== 'true') {
+        const hasPastEmployer = pastEmployments.some((record) => record.employerName.trim() !== '');
+        if (!hasPastEmployer) {
+          found.past_0_employerName = 'Add at least one past employer, or select “I am a fresher”.';
+        }
+        pastEmployments.forEach((record, index) => {
+          const recordStarted = hasPastEmploymentDetails(record);
+          pastEmploymentFields.forEach((field) => {
+            const value = record[field.key as keyof PastEmploymentForm].trim();
+            const isRequired = field.required && recordStarted;
+            const problem = !value && isRequired
+              ? `${field.label} is required.`
+              : value ? field.validate?.(value) : null;
+            if (problem) found[`past_${index}_${field.key}`] = problem;
+          });
         });
-      });
+      }
     }
     setFieldErrors(found);
     if (Object.keys(found).length) {
@@ -1638,7 +1648,7 @@ export default function CandidatePortalPage() {
         ? effectiveSectionFields.employment.map((field) => field.label)
         : [
           ...effectiveSectionFields.employment.map((field) => `${field.label}${field.required ? ' (required)' : ''}`),
-          'Past employer name, role and employment dates',
+          'At least one past employer name is required unless you select “I am a fresher”',
           'Employer HR contact name and phone number',
           ...enabledEmploymentDocuments.map((document) => {
             const label = CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? humanize(document.type);
@@ -2100,7 +2110,14 @@ export default function CandidatePortalPage() {
                         {pastEmploymentFields.map((field) => (
                           <Field
                             key={`${index}-${field.key}`}
-                            def={{ ...field, required: hasPastEmploymentDetails(employment) && field.required, key: `past-${index}-${field.key}` }}
+                            def={{
+                              ...field,
+                              required: field.key === 'employerName'
+                                ? field.required && hasPastEmploymentDetails(employment)
+                                  || !pastEmployments.some((record) => record.employerName.trim() !== '') && index === 0
+                                : hasPastEmploymentDetails(employment) && field.required,
+                              key: `past-${index}-${field.key}`,
+                            }}
                             value={employment[field.key as keyof PastEmploymentForm]}
                             error={fieldErrors[`past_${index}_${field.key}`]}
                             disabled={profileReadOnly}

@@ -1,6 +1,7 @@
 'use strict';
 
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 const requireEnv = (key, fallback) => {
   const value = process.env[key];
@@ -84,9 +85,9 @@ const config = {
   },
 
   surepass: {
-    baseUrl: process.env.SUREPASS_BASE_URL || '',
+    baseUrl: process.env.SUREPASS_BASE_URL || 'https://kyc-api.surepass.io',
     bearerToken: process.env.SUREPASS_BEARER_TOKEN || '',
-    panEndpoint: process.env.SUREPASS_PAN_ENDPOINT || '',
+    panEndpoint: process.env.SUREPASS_PAN_ENDPOINT || '/api/v1/pan/pan-comprehensive',
     uanEndpoint: process.env.SUREPASS_UAN_ENDPOINT || '',
     addressEndpoint: process.env.SUREPASS_ADDRESS_ENDPOINT || '',
     courtEndpoint: process.env.SUREPASS_COURT_ENDPOINT || '',

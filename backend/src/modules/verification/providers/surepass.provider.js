@@ -5,21 +5,72 @@ const { BadRequestError, UnprocessableEntityError } = require('../../../utils/er
 
 const normalizeResponse = (payload) => {
   const data = payload?.data || payload?.result || payload || {};
-  const success = payload?.success !== false && payload?.status !== false;
-  const result = success ? (data?.pan_status === true || data?.valid === true || data?.verified === true ? 'VERIFIED' : data?.pan_status === false || data?.valid === false ? 'NOT_VERIFIED' : 'REQUIRES_REVIEW') : 'UNABLE_TO_VERIFY';
+  const panDetails = data?.pan_details || {};
+  const address = panDetails?.address || data?.address || {};
+  const success = payload?.success !== false && payload?.status !== false && payload?.status_code !== 422 && payload?.status_code !== 400;
+  const hasValidPan = Boolean(data?.pan_number || data?.panNumber || panDetails?.full_name || panDetails?.fullName || payload?.pan_number);
+  const result = success && hasValidPan ? 'VERIFIED' : success ? 'REQUIRES_REVIEW' : 'NOT_VERIFIED';
+  const resultData = {
+    verified: result === 'VERIFIED',
+    clientId: data?.client_id || data?.clientId || null,
+    panNumber: data?.pan_number || data?.panNumber || null,
+    fullName: panDetails?.full_name || data?.full_name || data?.name || null,
+    category: panDetails?.category || data?.category || null,
+    scoreStatus: data?.status || payload?.status || null,
+    statusCode: payload?.status_code ?? payload?.statusCode ?? null,
+    message: payload?.message || data?.message || null,
+    messageCode: payload?.message_code || payload?.messageCode || null,
+    isSoleProprietor: data?.is_sole_proprietor ?? data?.isSoleProprietor ?? null,
+    isDirector: data?.is_director ?? data?.isDirector ?? null,
+    isSalaried: data?.is_salaried ?? data?.isSalaried ?? null,
+    dob: panDetails?.dob || data?.dob || null,
+    gender: panDetails?.gender || data?.gender || null,
+    aadhaarLinked: panDetails?.aadhaar_linked ?? data?.aadhaar_linked ?? null,
+    email: panDetails?.email || data?.email || null,
+    phoneNumber: panDetails?.phone_number || data?.phone_number || null,
+    address: {
+      full: address?.full || null,
+      line1: address?.line_1 || address?.line1 || null,
+      line2: address?.line_2 || address?.line2 || null,
+      streetName: address?.street_name || address?.streetName || null,
+      city: address?.city || null,
+      state: address?.state || null,
+      zip: address?.zip || address?.postalCode || null,
+      country: address?.country || null,
+    },
+    rawPanDetails: panDetails,
+  };
+
   return {
     result,
-    resultData: {
-      verified: result === 'VERIFIED',
-      name: data?.full_name || data?.name || null,
-      panStatus: data?.pan_status ?? data?.status ?? null,
-      category: data?.category ?? null,
-      message: payload?.message || data?.message || null,
-    },
-    providerRequestId: payload?.request_id || payload?.requestId || data?.request_id || null,
-    providerReferenceId: payload?.reference_id || payload?.referenceId || data?.reference_id || null,
+    resultData,
+    providerRequestId: payload?.request_id || payload?.requestId || data?.request_id || data?.requestId || null,
+    providerReferenceId: payload?.reference_id || payload?.referenceId || data?.reference_id || data?.referenceId || null,
     rawResponse: payload,
   };
+};
+
+const defaultHeaders = () => ({
+  Authorization: 'Bearer ' + String(config.surepass.bearerToken || '').trim(),
+  'Content-Type': 'application/json',
+  Accept: 'application/json',
+});
+
+const buildPanPayload = (pan) => {
+  const idNumber = String(pan || '').trim().toUpperCase();
+  return {
+    id_number: idNumber,
+    masked_aadhaar_variant: '',
+    get_address: true,
+    get_contact: true,
+  };
+};
+
+const extractErrorMessage = (payload, fallback) => {
+  const message = payload?.message || payload?.error?.message || payload?.detail || payload?.error || payload?.data?.message || payload?.data?.error || null;
+  if (typeof message === 'string' && message.trim()) return message;
+  if (typeof payload === 'string' && payload.trim()) return payload;
+  return fallback;
 };
 
 const verifyPan = async ({ pan }) => {
@@ -32,11 +83,14 @@ const verifyPan = async ({ pan }) => {
 
   const response = await fetch(`${config.surepass.baseUrl.replace(/\/$/, '')}/${config.surepass.panEndpoint.replace(/^\//, '')}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${config.surepass.bearerToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id_number: pan }),
+    headers: defaultHeaders(),
+    body: JSON.stringify(buildPanPayload(pan)),
   });
   const body = await response.json().catch(() => null);
-  if (!response.ok) throw new UnprocessableEntityError('Surepass PAN verification failed');
+  if (!response.ok) {
+    const message = extractErrorMessage(body, 'Surepass PAN verification failed');
+    throw new UnprocessableEntityError(`Surepass PAN verification failed: ${message}`);
+  }
   return normalizeResponse(body);
 };
 
@@ -70,11 +124,14 @@ const verifyCheck = async ({ type, inputData, apiVersion = 'v1' }) => {
   const path = endpoint.replace(/^\//, '').replace(/^v1\//, `${apiVersion}/`);
   const response = await fetch(`${config.surepass.baseUrl.replace(/\/$/, '')}/${path}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${config.surepass.bearerToken}`, 'Content-Type': 'application/json' },
+    headers: defaultHeaders(),
     body: JSON.stringify(inputData || {}),
   });
   const body = await response.json().catch(() => null);
-  if (!response.ok) throw new UnprocessableEntityError(`Surepass ${type} verification failed`);
+  if (!response.ok) {
+    const message = extractErrorMessage(body, `Surepass ${type} verification failed`);
+    throw new UnprocessableEntityError(`Surepass ${type} verification failed: ${message}`);
+  }
   return genericResult(body);
 };
 

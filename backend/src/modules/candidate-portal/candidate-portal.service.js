@@ -330,6 +330,24 @@ const pendingFor = (candidate) => {
     }
   }
 
+  if (candidateFormConfig.sections.employment.enabled) {
+    const storedEmploymentHistory = Array.isArray(candidate.employmentHistory) ? candidate.employmentHistory : [];
+    const isFresher = storedEmploymentHistory.some((record) => record?.isCurrent === true && record.isFresher === true);
+    const hasPastEmployer = storedEmploymentHistory.some((record) =>
+      record && record.isCurrent !== true
+      && typeof record.employerName === 'string'
+      && record.employerName.trim() !== '',
+    );
+    if (!isFresher && !hasPastEmployer) {
+      pending.push({
+        key: 'employment-past-required',
+        label: 'Add at least one past employer or select that you are a fresher',
+        type: 'profile',
+        category: 'EMPLOYMENT',
+      });
+    }
+  }
+
   if (candidateFormConfig.sections.education.enabled) {
     const storedEducationHistory = Array.isArray(candidate.educationHistory) ? candidate.educationHistory : [];
     const legacyEducation = [candidate.highestQualification, candidate.courseName, candidate.institutionName, candidate.universityName, candidate.yearOfPassing, candidate.gradeOrPercentage]
@@ -568,7 +586,7 @@ const issue = async ({ candidateId, companyId, expiresInDays }) => {
   return { ...toStaffStatus({ ...invitation, lastSentAt }), emailSent, status: toDto(invitation) };
 };
 
-const extend = async ({ candidateId, companyId, expiresInDays }) => {
+const extend = async ({ candidateId, companyId, expiresInDays, sendEmail = false }) => {
   const candidate = await prisma.candidate.findFirst({
     where: { id: candidateId, ...(companyId ? { companyId } : {}), isDeleted: false },
     include: {
@@ -579,14 +597,10 @@ const extend = async ({ candidateId, companyId, expiresInDays }) => {
     },
   });
   if (!candidate) throw new NotFoundError('Candidate not found');
-  if (!candidate.email) throw new BadRequestError('Candidate email is required before extending a portal link.');
 
   const invitation = await prisma.candidatePortalInvitation.findUnique({ where: { candidateId } });
   if (!invitation) throw new NotFoundError('Candidate portal has not been activated.');
   if (invitation.revokedAt) throw new BadRequestError('This portal link is locked. Unlock it before extending.');
-  if (invitation.expiresAt <= new Date()) {
-    throw new BadRequestError('This portal link has expired. Resend the invitation to create a new link.');
-  }
   const token = decryptToken(invitation.encryptedToken);
   if (!token) {
     throw new BadRequestError('This link cannot be extended because it predates secure link storage. Resend the invitation to create a new link.');
@@ -602,19 +616,18 @@ const extend = async ({ candidateId, companyId, expiresInDays }) => {
     where: { candidateId },
     data: { expiresAt },
   });
-  const status = pendingFor(candidate);
-  const emailSent = await sendInvitationEmail({
-    candidate,
-    token,
-    reminder: true,
-    pendingCount: status.pending.length,
-  });
-  const finalInvitation = emailSent
-    ? await prisma.candidatePortalInvitation.update({
-      where: { candidateId },
-      data: { lastSentAt: new Date(), lastRemindedAt: new Date(), reminderCount: { increment: 1 } },
-    })
-    : updatedInvitation;
+  let finalInvitation = { ...invitation, ...updatedInvitation, encryptedToken: invitation.encryptedToken };
+  let emailSent = false;
+  if (sendEmail) {
+    const status = pendingFor(candidate);
+    emailSent = await sendInvitationEmail({ candidate, token, reminder: true, pendingCount: status.pending.length });
+    if (emailSent) {
+      finalInvitation = await prisma.candidatePortalInvitation.update({
+        where: { candidateId },
+        data: { lastSentAt: new Date(), lastRemindedAt: new Date(), reminderCount: { increment: 1 } },
+      });
+    }
+  }
   return { ...toStaffStatus(finalInvitation), emailSent };
 };
 

@@ -382,10 +382,10 @@ export async function activateCandidatePortal(id: string, expiresInDays: number,
   return json.data.data as CandidatePortalIssueResult;
 }
 
-export async function extendCandidatePortal(id: string, expiresInDays: number, accessToken?: string | null): Promise<CandidatePortalReminderResult> {
+export async function extendCandidatePortal(id: string, expiresInDays: number, accessToken?: string | null, sendEmail = false): Promise<CandidatePortalReminderResult> {
   const json = await authFetch(`/candidate-portal/invitations/${id}/extend`, accessToken, {
     method: 'POST',
-    body: JSON.stringify({ expiresInDays }),
+    body: JSON.stringify({ expiresInDays, sendEmail }),
   });
   return json.data.data as CandidatePortalReminderResult;
 }

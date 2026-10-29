@@ -525,11 +525,13 @@ export default function CandidateDetailPage() {
     }
   };
 
-  const issueLink = (mode: 'activate' | 'extend' | 'resend') => {
+  const issueLink = (mode: 'activate' | 'extend' | 'extend-email' | 'resend') => {
     if (!daysValid) return;
     void run(async () => {
       const result = mode === 'extend'
         ? await extendCandidatePortal(id, parsedDays, accessToken)
+        : mode === 'extend-email'
+          ? await extendCandidatePortal(id, parsedDays, accessToken, true)
         : await activateCandidatePortal(id, parsedDays, accessToken);
       setPortal({
         ...result,
@@ -538,15 +540,20 @@ export default function CandidateDetailPage() {
         lastRemindedAt: 'lastRemindedAt' in result ? result.lastRemindedAt : portal?.lastRemindedAt || null,
       });
       const until = formatDateTime(result.expiresAt) ?? '';
-      setNotice(result.emailSent
-        ? mode === 'resend'
-          ? `Invitation sent. A new link is active until ${until}.`
-          : mode === 'extend'
-            ? `Link extended until ${until}. The candidate's existing link remains unchanged.`
+      const emailSent = 'emailSent' in result && result.emailSent;
+      if (mode === 'extend' || mode === 'extend-email') {
+        setNotice(mode === 'extend-email'
+          ? emailSent
+            ? `Link extended until ${until}. The existing link is unchanged, and an email was sent.`
+            : `Link extended until ${until}, but the email could not be delivered. The existing link is still active.`
+          : `Link extended until ${until}. The existing link is unchanged, and no email was sent.`);
+      } else {
+        setNotice(emailSent
+          ? mode === 'resend'
+            ? `Invitation sent. A new link is active until ${until}.`
             : `Portal link activated until ${until}.`
-        : mode === 'extend'
-          ? `The existing link remains active and is extended until ${until}, but the email could not be delivered.`
           : `Portal access is active until ${until}, but the email could not be delivered. Use the active link below to share it with the candidate.`);
+      }
     }, 'Could not update portal access.');
   };
 
@@ -1032,7 +1039,7 @@ export default function CandidateDetailPage() {
                   {state === 'none' && 'The candidate has no portal link yet. Activate one so they can submit their details and documents.'}
                   {state === 'active' && `The candidate can open the portal. It expires on ${formatDateTime(expiresAt)} (${formatDuration(remainingMs)} remaining).`}
                   {state === 'expiring' && `The link is active and the candidate can still open it. It expires on ${formatDateTime(expiresAt)} (${formatDuration(remainingMs)} remaining). Extend it to give the candidate more time.`}
-                  {state === 'expired' && `This link expired ${formatDuration(remainingMs)} ago, on ${formatDateTime(expiresAt)}. The candidate cannot open it. Resend the invitation to give them a new link.`}
+                  {state === 'expired' && `This link expired ${formatDuration(remainingMs)} ago, on ${formatDateTime(expiresAt)}. Extend it to reactivate the same link without sending an email, or resend the invitation to issue a new link.`}
                   {state === 'locked' && `An admin locked this link${portal?.revokedAt ? ` on ${formatDateTime(portal.revokedAt)}` : ''}. The candidate cannot open it.${expired ? ' It has also expired, so resend the invitation to replace it.' : ' Unlock it to restore access.'}`}
                 </p>
               </div>
@@ -1075,7 +1082,7 @@ export default function CandidateDetailPage() {
               {(state !== 'locked' || needsResend || correctionUnlockAvailable) && (
                 <div className="space-y-4">
                   <DurationPicker value={daysInput} onChange={setDaysInput} valid={daysValid} />
-                  {newExpiry && <p className="text-sm text-[var(--muted)]">{needsResend || correctionUnlockAvailable ? 'The new link will' : 'The link will'} stay active until <span className="font-medium text-[var(--foreground)]">{formatDateTime(newExpiry)}</span>.</p>}
+                  {newExpiry && <p className="text-sm text-[var(--muted)]">{needsResend || correctionUnlockAvailable ? 'The link will be active' : 'The link will stay active'} until <span className="font-medium text-[var(--foreground)]">{formatDateTime(newExpiry)}</span>.</p>}
                 </div>
               )}
 
@@ -1090,10 +1097,15 @@ export default function CandidateDetailPage() {
                     {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Send size={15} aria-hidden="true" />}Resend invitation
                   </button>
                 )}
-                {(state === 'active' || state === 'expiring') && (
-                  <button type="button" onClick={() => issueLink('extend')} disabled={busy || !daysValid} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-[var(--primary-foreground)] disabled:opacity-50">
-                    {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Clock size={15} aria-hidden="true" />}Extend link
-                  </button>
+                {(state === 'active' || state === 'expiring' || state === 'expired') && (
+                  <>
+                    <button type="button" onClick={() => issueLink('extend')} disabled={busy || !daysValid} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-[var(--primary-foreground)] disabled:opacity-50">
+                      {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Clock size={15} aria-hidden="true" />}{state === 'expired' ? 'Extend same link (no email)' : 'Extend link (no email)'}
+                    </button>
+                    <button type="button" onClick={() => issueLink('extend-email')} disabled={busy || !daysValid} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2.5 text-sm font-semibold hover:bg-[var(--surface-muted)] disabled:opacity-50">
+                      {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Mail size={15} aria-hidden="true" />}{state === 'expired' ? 'Extend same link and email' : 'Extend link and email'}
+                    </button>
+                  </>
                 )}
                 {(state === 'active' || state === 'expiring') && (
                   <button type="button" onClick={sendPortalReminder} disabled={busy} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2.5 text-sm font-semibold hover:bg-[var(--surface-muted)] disabled:opacity-50">
