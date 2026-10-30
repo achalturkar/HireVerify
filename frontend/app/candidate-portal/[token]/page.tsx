@@ -2249,7 +2249,6 @@ export default function CandidatePortalPage() {
               <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} downloadAvailable={form.enabled} uploadAvailable={form.enabled} />
             ))}
             {policeVerificationForms.length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">No police verification form is currently requested.</p>}
-            {supportingDocumentsSection('POLICE_VERIFICATION')}
           </div>
         )}
 
@@ -2262,7 +2261,6 @@ export default function CandidatePortalPage() {
             {bgvForms.map((form) => (
               <CandidateFormTemplateUpload key={form.id} token={token} accent={accent} form={form} documents={portal.documents} onUploaded={refreshPortal} readOnly={uploadReadOnly} downloadAvailable={form.enabled} uploadAvailable={form.enabled} />
             ))}
-            {supportingDocumentsSection('BGV')}
           </div>
         )}
 

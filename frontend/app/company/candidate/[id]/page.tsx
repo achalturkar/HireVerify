@@ -314,7 +314,7 @@ function IdentityCard({ title, value, documents, origin, candidate, editing, onC
           <span className="grid h-9 w-9 place-items-center rounded-lg bg-[var(--surface-muted)] text-[var(--primary)]"><Hash size={18} aria-hidden="true" /></span>
           <h3 className="font-semibold">{title}</h3>
         </div>
-        {latest ? <DocStatus status={latest.verificationStatus} /> : <Pill className="bg-slate-100 text-slate-600 ring-slate-200">No file</Pill>}
+        {latest ? <DocStatus status={candidateDocumentReviewLabel(latest.verificationStatus)} /> : <Pill className="bg-slate-100 text-slate-600 ring-slate-200">No file</Pill>}
       </div>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--surface-muted)] px-4 py-3">
         <div>
@@ -450,22 +450,40 @@ export default function CandidateDetailPage() {
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
+    const refreshCandidateDetails = () => {
+      if (document.visibilityState !== 'visible' || editingProfile || busy) return;
+      void getCandidate(id, accessToken)
+        .then((detail) => {
+          if (cancelled) return;
+          const candidateDetail = detail as CandidateDetail;
+          setCandidate(candidateDetail);
+          setProfileValues(toProfileDraft(candidateDetail));
+        })
+        .catch(() => undefined);
+    };
     const refreshPortalStatus = () => {
       if (document.visibilityState !== 'visible') return;
       void getCandidatePortalStatus(id, accessToken)
         .then((status) => { if (!cancelled && status) setPortal(status); })
         .catch(() => undefined);
     };
-    const intervalId = window.setInterval(refreshPortalStatus, 15000);
-    window.addEventListener('focus', refreshPortalStatus);
-    document.addEventListener('visibilitychange', refreshPortalStatus);
+    const intervalId = window.setInterval(() => {
+      refreshPortalStatus();
+      refreshCandidateDetails();
+    }, 15000);
+    const refreshVisiblePage = () => {
+      refreshPortalStatus();
+      refreshCandidateDetails();
+    };
+    window.addEventListener('focus', refreshVisiblePage);
+    document.addEventListener('visibilitychange', refreshVisiblePage);
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
-      window.removeEventListener('focus', refreshPortalStatus);
-      document.removeEventListener('visibilitychange', refreshPortalStatus);
+      window.removeEventListener('focus', refreshVisiblePage);
+      document.removeEventListener('visibilitychange', refreshVisiblePage);
     };
-  }, [id, accessToken]);
+  }, [id, accessToken, editingProfile, busy]);
 
   // Keeps the "expires in" countdown and the expired state current without a refresh.
   useEffect(() => {
@@ -511,6 +529,9 @@ export default function CandidateDetailPage() {
     : latestConsent?.revokedAt
       ? 'Revoked'
       : 'No';
+  const visiblePendingItems = consentStatus === 'Yes'
+    ? pendingItems.filter((item) => item.type !== 'consent')
+    : pendingItems;
   const correctionUnlockAvailable = canUpdateCandidate
     && consentStatus === 'Yes'
     && !['COMPLETED', 'CANCELLED'].includes(bgvCases[0]?.status ?? '');
@@ -663,7 +684,7 @@ export default function CandidateDetailPage() {
   const tabs: { key: Tab; label: string; icon: LucideIcon; count?: number }[] = [
     { key: 'summary', label: 'Summary', icon: LayoutDashboard },
     { key: 'submitted', label: 'Submitted details', icon: FileText },
-    { key: 'pending', label: 'Pending items', icon: ClipboardList, count: pendingItems.length + rejectedDocuments.length },
+    { key: 'pending', label: 'Pending items', icon: ClipboardList, count: visiblePendingItems.length + rejectedDocuments.length },
     { key: 'personal', label: 'Personal', icon: UserRound },
     { key: 'family', label: 'Family', icon: Users },
     { key: 'identity', label: 'Identity', icon: Hash, count: docsOf('identity').length },
@@ -811,7 +832,7 @@ export default function CandidateDetailPage() {
       {tab === 'full-form' && <div className="space-y-3">
         <CandidatePortalPreview candidate={candidate} />
       </div>}
-      {tab === 'pending' && <CandidatePendingItems pending={pendingItems} documents={documents} candidate={candidate} />}
+      {tab === 'pending' && <CandidatePendingItems pending={visiblePendingItems} documents={documents} candidate={candidate} />}
 
       {tab === 'summary' && (
         <div className="space-y-5">

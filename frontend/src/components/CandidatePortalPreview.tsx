@@ -459,13 +459,13 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
           )}
 
           {(['details', 'family', 'identity', 'address', 'education', 'employment'] as const).includes(activeTab as 'details' | 'family' | 'identity' | 'address' | 'education' | 'employment') && formSections[activeTab as keyof typeof formSections]}
-          {activeTab === 'bgv' && <><PortalCard icon={FileText} title="BGV forms">{renderCustomForms('BGV')}</PortalCard>{renderSupportingDocuments('BGV')}</>}
+          {activeTab === 'bgv' && <PortalCard icon={FileText} title="BGV forms">{renderCustomForms('BGV')}</PortalCard>}
           {activeTab === 'reference' && <><PortalCard icon={Users} title="Reference check">{renderCustomForms('REFERENCE')}</PortalCard>{renderSupportingDocuments('REFERENCE')}</>}
           {activeTab === 'court' && <><PortalCard icon={ShieldCheck} title="Court check">{renderCustomForms('COURT')}</PortalCard>{renderSupportingDocuments('COURT')}</>}
           {activeTab === 'cibil' && <><PortalCard icon={FileCheck} title="CIBIL forms">{renderCustomForms('CIBIL')}</PortalCard>{renderSupportingDocuments('CIBIL')}</>}
           {activeTab === 'world' && <><PortalCard icon={ShieldCheck} title="World check">{renderCustomForms('WORLD')}</PortalCard>{renderSupportingDocuments('WORLD')}</>}
           {activeTab === 'socialMedia' && <><PortalCard icon={FileText} title="Social media check">{renderCustomForms('SOCIAL_MEDIA')}</PortalCard>{renderSupportingDocuments('SOCIAL_MEDIA')}</>}
-          {activeTab === 'police' && <><PortalCard icon={ShieldCheck} title="Police verification">{renderCustomForms('POLICE_VERIFICATION')}</PortalCard>{renderSupportingDocuments('POLICE_VERIFICATION')}</>}
+          {activeTab === 'police' && <PortalCard icon={ShieldCheck} title="Police verification">{renderCustomForms('POLICE_VERIFICATION')}</PortalCard>}
           {activeTab === 'other' && <><PortalCard icon={FileCheck} title="Other checks">{<div className="space-y-5">{renderCustomForms('OTHER_CHECKS')}{renderCustomForms('OTHER')}</div>}</PortalCard>{renderSupportingDocuments('OTHER_CHECKS')}</>}
           {activeTab === 'documents' && <PortalCard icon={FileCheck} title="Uploaded documents" description="Files saved from the candidate portal.">{renderDocuments(documents, 'The candidate has not uploaded documents yet.')}</PortalCard>}
           {activeTab === 'consent' && (
