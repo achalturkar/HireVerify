@@ -11,7 +11,21 @@ const IDENTITY_FIELDS = [
   { key: 'voterIdNumber', documentType: 'VOTER_ID', label: 'Voter ID', pattern: /^[A-Z]{3}\d{7}$/ },
 ];
 
-const CANDIDATE_FORM_SECTIONS = ['family', 'education', 'employment', 'policeVerification', 'address'];
+const CANDIDATE_FORM_SECTIONS = [
+  'family',
+  'education',
+  'employment',
+  'policeVerification',
+  'address',
+  'identity',
+  'bgv',
+  'reference',
+  'court',
+  'cibil',
+  'world',
+  'socialMedia',
+  'otherChecks',
+];
 const ADDRESS_DOCUMENT_TYPES = [
   'ADDRESS_PROOF',
   'AADHAAR',
@@ -20,8 +34,20 @@ const ADDRESS_DOCUMENT_TYPES = [
   'VOTER_ID',
   'BANK_STATEMENT',
   'ELECTRICITY_BILL',
+  'GAS_BILL',
+  'WATER_BILL',
+  'INTERNET_BILL',
+  'TELEPHONE_BILL',
   'UTILITY_BILL',
   'RENT_AGREEMENT',
+  'SALE_DEED',
+  'RATION_CARD',
+  'BANK_PASSBOOK',
+  'CREDIT_CARD_STATEMENT',
+  'VEHICLE_REGISTRATION_CERTIFICATE',
+  'SOCIETY_MAINTENANCE_BILL',
+  'RENT_RECEIPT',
+  'AFFIDAVIT',
   'GPS_ADDRESS_PHOTO',
 ];
 const EMPLOYMENT_DOCUMENT_TYPES = [
@@ -36,10 +62,27 @@ const EMPLOYMENT_DOCUMENT_TYPES = [
   'BANK_STATEMENT',
   'PF_STATEMENT',
   'EMPLOYMENT_CONTRACT',
+  'RESIGNATION_ACCEPTANCE',
+  'FULL_FINAL_SETTLEMENT',
+  'INTERNSHIP_EXPERIENCE_LETTER',
+  'INTERNSHIP_OFFER_LETTER',
+  'ARTICLESHIP_DOCUMENT',
+  'FREELANCER_INVOICE',
+  'CONTRACT_COMPLETION_LETTER',
+  'TERMINATION_LETTER',
   'OTHER',
 ];
-const EDUCATION_DOCUMENT_TYPES = ['EDUCATION_CERTIFICATE'];
-const CUSTOM_FORM_CATEGORIES = ['BGV', 'IDENTITY', 'EDUCATION', 'EMPLOYMENT', 'POLICE_VERIFICATION', 'CIBIL', 'OTHER_CHECKS', 'OTHER'];
+const EDUCATION_DOCUMENT_TYPES = [
+  'EDUCATION_CERTIFICATE',
+  'DEGREE_CERTIFICATE',
+  'DEGREE_FINAL_YEAR_MARKSHEET',
+  'ALL_YEAR_MARKSHEETS',
+  'CONSOLIDATED_MARKSHEET',
+  'PROVISIONAL_CERTIFICATE',
+  'FINAL_YEAR_MARKSHEET',
+  'ONLINE_RESULT_DOCUMENT',
+];
+const CUSTOM_FORM_CATEGORIES = ['BGV', 'IDENTITY', 'EDUCATION', 'EMPLOYMENT', 'POLICE_VERIFICATION', 'REFERENCE', 'COURT', 'CIBIL', 'WORLD', 'SOCIAL_MEDIA', 'OTHER_CHECKS', 'OTHER'];
 const CANDIDATE_FORM_REQUIRED_FIELDS = {
   phone: true,
   dateOfBirth: true,
@@ -80,6 +123,7 @@ DEFAULT_CANDIDATE_FORM_CONFIG.address = {
   currentAddressRequired: true,
   permanentAddressEnabled: true,
   permanentAddressRequired: false,
+  requireAnyDocument: false,
   documents: ADDRESS_DOCUMENT_TYPES.map((type) => ({ type, enabled: true, required: false })),
 };
 DEFAULT_CANDIDATE_FORM_CONFIG.customForms = [];
@@ -88,6 +132,7 @@ DEFAULT_CANDIDATE_FORM_CONFIG.employmentDocuments = EMPLOYMENT_DOCUMENT_TYPES.ma
   enabled: true,
   required: false,
 }));
+DEFAULT_CANDIDATE_FORM_CONFIG.currentEmploymentEnabled = true;
 DEFAULT_CANDIDATE_FORM_CONFIG.requireEmploymentDocumentPerEmployer = false;
 DEFAULT_CANDIDATE_FORM_CONFIG.requiredEmploymentEmployerCount = 3;
 DEFAULT_CANDIDATE_FORM_CONFIG.includeCurrentEmployerInDocumentRequirements = true;
@@ -146,6 +191,7 @@ const normalizeConfig = (value) => {
     return { type, enabled, required: enabled && document?.required === true };
   });
   const requireEmploymentDocumentPerEmployer = source.requireEmploymentDocumentPerEmployer === true;
+  const currentEmploymentEnabled = source.currentEmploymentEnabled !== false;
   const requiredEmploymentEmployerCount = Number.isInteger(source.requiredEmploymentEmployerCount)
     && source.requiredEmploymentEmployerCount >= 1
     && source.requiredEmploymentEmployerCount <= 10
@@ -166,6 +212,7 @@ const normalizeConfig = (value) => {
     currentAddressRequired: sourceAddress.currentAddressEnabled !== false && sourceAddress.currentAddressRequired !== false,
     permanentAddressEnabled: sourceAddress.permanentAddressEnabled !== false,
     permanentAddressRequired: sourceAddress.permanentAddressEnabled !== false && sourceAddress.permanentAddressRequired === true,
+    requireAnyDocument: sourceAddress.requireAnyDocument === true,
     documents: ADDRESS_DOCUMENT_TYPES.map((type) => {
       const document = sourceAddressDocuments.find((item) => item && item.type === type);
       const enabled = document ? document.enabled === true : true;
@@ -180,6 +227,7 @@ const normalizeConfig = (value) => {
     address,
     customForms,
     employmentDocuments,
+    currentEmploymentEnabled,
     requireEmploymentDocumentPerEmployer,
     requiredEmploymentEmployerCount,
     includeCurrentEmployerInDocumentRequirements,
@@ -191,7 +239,7 @@ const validateConfig = (value, clientId) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new BadRequestError('Candidate form configuration must be an object.');
   }
-  const allowedKeys = new Set([...IDENTITY_FIELDS.map(({ key }) => key), 'invitationExpiryDays', 'fields', 'sections', 'address', 'customForms', 'employmentDocuments', 'requireEmploymentDocumentPerEmployer', 'requiredEmploymentEmployerCount', 'includeCurrentEmployerInDocumentRequirements', 'educationDocuments']);
+  const allowedKeys = new Set([...IDENTITY_FIELDS.map(({ key }) => key), 'invitationExpiryDays', 'fields', 'sections', 'address', 'customForms', 'employmentDocuments', 'currentEmploymentEnabled', 'requireEmploymentDocumentPerEmployer', 'requiredEmploymentEmployerCount', 'includeCurrentEmployerInDocumentRequirements', 'educationDocuments']);
   for (const [key, field] of Object.entries(value)) {
     if (key === 'invitationExpiryDays') {
       if (!Number.isInteger(field) || field < 1 || field > 30) {
@@ -202,6 +250,12 @@ const validateConfig = (value, clientId) => {
     if (key === 'requireEmploymentDocumentPerEmployer') {
       if (typeof field !== 'boolean') {
         throw new BadRequestError('The legacy employment document requirement setting must be a boolean.');
+      }
+      continue;
+    }
+    if (key === 'currentEmploymentEnabled') {
+      if (typeof field !== 'boolean') {
+        throw new BadRequestError('Current employment visibility setting must be a boolean.');
       }
       continue;
     }
@@ -247,11 +301,11 @@ const validateConfig = (value, clientId) => {
       if (!field || typeof field !== 'object' || Array.isArray(field)) {
         throw new BadRequestError('Candidate address settings must be an object.');
       }
-      const allowedAddressKeys = new Set(['showVerificationLocationSelector', 'currentAddressEnabled', 'currentAddressRequired', 'permanentAddressEnabled', 'permanentAddressRequired', 'documents']);
+      const allowedAddressKeys = new Set(['showVerificationLocationSelector', 'currentAddressEnabled', 'currentAddressRequired', 'permanentAddressEnabled', 'permanentAddressRequired', 'requireAnyDocument', 'documents']);
       for (const property of Object.keys(field)) {
         if (!allowedAddressKeys.has(property)) throw new BadRequestError(`Invalid candidate address setting: ${property}.`);
       }
-      for (const property of ['showVerificationLocationSelector', 'currentAddressEnabled', 'currentAddressRequired', 'permanentAddressEnabled', 'permanentAddressRequired']) {
+      for (const property of ['showVerificationLocationSelector', 'currentAddressEnabled', 'currentAddressRequired', 'permanentAddressEnabled', 'permanentAddressRequired', 'requireAnyDocument']) {
         if (field[property] !== undefined && typeof field[property] !== 'boolean') {
           throw new BadRequestError(`Invalid ${property} setting for candidate address.`);
         }
@@ -358,6 +412,10 @@ const validateConfig = (value, clientId) => {
   const normalized = normalizeConfig(value);
   if (normalized.requireEmploymentDocumentPerEmployer && !normalized.employmentDocuments.some((document) => document.enabled)) {
     throw new BadRequestError('Enable at least one employment document type before requiring one document per employer.');
+  }
+  if (normalized.address.requireAnyDocument
+    && (!normalized.sections.address.enabled || !normalized.address.documents.some((document) => document.enabled))) {
+    throw new BadRequestError('Enable the address section and at least one address document type before requiring an address document.');
   }
   for (const form of normalized.customForms) {
     if (!/^[0-9a-f-]{36}$/i.test(form.id || '')

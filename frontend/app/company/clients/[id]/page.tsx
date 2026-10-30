@@ -19,7 +19,7 @@ import ClientFormModal from '@/src/components/layout/company/client/ClientFormMo
 import ClientConfirmDialog from '@/src/components/layout/company/client/ClientConfirmDialog';
 import ClientAnalyticsPanel from '@/src/components/layout/company/client/ClientAnalyticsPanel';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
-import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EDUCATION_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, CANDIDATE_FORM_REQUIRED_FIELD_GROUPS, CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
+import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EDUCATION_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, CANDIDATE_FORM_REQUIRED_FIELD_GROUPS, CANDIDATE_FORM_SECTION_OPTIONS, CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
 import { setClientPortalScope } from '@/src/lib/api/client-portal';
 import type { CandidateCustomForm, CandidateCustomFormCategory, CandidateFormConfig, CandidateFormRequiredFieldKey, CandidateIdentityFieldKey, Client, ClientFormValues, ClientPortalAccountMethod, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
 import type { Candidate, CandidateFormValues, CandidateStatus, PaginationMeta } from '@/src/types/candidate';
@@ -361,13 +361,16 @@ export default function ClientDetailPage() {
     }));
   };
 
-  const updateCandidateAddressField = (key: 'showVerificationLocationSelector' | 'currentAddressEnabled' | 'currentAddressRequired' | 'permanentAddressEnabled' | 'permanentAddressRequired', value: boolean) => {
+  const updateCandidateAddressField = (key: 'showVerificationLocationSelector' | 'currentAddressEnabled' | 'currentAddressRequired' | 'permanentAddressEnabled' | 'permanentAddressRequired' | 'requireAnyDocument', value: boolean) => {
     setCandidateFormSaved(false);
     setCandidateFormConfig((current) => ({
       ...current,
       address: {
         ...current.address,
         [key]: value,
+        ...(key === 'requireAnyDocument' && value && !current.address.documents.some((document) => document.enabled)
+          ? { documents: current.address.documents.map((document, index) => index === 0 ? { ...document, enabled: true } : document) }
+          : {}),
         ...((key === 'currentAddressEnabled' || key === 'permanentAddressEnabled') && !value
           ? { [key === 'currentAddressEnabled' ? 'currentAddressRequired' : 'permanentAddressRequired']: false }
           : {}),
@@ -384,6 +387,10 @@ export default function ClientDetailPage() {
         documents: current.address.documents.map((document) => document.type === type
           ? { ...document, [property]: value, ...(property === 'enabled' && !value ? { required: false } : {}) }
           : document),
+        ...(property === 'enabled' && !value && current.address.requireAnyDocument
+          && current.address.documents.filter((document) => document.type !== type).every((document) => !document.enabled)
+          ? { requireAnyDocument: false }
+          : {}),
       },
     }));
   };
@@ -409,6 +416,14 @@ export default function ClientDetailPage() {
     setCandidateFormConfig((current) => ({
       ...current,
       requireEmploymentDocumentPerEmployer: required,
+    }));
+  };
+
+  const updateCurrentEmploymentVisibility = (enabled: boolean) => {
+    setCandidateFormSaved(false);
+    setCandidateFormConfig((current) => ({
+      ...current,
+      currentEmploymentEnabled: enabled,
     }));
   };
 
@@ -1418,21 +1433,29 @@ export default function ClientDetailPage() {
               { key: 'overview', label: 'Overview', enabled: true },
               { key: 'details', label: 'Details', enabled: true },
               { key: 'family', label: 'Family', enabled: candidateFormConfig.sections.family.enabled },
-              { key: 'identity', label: 'Identity', enabled: CANDIDATE_IDENTITY_FIELDS.some((field) => candidateFormConfig[field.key].enabled) },
-              { key: 'address', label: 'Address', enabled: candidateFormConfig.sections.address.enabled && (candidateFormConfig.address.currentAddressEnabled || candidateFormConfig.address.permanentAddressEnabled || candidateFormConfig.address.documents.some((document) => document.enabled)) },
-              { key: 'bgv', label: 'BGV forms', enabled: candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'BGV') },
-              { key: 'cibil', label: 'CIBIL', enabled: candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'CIBIL') },
-              { key: 'education', label: 'Education', enabled: candidateFormConfig.sections.education.enabled || candidateFormConfig.educationDocuments.some((document) => document.enabled) || candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'EDUCATION') },
-              { key: 'employment', label: 'Employment', enabled: candidateFormConfig.sections.employment.enabled && (candidateFormConfig.employmentDocuments.some((document) => document.enabled) || candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'EMPLOYMENT')) },
-              { key: 'police', label: 'Police verification', enabled: candidateFormConfig.sections.policeVerification.enabled && candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'POLICE_VERIFICATION') },
-              { key: 'otherChecks', label: 'Other checks', enabled: candidateFormConfig.customForms.some((form) => form.enabled && form.category === 'OTHER_CHECKS') },
+              { key: 'identity', label: 'Identity', enabled: candidateFormConfig.sections.identity.enabled },
+              { key: 'address', label: 'Address', enabled: candidateFormConfig.sections.address.enabled },
+              { key: 'bgv', label: 'BGV forms', enabled: candidateFormConfig.sections.bgv.enabled },
+              { key: 'reference', label: 'Reference check', enabled: candidateFormConfig.sections.reference.enabled },
+              { key: 'court', label: 'Court check', enabled: candidateFormConfig.sections.court.enabled },
+              { key: 'cibil', label: 'CIBIL', enabled: candidateFormConfig.sections.cibil.enabled },
+              { key: 'world', label: 'World check', enabled: candidateFormConfig.sections.world.enabled },
+              { key: 'socialMedia', label: 'Social media', enabled: candidateFormConfig.sections.socialMedia.enabled },
+              { key: 'education', label: 'Education', enabled: candidateFormConfig.sections.education.enabled },
+              { key: 'employment', label: 'Employment', enabled: candidateFormConfig.sections.employment.enabled },
+              { key: 'police', label: 'Police verification', enabled: candidateFormConfig.sections.policeVerification.enabled },
+              { key: 'otherChecks', label: 'Other checks', enabled: candidateFormConfig.sections.otherChecks.enabled },
               { key: 'documents', label: 'Documents', enabled: true },
               { key: 'consent', label: 'Consent', enabled: true },
             ].filter((item) => item.enabled);
             const selectedPreviewTab = previewTabs.some((item) => item.key === candidatePreviewTab) ? candidatePreviewTab : 'overview';
             const previewForms = candidateFormConfig.customForms.filter((form) => form.enabled && (
               (selectedPreviewTab === 'bgv' && form.category === 'BGV')
+              || (selectedPreviewTab === 'reference' && form.category === 'REFERENCE')
+              || (selectedPreviewTab === 'court' && form.category === 'COURT')
               || (selectedPreviewTab === 'cibil' && form.category === 'CIBIL')
+              || (selectedPreviewTab === 'world' && form.category === 'WORLD')
+              || (selectedPreviewTab === 'socialMedia' && form.category === 'SOCIAL_MEDIA')
               || (selectedPreviewTab === 'otherChecks' && form.category === 'OTHER_CHECKS')
               || (selectedPreviewTab === 'police' && form.category === 'POLICE_VERIFICATION')
               || (selectedPreviewTab === 'education' && form.category === 'EDUCATION')
@@ -1495,6 +1518,7 @@ export default function ClientDetailPage() {
                     ...(candidateFormConfig.address.currentAddressEnabled ? [`Current address${candidateFormConfig.address.currentAddressRequired ? ' *' : ''}`] : []),
                     ...(candidateFormConfig.address.permanentAddressEnabled ? [`Permanent address${candidateFormConfig.address.permanentAddressRequired ? ' *' : ''}`] : []),
                     ...addressDocs.map((document) => `${CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? document.type}${document.required ? ' *' : ''}`),
+                    ...(candidateFormConfig.address.requireAnyDocument ? ['At least one enabled address document is required'] : []),
                   ]} />}
                   {selectedPreviewTab === 'education' && <CandidateFormPreviewFields title="Education details and requested forms" fields={[
                     ...candidateRequiredFieldsFor('education').map((field) => `${field.label}${candidateFormConfig.fields[field.key]?.required ? ' *' : ''}`),
@@ -1513,7 +1537,11 @@ export default function ClientDetailPage() {
                   ]} />}
                   {selectedPreviewTab === 'police' && <CandidateFormPreviewFields title="Police verification forms" fields={previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)} />}
                   {selectedPreviewTab === 'bgv' && <CandidateFormPreviewFields title="BGV forms" fields={previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)} />}
+                  {selectedPreviewTab === 'reference' && <CandidateFormPreviewFields title="Reference check" fields={previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)} />}
+                  {selectedPreviewTab === 'court' && <CandidateFormPreviewFields title="Court check" fields={previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)} />}
                   {selectedPreviewTab === 'cibil' && <CandidateFormPreviewFields title="CIBIL forms" fields={previewForms.map((form) => `${form.name}${form.required ? ' *' : ''}`)} />}
+                  {selectedPreviewTab === 'world' && <CandidateFormPreviewFields title="World check" fields={previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)} />}
+                  {selectedPreviewTab === 'socialMedia' && <CandidateFormPreviewFields title="Social media check" fields={previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)} />}
                   {selectedPreviewTab === 'otherChecks' && <CandidateFormPreviewFields title="Other checks" fields={previewForms.map((form) => `${form.name}${form.required ? ' · required' : ''}`)} />}
                   {selectedPreviewTab === 'documents' && <CandidateFormPreviewFields title="Documents" fields={['Other documents', ...candidateFormConfig.customForms.filter((form) => form.enabled && form.category === 'OTHER').map((form) => form.name)]} />}
                   {selectedPreviewTab === 'consent' && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Consent appears after required profile details, documents, and forms are complete.</p>}
@@ -1524,20 +1552,14 @@ export default function ClientDetailPage() {
           <div id="candidate-section-settings" className="mt-5 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <h3 className="text-[13px] font-semibold">Portal sections</h3>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {([
-                ['family', 'Family details'],
-                ['address', 'Address'],
-                ['education', 'Education'],
-                ['employment', 'Employment'],
-                ['policeVerification', 'Police verification'],
-              ] as const).map(([key, label]) => (
+              {CANDIDATE_FORM_SECTION_OPTIONS.map(({ key, label }) => (
                 <label key={key} className="flex items-center gap-2 text-[12px]">
                   <input type="checkbox" checked={candidateFormConfig.sections[key].enabled} onChange={(event) => updateCandidateFormSection(key, event.target.checked)} disabled={!canManageAccess || candidateFormSaving} className="accent-[var(--primary)]" />
                   {label}
                 </label>
               ))}
             </div>
-            <p className="mt-2 text-[11px] text-[var(--muted)]">Disabled sections are hidden from candidates for this client. Details, consent and requested documents remain available when needed.</p>
+            <p className="mt-2 text-[11px] text-[var(--muted)]">Disabled sections and their configured forms are hidden from candidates for this client. Overview, details, documents and consent remain available when needed.</p>
           </div>
           <section id="candidate-required-fields" className="mt-5 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1614,6 +1636,19 @@ export default function ClientDetailPage() {
                 );
               })}
             </div>
+            <label className={`mt-3 flex items-start gap-2 rounded-lg border border-[var(--border)] p-3 text-[11px] ${!candidateFormConfig.address.documents.some((document) => document.enabled) ? 'opacity-50' : ''}`}>
+              <input
+                type="checkbox"
+                checked={candidateFormConfig.address.requireAnyDocument}
+                onChange={(event) => updateCandidateAddressField('requireAnyDocument', event.target.checked)}
+                disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.address.enabled || !candidateFormConfig.address.documents.some((document) => document.enabled)}
+                className="mt-0.5 accent-[var(--primary)]"
+              />
+              <span>
+                <span className="block font-semibold">Candidate must upload at least one enabled address document</span>
+                <span className="mt-0.5 block text-[var(--muted)]">Any one enabled address proof satisfies this requirement. Individual “Candidate must upload” selections below are still required too.</span>
+              </span>
+            </label>
             <div className="mt-3 space-y-2">
               {CANDIDATE_ADDRESS_DOCUMENT_TYPES.map(({ type, label }) => {
                 const document = candidateFormConfig.address.documents.find((item) => item.type === type);
@@ -1674,7 +1709,20 @@ export default function ClientDetailPage() {
           </div>
           <div id="candidate-employment-document-settings" className="mt-6 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <h3 className="text-[13px] font-semibold">Employment document uploads</h3>
-            <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Choose which document types this client accepts, whether the current employer is included, and how many employers need documents.</p>
+            <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Choose whether current employment appears in the candidate form, which document types this client accepts, and how many employers need documents.</p>
+            <label className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--border)] p-3 text-[11px]">
+              <input
+                type="checkbox"
+                checked={candidateFormConfig.currentEmploymentEnabled}
+                onChange={(event) => updateCurrentEmploymentVisibility(event.target.checked)}
+                disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.employment.enabled}
+                className="mt-0.5 accent-[var(--primary)]"
+              />
+              <span>
+                <span className="block font-semibold">Show current employment to candidates</span>
+                <span className="mt-0.5 block text-[var(--muted)]">When unchecked, current employer details and its document uploads are hidden. Past employment remains available.</span>
+              </span>
+            </label>
             <label className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] p-3 text-[11px]">
               <span className="font-medium">Apply employment document requirements to the first</span>
               <select
@@ -1687,14 +1735,14 @@ export default function ClientDetailPage() {
                   <option key={count} value={count}>{count}</option>
                 ))}
               </select>
-              <span className="font-medium">{candidateFormConfig.includeCurrentEmployerInDocumentRequirements ? 'employers (including the current employer)' : 'past employers (current employer excluded)'}</span>
+              <span className="font-medium">{candidateFormConfig.currentEmploymentEnabled && candidateFormConfig.includeCurrentEmployerInDocumentRequirements ? 'employers (including the current employer)' : 'past employers (current employer excluded)'}</span>
             </label>
             <label className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--border)] p-3 text-[11px]">
               <input
                 type="checkbox"
-                checked={candidateFormConfig.includeCurrentEmployerInDocumentRequirements}
+                checked={candidateFormConfig.currentEmploymentEnabled && candidateFormConfig.includeCurrentEmployerInDocumentRequirements}
                 onChange={(event) => updateIncludeCurrentEmployerInDocumentRequirements(event.target.checked)}
-                disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.employment.enabled}
+                disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.employment.enabled || !candidateFormConfig.currentEmploymentEnabled}
                 className="mt-0.5 accent-[var(--primary)]"
               />
               <span>
@@ -1775,6 +1823,10 @@ export default function ClientDetailPage() {
                   <option value="BGV">BGV form</option>
                   <option value="CIBIL">CIBIL</option>
                   <option value="POLICE_VERIFICATION">Police verification</option>
+                  <option value="REFERENCE">Reference check</option>
+                  <option value="COURT">Court check</option>
+                  <option value="WORLD">World check</option>
+                  <option value="SOCIAL_MEDIA">Social media</option>
                   <option value="OTHER_CHECKS">Other checks</option>
                   <option value="IDENTITY">Identity</option>
                   <option value="EDUCATION">Education</option>
@@ -1810,6 +1862,10 @@ export default function ClientDetailPage() {
                         <option value="BGV">BGV form</option>
                         <option value="CIBIL">CIBIL</option>
                         <option value="POLICE_VERIFICATION">Police verification</option>
+                        <option value="REFERENCE">Reference check</option>
+                        <option value="COURT">Court check</option>
+                        <option value="WORLD">World check</option>
+                        <option value="SOCIAL_MEDIA">Social media</option>
                         <option value="OTHER_CHECKS">Other checks</option>
                         <option value="IDENTITY">Identity</option>
                         <option value="EDUCATION">Education</option>

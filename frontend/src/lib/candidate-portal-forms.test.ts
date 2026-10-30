@@ -19,6 +19,16 @@ describe('displayable custom forms', () => {
     )).toBe('PCC form');
   });
 
+  it('uses readable labels for expanded candidate document types', () => {
+    expect(candidateDocumentTypeLabel({ documentType: 'GAS_BILL' }, [])).toBe('Gas bill');
+    expect(candidateDocumentTypeLabel({ documentType: 'ARTICLESHIP_DOCUMENT' }, [])).toBe('Articleship document');
+    expect(candidateDocumentTypeLabel({ documentType: 'CONSOLIDATED_MARKSHEET' }, [])).toBe('Consolidated marksheet');
+    expect(candidateDocumentTypeLabel(
+      { documentType: 'OTHER', documentNumber: 'CHECK_SUPPORTING:CIBIL' },
+      [],
+    )).toBe('CIBIL supporting document');
+  });
+
   it('resolves uploaded document URLs against the API origin', () => {
     expect(candidatePortalFileUrl('/uploads/candidate-form.pdf', '/api/v1')).toBe('/uploads/candidate-form.pdf');
     expect(candidatePortalFileUrl('/uploads/candidate-form.pdf', 'https://api.example.test/api/v1')).toBe('https://api.example.test/uploads/candidate-form.pdf');

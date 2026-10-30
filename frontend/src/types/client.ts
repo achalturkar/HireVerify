@@ -10,8 +10,36 @@ export const CANDIDATE_IDENTITY_FIELDS = [
 ] as const;
 
 export type CandidateIdentityFieldKey = typeof CANDIDATE_IDENTITY_FIELDS[number]['key'];
-export type CandidateFormSectionKey = 'family' | 'education' | 'employment' | 'policeVerification' | 'address';
-export type CandidateCustomFormCategory = 'BGV' | 'IDENTITY' | 'EDUCATION' | 'EMPLOYMENT' | 'POLICE_VERIFICATION' | 'CIBIL' | 'OTHER_CHECKS' | 'OTHER';
+export type CandidateFormSectionKey =
+  | 'family'
+  | 'education'
+  | 'employment'
+  | 'policeVerification'
+  | 'address'
+  | 'identity'
+  | 'bgv'
+  | 'reference'
+  | 'court'
+  | 'cibil'
+  | 'world'
+  | 'socialMedia'
+  | 'otherChecks';
+export const CANDIDATE_FORM_SECTION_OPTIONS: { key: CandidateFormSectionKey; label: string }[] = [
+  { key: 'family', label: 'Family details' },
+  { key: 'address', label: 'Address' },
+  { key: 'education', label: 'Education' },
+  { key: 'employment', label: 'Employment' },
+  { key: 'identity', label: 'Identity' },
+  { key: 'policeVerification', label: 'Police verification' },
+  { key: 'bgv', label: 'BGV forms' },
+  { key: 'reference', label: 'Reference check' },
+  { key: 'court', label: 'Court check' },
+  { key: 'cibil', label: 'CIBIL' },
+  { key: 'world', label: 'World check' },
+  { key: 'socialMedia', label: 'Social media' },
+  { key: 'otherChecks', label: 'Other checks' },
+];
+export type CandidateCustomFormCategory = 'BGV' | 'IDENTITY' | 'EDUCATION' | 'EMPLOYMENT' | 'POLICE_VERIFICATION' | 'REFERENCE' | 'COURT' | 'CIBIL' | 'WORLD' | 'SOCIAL_MEDIA' | 'OTHER_CHECKS' | 'OTHER';
 export const CANDIDATE_FORM_REQUIRED_FIELD_GROUPS = [
   {
     key: 'details',
@@ -72,8 +100,20 @@ export const CANDIDATE_ADDRESS_DOCUMENT_TYPES = [
   { type: 'VOTER_ID', label: 'Voter ID' },
   { type: 'BANK_STATEMENT', label: 'Bank statement with address' },
   { type: 'ELECTRICITY_BILL', label: 'Electricity bill' },
+  { type: 'GAS_BILL', label: 'Gas bill' },
+  { type: 'WATER_BILL', label: 'Water bill' },
+  { type: 'INTERNET_BILL', label: 'Internet bill' },
+  { type: 'TELEPHONE_BILL', label: 'Telephone bill' },
   { type: 'UTILITY_BILL', label: 'Water or other utility bill' },
   { type: 'RENT_AGREEMENT', label: 'Rent agreement' },
+  { type: 'SALE_DEED', label: 'Sale deed or agreement' },
+  { type: 'RATION_CARD', label: 'Ration card' },
+  { type: 'BANK_PASSBOOK', label: 'Bank passbook' },
+  { type: 'CREDIT_CARD_STATEMENT', label: 'Credit card statement' },
+  { type: 'VEHICLE_REGISTRATION_CERTIFICATE', label: 'Vehicle registration certificate' },
+  { type: 'SOCIETY_MAINTENANCE_BILL', label: 'Society maintenance bill' },
+  { type: 'RENT_RECEIPT', label: 'Rent receipt' },
+  { type: 'AFFIDAVIT', label: 'Affidavit (if no other proof is available)' },
   { type: 'GPS_ADDRESS_PHOTO', label: 'GPS address photo' },
 ] as const;
 export type CandidateAddressDocumentType = typeof CANDIDATE_ADDRESS_DOCUMENT_TYPES[number]['type'];
@@ -89,11 +129,26 @@ export const CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES = [
   { type: 'BANK_STATEMENT', label: 'Bank statement' },
   { type: 'PF_STATEMENT', label: 'PF statement' },
   { type: 'EMPLOYMENT_CONTRACT', label: 'Employment contract' },
+  { type: 'RESIGNATION_ACCEPTANCE', label: 'Resignation acceptance letter or email' },
+  { type: 'FULL_FINAL_SETTLEMENT', label: 'Full and final settlement document' },
+  { type: 'INTERNSHIP_EXPERIENCE_LETTER', label: 'Internship experience letter' },
+  { type: 'INTERNSHIP_OFFER_LETTER', label: 'Internship offer letter' },
+  { type: 'ARTICLESHIP_DOCUMENT', label: 'Articleship document' },
+  { type: 'FREELANCER_INVOICE', label: 'Freelancer invoice' },
+  { type: 'CONTRACT_COMPLETION_LETTER', label: 'Contract completion letter' },
+  { type: 'TERMINATION_LETTER', label: 'Termination letter' },
   { type: 'OTHER', label: 'Other employment document' },
 ] as const;
 export type CandidateEmploymentDocumentType = typeof CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES[number]['type'];
 export const CANDIDATE_EDUCATION_DOCUMENT_TYPES = [
-  { type: 'EDUCATION_CERTIFICATE', label: 'Education certificate or marksheet' },
+  { type: 'EDUCATION_CERTIFICATE', label: 'Education certificate' },
+  { type: 'DEGREE_CERTIFICATE', label: 'Degree certificate' },
+  { type: 'DEGREE_FINAL_YEAR_MARKSHEET', label: 'Degree certificate with final-year marksheet' },
+  { type: 'ALL_YEAR_MARKSHEETS', label: 'All-year pass marksheets' },
+  { type: 'CONSOLIDATED_MARKSHEET', label: 'Consolidated marksheet' },
+  { type: 'PROVISIONAL_CERTIFICATE', label: 'Provisional certificate' },
+  { type: 'FINAL_YEAR_MARKSHEET', label: 'Final-year marksheet' },
+  { type: 'ONLINE_RESULT_DOCUMENT', label: 'Online result document (issued within one year)' },
 ] as const;
 export type CandidateEducationDocumentType = typeof CANDIDATE_EDUCATION_DOCUMENT_TYPES[number]['type'];
 export type CandidateEmploymentDocumentConfig = {
@@ -128,10 +183,12 @@ export type CandidateFormConfig = Record<CandidateIdentityFieldKey, {
     currentAddressRequired: boolean;
     permanentAddressEnabled: boolean;
     permanentAddressRequired: boolean;
+    requireAnyDocument: boolean;
     documents: { type: CandidateAddressDocumentType; enabled: boolean; required: boolean }[];
   };
   customForms: CandidateCustomForm[];
   employmentDocuments: CandidateEmploymentDocumentConfig[];
+  currentEmploymentEnabled: boolean;
   requireEmploymentDocumentPerEmployer: boolean;
   requiredEmploymentEmployerCount: number;
   includeCurrentEmployerInDocumentRequirements: boolean;
@@ -155,6 +212,14 @@ export const DEFAULT_CANDIDATE_FORM_CONFIG: CandidateFormConfig = {
     employment: { enabled: true },
     policeVerification: { enabled: false },
     address: { enabled: true },
+    identity: { enabled: true },
+    bgv: { enabled: true },
+    reference: { enabled: true },
+    court: { enabled: true },
+    cibil: { enabled: true },
+    world: { enabled: true },
+    socialMedia: { enabled: true },
+    otherChecks: { enabled: true },
   },
   address: {
     showVerificationLocationSelector: false,
@@ -162,10 +227,12 @@ export const DEFAULT_CANDIDATE_FORM_CONFIG: CandidateFormConfig = {
     currentAddressRequired: true,
     permanentAddressEnabled: true,
     permanentAddressRequired: false,
+    requireAnyDocument: false,
     documents: CANDIDATE_ADDRESS_DOCUMENT_TYPES.map(({ type }) => ({ type, enabled: true, required: false })),
   },
   customForms: [],
   employmentDocuments: CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.map(({ type }) => ({ type, enabled: true, required: false })),
+  currentEmploymentEnabled: true,
   requireEmploymentDocumentPerEmployer: false,
   requiredEmploymentEmployerCount: 3,
   includeCurrentEmployerInDocumentRequirements: true,

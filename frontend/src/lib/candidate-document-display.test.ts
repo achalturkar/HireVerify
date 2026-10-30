@@ -25,6 +25,17 @@ describe('candidate document display', () => {
     expect(candidateDocumentDisplayName({ documentType: 'OTHER' }, candidate)).toBe('Other document');
   });
 
+  it('labels supporting documents by verification check', () => {
+    expect(candidateDocumentDisplayName(
+      { documentType: 'OTHER', documentNumber: 'CHECK_SUPPORTING:CIBIL' },
+      candidate,
+    )).toBe('CIBIL supporting document');
+    expect(candidateDocumentDisplayName(
+      { documentType: 'OTHER', documentNumber: 'CHECK_SUPPORTING:REFERENCE' },
+      candidate,
+    )).toBe('Reference check supporting document');
+  });
+
   it('adds the employer or qualification to related documents', () => {
     expect(candidateDocumentDisplayName(
       { documentType: 'SALARY_SLIP', documentNumber: 'employer-1' },

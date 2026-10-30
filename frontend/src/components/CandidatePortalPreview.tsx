@@ -17,7 +17,7 @@ import {
   Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
+import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EDUCATION_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
 import type { CandidateFormConfig } from '@/src/types/client';
 import type { Candidate } from '@/src/types/candidate';
 import { candidatePortalFileUrl } from '@/src/lib/candidate-portal-forms';
@@ -40,7 +40,7 @@ type PreviewCandidate = Candidate & {
   documents?: PreviewDocument[];
 };
 
-type PreviewTab = 'overview' | 'details' | 'family' | 'identity' | 'address' | 'bgv' | 'cibil' | 'education' | 'employment' | 'police' | 'other' | 'documents' | 'consent';
+type PreviewTab = 'overview' | 'details' | 'family' | 'identity' | 'address' | 'bgv' | 'reference' | 'court' | 'cibil' | 'world' | 'socialMedia' | 'education' | 'employment' | 'police' | 'other' | 'documents' | 'consent';
 
 const IDENTITY_FIELDS = [
   { key: 'aadhaarNumber', label: 'Aadhaar number', documentType: 'AADHAAR' },
@@ -58,7 +58,11 @@ const allTabs: { key: PreviewTab; label: string; icon: LucideIcon }[] = [
   { key: 'identity', label: 'ID numbers', icon: Hash },
   { key: 'address', label: 'Address', icon: MapPin },
   { key: 'bgv', label: 'BGV forms', icon: FileText },
+  { key: 'reference', label: 'Reference check', icon: Users },
+  { key: 'court', label: 'Court check', icon: ShieldCheck },
   { key: 'cibil', label: 'CIBIL', icon: FileCheck },
+  { key: 'world', label: 'World check', icon: ShieldCheck },
+  { key: 'socialMedia', label: 'Social media', icon: FileText },
   { key: 'education', label: 'Qualification', icon: GraduationCap },
   { key: 'employment', label: 'Employment', icon: BriefcaseBusiness },
   { key: 'police', label: 'Police verification', icon: ShieldCheck },
@@ -135,16 +139,28 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
     if (key === 'education') return config.sections.education.enabled;
     if (key === 'employment') return config.sections.employment.enabled;
     if (key === 'address') return config.sections.address.enabled;
-    if (key === 'identity') return enabledIdentity.length > 0;
-    if (key === 'bgv') return customForms.some((form) => form.category === 'BGV');
-    if (key === 'cibil') return customForms.some((form) => form.category === 'CIBIL');
-    if (key === 'police') return config.sections.policeVerification.enabled || customForms.some((form) => form.category === 'POLICE_VERIFICATION');
-    if (key === 'other') return customForms.some((form) => form.category === 'OTHER' || form.category === 'OTHER_CHECKS');
+    if (key === 'identity') return config.sections.identity.enabled;
+    if (key === 'bgv') return config.sections.bgv.enabled;
+    if (key === 'reference') return config.sections.reference.enabled;
+    if (key === 'court') return config.sections.court.enabled;
+    if (key === 'cibil') return config.sections.cibil.enabled;
+    if (key === 'world') return config.sections.world.enabled;
+    if (key === 'socialMedia') return config.sections.socialMedia.enabled;
+    if (key === 'police') return config.sections.policeVerification.enabled;
+    if (key === 'other') return config.sections.otherChecks.enabled;
     return true;
   });
 
   const documentsFor = (types: string[], number?: string) => documents.filter((document) =>
     types.includes(document.documentType) && (number === undefined || document.documentNumber === number),
+  );
+  const employmentDocumentsForPreview = (types: string[]) => documents.filter((document) =>
+    types.includes(document.documentType)
+    && (config.currentEmploymentEnabled || (
+      document.documentNumber !== 'employment-current'
+      && document.documentNumber !== null
+      && document.documentNumber !== undefined
+    )),
   );
 
   const renderDocuments = (items: PreviewDocument[], emptyText: string) => (
@@ -172,6 +188,15 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
     ) : <p className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">{emptyText}</p>
   );
 
+  const supportingDocumentsFor = (category: string) => documents.filter(
+    (document) => document.documentNumber === `CHECK_SUPPORTING:${category}`,
+  );
+  const renderSupportingDocuments = (category: string) => (
+    <PortalCard icon={FileCheck} title={`${category.replaceAll('_', ' ')} supporting documents`}>
+      {renderDocuments(supportingDocumentsFor(category), 'No supporting documents uploaded.')}
+    </PortalCard>
+  );
+
   const renderCustomForms = (category: string) => {
     const forms = customForms.filter((form) => form.category === category);
     if (!forms.length) return <p className="text-sm text-slate-500">No forms configured for this section.</p>;
@@ -191,7 +216,7 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
     );
   };
 
-  const formSections: Record<Exclude<PreviewTab, 'overview' | 'bgv' | 'cibil' | 'police' | 'other' | 'documents' | 'consent'>, React.ReactNode> = {
+  const formSections: Record<'details' | 'family' | 'identity' | 'address' | 'education' | 'employment', React.ReactNode> = {
     details: (
       <PortalCard icon={UserRound} title="Your details" description="Personal information submitted for this verification.">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -234,6 +259,7 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
           </PortalCard>
         ))}
         {customForms.some((form) => form.category === 'IDENTITY') && <PortalCard icon={FileText} title="Additional identity forms">{renderCustomForms('IDENTITY')}</PortalCard>}
+        {renderSupportingDocuments('IDENTITY')}
       </div>
     ),
     address: (
@@ -246,7 +272,8 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
           </div>
         </PortalCard>
         <PortalCard icon={FileCheck} title="Address verification documents">
-          {renderDocuments(documentsFor(config.address.documents.filter((item) => item.enabled).map((item) => item.type)), 'No address documents uploaded.')}
+          {config.address.requireAnyDocument && <p className="mb-3 text-xs font-medium text-slate-700">At least one enabled address document is required.</p>}
+          {renderDocuments(documentsFor(CANDIDATE_ADDRESS_DOCUMENT_TYPES.map(({ type }) => type)), 'No address documents uploaded.')}
         </PortalCard>
       </div>
     ),
@@ -268,7 +295,7 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
                       <ReadonlyField label="Year of passing" value={record.yearOfPassing} />
                       <ReadonlyField label="Grade or percentage" value={record.gradeOrPercentage} />
                     </div>
-                    <div className="mt-4">{renderDocuments(linkedDocuments.length ? linkedDocuments : documentsFor(['EDUCATION_CERTIFICATE']), 'No certificate uploaded for this qualification.')}</div>
+                    <div className="mt-4">{renderDocuments(linkedDocuments.length ? linkedDocuments : documentsFor(CANDIDATE_EDUCATION_DOCUMENT_TYPES.map(({ type }) => type)), 'No certificate uploaded for this qualification.')}</div>
                   </div>
                 );
               })}
@@ -284,15 +311,15 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
             </div>
           )}
         </PortalCard>
-        <PortalCard icon={FileCheck} title="Education documents">{renderDocuments(documentsFor(['EDUCATION_CERTIFICATE']), 'No education documents uploaded.')}</PortalCard>
+        <PortalCard icon={FileCheck} title="Education documents">{renderDocuments(documentsFor(CANDIDATE_EDUCATION_DOCUMENT_TYPES.map(({ type }) => type)), 'No education documents uploaded.')}</PortalCard>
       </div>
     ),
     employment: (
       <div className="space-y-5">
         <PortalCard icon={BriefcaseBusiness} title="Employment history" description="Employment details submitted by the candidate.">
-          {(candidate.employmentHistory?.length ?? 0) > 0 ? (
+          {(candidate.employmentHistory?.filter((record) => config.currentEmploymentEnabled || !record.isCurrent).length ?? 0) > 0 ? (
             <div className="space-y-4">
-              {candidate.employmentHistory?.map((record, index) => (
+              {candidate.employmentHistory?.filter((record) => config.currentEmploymentEnabled || !record.isCurrent).map((record, index) => (
                 <div key={`${record.employerName}-${index}`} className="rounded-xl border border-slate-200 p-4">
                   <h3 className="mb-3 text-sm font-semibold">{record.isFresher ? 'Candidate marked as fresher' : record.employerName || `Employment ${index + 1}`}</h3>
                   {!record.isFresher && <div className="grid gap-4 sm:grid-cols-2">
@@ -312,20 +339,22 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
               ))}
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <ReadonlyField label="Current employer" value={candidate.currentEmployer} />
-              <ReadonlyField label="Employee ID" value={candidate.employeeId} />
-              <ReadonlyField label="Designation" value={candidate.employeeDesignation} />
-              <ReadonlyField label="Department" value={candidate.employeeDepartment} />
-              <ReadonlyField label="Employment type" value={candidate.employmentType} />
-              <ReadonlyField label="Joining date" value={candidate.joiningDate} />
-              <ReadonlyField label="Work location" value={candidate.workLocation} />
-              <ReadonlyField label="Employer HR contact name" value={candidate.employerHrName} />
-              <ReadonlyField label="Employer HR contact number" value={candidate.employerHrPhone} />
-            </div>
+            config.currentEmploymentEnabled
+              ? <div className="grid gap-4 sm:grid-cols-2">
+                <ReadonlyField label="Current employer" value={candidate.currentEmployer} />
+                <ReadonlyField label="Employee ID" value={candidate.employeeId} />
+                <ReadonlyField label="Designation" value={candidate.employeeDesignation} />
+                <ReadonlyField label="Department" value={candidate.employeeDepartment} />
+                <ReadonlyField label="Employment type" value={candidate.employmentType} />
+                <ReadonlyField label="Joining date" value={candidate.joiningDate} />
+                <ReadonlyField label="Work location" value={candidate.workLocation} />
+                <ReadonlyField label="Employer HR contact name" value={candidate.employerHrName} />
+                <ReadonlyField label="Employer HR contact number" value={candidate.employerHrPhone} />
+              </div>
+              : <p className="text-sm text-slate-500">No past employment details submitted.</p>
           )}
         </PortalCard>
-        <PortalCard icon={FileCheck} title="Employment documents">{renderDocuments(documentsFor(['SALARY_SLIP', 'FORM_16', 'EXPERIENCE_LETTER', 'RELIEVING_LETTER', 'OFFER_LETTER', 'APPOINTMENT_LETTER', 'INCREMENT_LETTER', 'PROMOTION_LETTER', 'BANK_STATEMENT', 'PF_STATEMENT', 'EMPLOYMENT_CONTRACT']), 'No employment documents uploaded.')}</PortalCard>
+        <PortalCard icon={FileCheck} title="Employment documents">{renderDocuments(employmentDocumentsForPreview(CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.map(({ type }) => type)), 'No employment documents uploaded.')}</PortalCard>
       </div>
     ),
   };
@@ -333,7 +362,7 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
   const overviewItems = [
     { key: 'details' as const, label: 'Your details', description: 'Personal and contact information', enabled: true },
     { key: 'family' as const, label: 'Family details', description: 'Parent, spouse and dependent information', enabled: config.sections.family.enabled },
-    { key: 'identity' as const, label: 'ID numbers', description: 'Identity values and document copies', enabled: enabledIdentity.length > 0 },
+    { key: 'identity' as const, label: 'ID numbers', description: 'Identity values and document copies', enabled: config.sections.identity.enabled },
     { key: 'address' as const, label: 'Address', description: 'Current and permanent address details', enabled: config.sections.address.enabled },
     { key: 'education' as const, label: 'Qualification', description: 'Education history and certificates', enabled: config.sections.education.enabled },
     { key: 'employment' as const, label: 'Employment', description: 'Current and past employment records', enabled: config.sections.employment.enabled },
@@ -430,10 +459,14 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
           )}
 
           {(['details', 'family', 'identity', 'address', 'education', 'employment'] as const).includes(activeTab as 'details' | 'family' | 'identity' | 'address' | 'education' | 'employment') && formSections[activeTab as keyof typeof formSections]}
-          {activeTab === 'bgv' && <PortalCard icon={FileText} title="BGV forms">{renderCustomForms('BGV')}</PortalCard>}
-          {activeTab === 'cibil' && <PortalCard icon={FileCheck} title="CIBIL forms">{renderCustomForms('CIBIL')}</PortalCard>}
-          {activeTab === 'police' && <PortalCard icon={ShieldCheck} title="Police verification">{renderCustomForms('POLICE_VERIFICATION')}</PortalCard>}
-          {activeTab === 'other' && <PortalCard icon={FileCheck} title="Other checks">{<div className="space-y-5">{renderCustomForms('OTHER_CHECKS')}{renderCustomForms('OTHER')}</div>}</PortalCard>}
+          {activeTab === 'bgv' && <><PortalCard icon={FileText} title="BGV forms">{renderCustomForms('BGV')}</PortalCard>{renderSupportingDocuments('BGV')}</>}
+          {activeTab === 'reference' && <><PortalCard icon={Users} title="Reference check">{renderCustomForms('REFERENCE')}</PortalCard>{renderSupportingDocuments('REFERENCE')}</>}
+          {activeTab === 'court' && <><PortalCard icon={ShieldCheck} title="Court check">{renderCustomForms('COURT')}</PortalCard>{renderSupportingDocuments('COURT')}</>}
+          {activeTab === 'cibil' && <><PortalCard icon={FileCheck} title="CIBIL forms">{renderCustomForms('CIBIL')}</PortalCard>{renderSupportingDocuments('CIBIL')}</>}
+          {activeTab === 'world' && <><PortalCard icon={ShieldCheck} title="World check">{renderCustomForms('WORLD')}</PortalCard>{renderSupportingDocuments('WORLD')}</>}
+          {activeTab === 'socialMedia' && <><PortalCard icon={FileText} title="Social media check">{renderCustomForms('SOCIAL_MEDIA')}</PortalCard>{renderSupportingDocuments('SOCIAL_MEDIA')}</>}
+          {activeTab === 'police' && <><PortalCard icon={ShieldCheck} title="Police verification">{renderCustomForms('POLICE_VERIFICATION')}</PortalCard>{renderSupportingDocuments('POLICE_VERIFICATION')}</>}
+          {activeTab === 'other' && <><PortalCard icon={FileCheck} title="Other checks">{<div className="space-y-5">{renderCustomForms('OTHER_CHECKS')}{renderCustomForms('OTHER')}</div>}</PortalCard>{renderSupportingDocuments('OTHER_CHECKS')}</>}
           {activeTab === 'documents' && <PortalCard icon={FileCheck} title="Uploaded documents" description="Files saved from the candidate portal.">{renderDocuments(documents, 'The candidate has not uploaded documents yet.')}</PortalCard>}
           {activeTab === 'consent' && (
             <PortalCard icon={ShieldCheck} title="Review & submit" description="Consent status recorded for this candidate.">

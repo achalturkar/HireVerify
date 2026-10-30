@@ -28,6 +28,24 @@ function configuredForms(candidate: CandidateDocumentContext): CandidateCustomFo
 }
 
 export function candidateDocumentDisplayName(document: DocumentRecord, candidate: CandidateDocumentContext): string {
+  const supportingCategory = document.documentNumber?.startsWith('CHECK_SUPPORTING:')
+    ? document.documentNumber.slice('CHECK_SUPPORTING:'.length)
+    : null;
+  const supportingCategoryLabels: Record<string, string> = {
+    IDENTITY: 'Identity',
+    BGV: 'BGV',
+    POLICE_VERIFICATION: 'Police verification',
+    REFERENCE: 'Reference check',
+    COURT: 'Court check',
+    CIBIL: 'CIBIL',
+    WORLD: 'World check',
+    SOCIAL_MEDIA: 'Social media',
+    OTHER_CHECKS: 'Other checks',
+  };
+  if (supportingCategory && supportingCategoryLabels[supportingCategory]) {
+    return `${supportingCategoryLabels[supportingCategory]} supporting document`;
+  }
+
   const customFormLabel = document.documentNumber?.startsWith('CUSTOM_FORM:')
     ? candidateDocumentTypeLabel(document, configuredForms(candidate))
     : null;
@@ -48,7 +66,9 @@ export function candidateDocumentDisplayName(document: DocumentRecord, candidate
   const employmentDocumentTypes = new Set([
     'SALARY_SLIP', 'FORM_16', 'EXPERIENCE_LETTER', 'RELIEVING_LETTER', 'OFFER_LETTER',
     'APPOINTMENT_LETTER', 'INCREMENT_LETTER', 'PROMOTION_LETTER', 'PF_STATEMENT',
-    'EMPLOYMENT_CONTRACT',
+    'EMPLOYMENT_CONTRACT', 'RESIGNATION_ACCEPTANCE', 'FULL_FINAL_SETTLEMENT',
+    'INTERNSHIP_EXPERIENCE_LETTER', 'INTERNSHIP_OFFER_LETTER', 'ARTICLESHIP_DOCUMENT',
+    'FREELANCER_INVOICE', 'CONTRACT_COMPLETION_LETTER', 'TERMINATION_LETTER',
   ]);
   if (employerName && employmentDocumentTypes.has(document.documentType)) {
     return `${documentTypeLabel} — ${String(employerName)}`;

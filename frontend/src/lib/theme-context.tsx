@@ -10,39 +10,44 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+const THEME_STORAGE_KEY = 'hireassess-theme';
+const THEME_PREFERENCE_SET_KEY = 'hireassess-theme-preference-set';
 
 export function ThemeProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Default is dark
-  const [theme, setTheme] = useState<Theme>('dark');
+  const [theme, setTheme] = useState<Theme>('light');
+  const [preferenceLoaded, setPreferenceLoaded] = useState(false);
 
-  // Load saved theme
+  // Use light mode by default; only retain dark mode when the user explicitly selected it.
   useEffect(() => {
-    const stored = localStorage.getItem('hireassess-theme') as Theme | null;
-
-    if (stored === 'light' || stored === 'dark') {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
+    const preferenceWasSet = localStorage.getItem(THEME_PREFERENCE_SET_KEY) === 'true';
+    if (preferenceWasSet && (stored === 'light' || stored === 'dark')) {
+      // Apply an explicit browser preference after hydration to keep server output light by default.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTheme(stored);
-    } else {
-      // First visit → Dark Mode
-      setTheme('dark');
     }
+    setPreferenceLoaded(true);
   }, []);
 
-  // Apply theme
   useEffect(() => {
+    if (!preferenceLoaded) return;
     document.documentElement.classList.toggle(
       'dark',
       theme === 'dark'
     );
 
-    localStorage.setItem('hireassess-theme', theme);
-  }, [theme]);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [preferenceLoaded, theme]);
 
-  const toggleTheme = () =>
+  const toggleTheme = () => {
+    if (!preferenceLoaded) return;
+    localStorage.setItem(THEME_PREFERENCE_SET_KEY, 'true');
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>

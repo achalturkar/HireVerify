@@ -8,13 +8,13 @@ const config = require('../../config');
 const { sendMail, buildCandidatePortalEmail } = require('../../utils/mailer');
 const { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } = require('../../utils/errors');
 const { parseDateValue } = require('../../utils/date');
-const { IDENTITY_FIELDS, EMPLOYMENT_DOCUMENT_TYPES, ADDRESS_DOCUMENT_TYPES, normalizeConfig, normalizeIdentityValue, validateIdentityValues } = require('../client/candidate-intake-config');
+const { IDENTITY_FIELDS, EMPLOYMENT_DOCUMENT_TYPES, EDUCATION_DOCUMENT_TYPES, ADDRESS_DOCUMENT_TYPES, normalizeConfig, normalizeIdentityValue, validateIdentityValues } = require('../client/candidate-intake-config');
 const { findTemplatePath } = require('../client/candidate-form-storage');
 
 const MAX_INVITATION_DAYS = 30;
 const CURRENT_EMPLOYMENT_RECORD_ID = 'employment-current';
 const portalTokenKey = crypto.createHash('sha256').update(`candidate-portal:${config.jwt.accessSecret}`).digest();
-const DOCUMENT_TYPES = new Set(['PAN', 'UAN', 'AADHAAR', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID', 'EDUCATION_CERTIFICATE', 'EXPERIENCE_LETTER', 'SALARY_SLIP', 'FORM_16', 'RELIEVING_LETTER', 'OFFER_LETTER', 'APPOINTMENT_LETTER', 'INCREMENT_LETTER', 'PROMOTION_LETTER', 'BANK_STATEMENT', 'PF_STATEMENT', 'EMPLOYMENT_CONTRACT', ...ADDRESS_DOCUMENT_TYPES, 'OTHER']);
+const DOCUMENT_TYPES = new Set(['PAN', 'UAN', 'AADHAAR', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID', ...EDUCATION_DOCUMENT_TYPES, ...EMPLOYMENT_DOCUMENT_TYPES, ...ADDRESS_DOCUMENT_TYPES, 'OTHER']);
 const EMPLOYMENT_HISTORY_FIELDS = {
   employerName: 255,
   employeeId: 100,
@@ -45,8 +45,27 @@ const CHECKS_FOR_FORM_CATEGORY = {
   EDUCATION: new Set(['EDUCATION', 'EDUCATION_VERIFICATION']),
   EMPLOYMENT: new Set(['EMPLOYMENT', 'EMPLOYMENT_VERIFICATION', 'UAN']),
   POLICE_VERIFICATION: new Set(['POLICE', 'POLICE_VERIFICATION', 'POLICE_RECORD', 'COURT']),
+  REFERENCE: new Set(['REFERENCE', 'REFERENCE_CHECK']),
+  COURT: new Set(['COURT', 'COURT_CHECK']),
+  CIBIL: new Set(['CIBIL', 'CREDIT', 'CREDIT_CHECK']),
+  WORLD: new Set(['WORLD', 'WORLD_CHECK', 'GLOBAL_DATABASE']),
+  SOCIAL_MEDIA: new Set(['SOCIAL_MEDIA', 'SOCIAL_MEDIA_CHECK']),
 };
 const STANDARD_FORM_CHECKS = new Set([...Object.values(CHECKS_FOR_FORM_CATEGORY).flatMap((types) => [...types]), 'CIBIL']);
+const FORM_CATEGORY_SECTIONS = {
+  IDENTITY: 'identity',
+  EDUCATION: 'education',
+  EMPLOYMENT: 'employment',
+  POLICE_VERIFICATION: 'policeVerification',
+  BGV: 'bgv',
+  REFERENCE: 'reference',
+  COURT: 'court',
+  CIBIL: 'cibil',
+  WORLD: 'world',
+  SOCIAL_MEDIA: 'socialMedia',
+  OTHER_CHECKS: 'otherChecks',
+};
+const CHECK_SUPPORTING_DOCUMENT_PREFIX = 'CHECK_SUPPORTING:';
 
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 const createToken = () => crypto.randomBytes(32).toString('hex');
@@ -110,17 +129,38 @@ const invitationInclude = {
 
 const isCustomFormEnabled = (form, candidateFormConfig, activeCase) => {
   if (!form.enabled) return false;
-  if (form.category === 'EDUCATION' && !candidateFormConfig.sections.education.enabled) return false;
-  if (form.category === 'EMPLOYMENT' && !candidateFormConfig.sections.employment.enabled) return false;
-  if (form.category === 'POLICE_VERIFICATION' && !candidateFormConfig.sections.policeVerification.enabled) return false;
+  const section = FORM_CATEGORY_SECTIONS[form.category];
+  if (section && !candidateFormConfig.sections[section].enabled) return false;
   if (form.category === 'IDENTITY' && !IDENTITY_FIELDS.some(({ key }) => candidateFormConfig[key].enabled)) return false;
   const selectedChecks = activeCase?.checks?.map((check) => check.type) || [];
+  if (['REFERENCE', 'COURT', 'WORLD', 'SOCIAL_MEDIA'].includes(form.category)) return true;
   if (form.category === 'OTHER_CHECKS') {
     return selectedChecks.length === 0 || selectedChecks.some((type) => !STANDARD_FORM_CHECKS.has(type));
   }
   const categoryChecks = CHECKS_FOR_FORM_CATEGORY[form.category];
   if (selectedChecks.length > 0 && categoryChecks && !selectedChecks.some((check) => categoryChecks.has(check))) return false;
   return true;
+};
+
+const isSupportingDocumentCategoryEnabled = (category, candidateFormConfig, activeCase) => {
+  const section = FORM_CATEGORY_SECTIONS[category];
+  if (!section || !candidateFormConfig.sections[section].enabled) return false;
+  const forms = candidateFormConfig.customForms.filter((form) =>
+    form.category === category && isCustomFormEnabled(form, candidateFormConfig, activeCase),
+  );
+  if (forms.length) return true;
+  const selectedChecks = activeCase?.checks?.map((check) => check.type) || [];
+  if (category === 'IDENTITY' && IDENTITY_FIELDS.some(({ key }) => candidateFormConfig[key].enabled)
+    && (selectedChecks.length === 0 || IDENTITY_FIELDS.some(({ key }) =>
+      candidateFormConfig[key].enabled && (candidateFormConfig[key].required || candidateFormConfig[key].documentRequired),
+    ))) {
+    return true;
+  }
+  if (category === 'OTHER_CHECKS') {
+    return selectedChecks.some((type) => !STANDARD_FORM_CHECKS.has(type));
+  }
+  const categoryChecks = CHECKS_FOR_FORM_CATEGORY[category];
+  return Boolean(categoryChecks && selectedChecks.some((type) => categoryChecks.has(type)));
 };
 
 const findInvitation = async (token) => {
@@ -180,7 +220,7 @@ const pendingFor = (candidate) => {
           label: `Upload documents for ${check.type.replaceAll('_', ' ').toLowerCase()}`,
           type: 'document',
           documentType: check.type,
-          ...(['ADDRESS_PROOF', 'GPS_ADDRESS_PHOTO', 'ELECTRICITY_BILL', 'UTILITY_BILL', 'RENT_AGREEMENT'].includes(check.type) ? { category: 'ADDRESS' } : {}),
+          ...(ADDRESS_DOCUMENT_TYPES.includes(check.type) ? { category: 'ADDRESS' } : {}),
         });
       }
     }
@@ -188,10 +228,10 @@ const pendingFor = (candidate) => {
 
   for (const field of IDENTITY_FIELDS) {
     const config = candidateFormConfig[field.key];
-    if (config.required && !candidate[field.key]) {
+    if (candidateFormConfig.sections.identity.enabled && config.required && !candidate[field.key]) {
       pending.push({ key: `field-${field.key}`, label: `Provide your ${field.label} number`, type: 'profile' });
     }
-    if (config.documentRequired && !existingDocuments.some((document) => document.documentType === field.documentType)
+    if (candidateFormConfig.sections.identity.enabled && config.documentRequired && !existingDocuments.some((document) => document.documentType === field.documentType)
       && !pending.some((item) => item.documentType === field.documentType)) {
       pending.push({ key: `document-${field.documentType}`, label: `Upload your ${field.label} document`, type: 'document', documentType: field.documentType });
     }
@@ -239,6 +279,20 @@ const pendingFor = (candidate) => {
         });
       }
     }
+    const enabledAddressDocumentTypes = addressConfig.documents
+      .filter((document) => document.enabled)
+      .map((document) => document.type);
+    if (addressConfig.requireAnyDocument
+      && enabledAddressDocumentTypes.length > 0
+      && !existingDocuments.some((item) => enabledAddressDocumentTypes.includes(item.documentType))) {
+      pending.push({
+        key: 'address-document-any',
+        label: 'Upload at least one enabled address document',
+        type: 'document',
+        documentType: enabledAddressDocumentTypes[0],
+        category: 'ADDRESS',
+      });
+    }
   }
 
   const selectedChecks = activeCase?.checks?.map((check) => check.type) || [];
@@ -258,7 +312,7 @@ const pendingFor = (candidate) => {
       employerHrName: candidate.employerHrName,
       employerHrPhone: candidate.employerHrPhone,
     };
-    if (!isFresher) {
+    if (candidateFormConfig.currentEmploymentEnabled && !isFresher) {
       for (const [field, value] of Object.entries(currentEmploymentValues)) {
         if (requiredFields[field]?.required && (value === null || value === undefined || value === '')) {
           pending.push({ key: `field-current-employment-${field}`, label: `Provide your current employer ${field.replaceAll(/([A-Z])/g, ' $1').toLowerCase()}`, type: 'profile', category: 'EMPLOYMENT' });
@@ -286,7 +340,9 @@ const pendingFor = (candidate) => {
         .map((record, index) => ({ ...record, id: employmentHistoryRecordId(record, index) }))
         .filter((record) => hasEmploymentHistoryDetails(record)
           || employmentDocuments.some((document) => document.documentNumber === record.id));
-      const employerRecords = candidateFormConfig.includeCurrentEmployerInDocumentRequirements
+      const includeCurrentEmployer = candidateFormConfig.currentEmploymentEnabled
+        && candidateFormConfig.includeCurrentEmployerInDocumentRequirements;
+      const employerRecords = includeCurrentEmployer
         ? [
           { id: CURRENT_EMPLOYMENT_RECORD_ID, employerName: candidate.currentEmployer, isCurrent: true },
           ...pastEmployerRecords,
@@ -817,6 +873,9 @@ const updateProfile = async (token, payload) => {
     }
   }
   for (const field of IDENTITY_FIELDS) {
+    if (data[field.key] !== undefined && !candidateFormConfig.sections.identity.enabled) {
+      throw new BadRequestError('Identity details are not enabled for this client’s candidate form.');
+    }
     if (data[field.key] !== undefined && !candidateFormConfig[field.key].enabled) {
       throw new BadRequestError(`${field.label} is not enabled for this client’s candidate form.`);
     }
@@ -1026,6 +1085,15 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
   if (documentCategory !== undefined && !['EMPLOYMENT', 'ADDRESS', 'EDUCATION'].includes(documentCategory)) {
     await rejectDocumentUpload(file, 'Document category is invalid.');
   }
+  if (documentNumber?.startsWith(CHECK_SUPPORTING_DOCUMENT_PREFIX)) {
+    const category = documentNumber.slice(CHECK_SUPPORTING_DOCUMENT_PREFIX.length);
+    const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
+    if (documentType !== 'OTHER' || documentCategory || customFormId
+      || !Object.prototype.hasOwnProperty.call(FORM_CATEGORY_SECTIONS, category)
+      || !isSupportingDocumentCategoryEnabled(category, candidateFormConfig, invitation.candidate.bgvCases[0])) {
+      await rejectDocumentUpload(file, 'Supporting documents are not enabled for this verification check.');
+    }
+  }
   if (documentCategory === 'ADDRESS') {
     const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
     const addressDocument = candidateFormConfig.address.documents.find((item) => item.type === documentType && item.enabled);
@@ -1073,8 +1141,10 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
     await rejectDocumentUpload(file, 'Word documents can only be uploaded as completed BGV/PCC forms.');
   }
   const identityField = IDENTITY_FIELDS.find((field) => field.documentType === documentType);
+  const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
+  const requestedIdentityCheck = invitation.candidate.bgvCases[0]?.checks.some((check) => check.type === documentType);
   if (identityField && documentCategory !== 'ADDRESS' && !ADDRESS_DOCUMENT_TYPES.includes(documentType)
-    && !getCandidateFormConfig(invitation.candidate)[identityField.key].enabled) {
+    && ((!candidateFormConfig.sections.identity.enabled || !candidateFormConfig[identityField.key].enabled) && !requestedIdentityCheck)) {
     await rejectDocumentUpload(file, `${identityField.label} documents are not enabled for this client’s candidate form.`);
   }
   const signature = await fs.readFile(file.path);
