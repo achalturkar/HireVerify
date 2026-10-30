@@ -350,7 +350,13 @@ export default function ClientDetailPage() {
 
   const updateCandidateFormSection = (key: keyof CandidateFormConfig['sections'], enabled: boolean) => {
     setCandidateFormSaved(false);
-    setCandidateFormConfig((current) => ({ ...current, sections: { ...current.sections, [key]: { enabled } } }));
+    setCandidateFormConfig((current) => ({
+      ...current,
+      sections: { ...current.sections, [key]: { enabled } },
+      ...(key === 'address' && !enabled
+        ? { address: { ...current.address, showVerificationLocationSelector: false, verificationLocations: [] } }
+        : {}),
+    }));
   };
 
   const updateCandidateFieldRequirement = (key: CandidateFormRequiredFieldKey, required: boolean) => {
@@ -368,6 +374,12 @@ export default function ClientDetailPage() {
       address: {
         ...current.address,
         [key]: value,
+        ...((key === 'currentAddressEnabled' || key === 'permanentAddressEnabled') && !value
+          ? {
+            verificationLocations: (current.address.verificationLocations ?? [])
+              .filter((location) => location !== (key === 'currentAddressEnabled' ? 'current' : 'permanent')),
+          }
+          : {}),
         ...(key === 'requireAnyDocument' && value && !current.address.documents.some((document) => document.enabled)
           ? { documents: current.address.documents.map((document, index) => index === 0 ? { ...document, enabled: true } : document) }
           : {}),
@@ -376,6 +388,29 @@ export default function ClientDetailPage() {
           : {}),
       },
     }));
+  };
+
+  const updateAddressVerificationLocation = (location: 'current' | 'permanent', enabled: boolean) => {
+    setCandidateFormSaved(false);
+    setCandidateFormConfig((current) => {
+      const verificationLocations = new Set(current.address.verificationLocations ?? []);
+      if (enabled) verificationLocations.add(location);
+      else verificationLocations.delete(location);
+      const documents = current.address.documents.some((document) => document.enabled)
+        ? current.address.documents
+        : current.address.documents.map((document, index) => index === 0 ? { ...document, enabled: true } : document);
+      return {
+        ...current,
+        address: {
+          ...current.address,
+          verificationLocations: [...verificationLocations],
+          showVerificationLocationSelector: verificationLocations.size > 0
+            ? false
+            : current.address.showVerificationLocationSelector,
+          documents,
+        },
+      };
+    });
   };
 
   const updateAddressDocument = (type: string, property: 'enabled' | 'required', value: boolean) => {
@@ -1514,7 +1549,8 @@ export default function ClientDetailPage() {
                     ...(candidateFormConfig[field.key].documentRequired ? [`${field.label} document copy *`] : []),
                   ])} />}
                   {selectedPreviewTab === 'address' && <CandidateFormPreviewFields title="Address details and requested documents" fields={[
-                    ...(candidateFormConfig.address.showVerificationLocationSelector && (candidateFormConfig.address.currentAddressEnabled || candidateFormConfig.address.permanentAddressEnabled) ? ['Which address should be verified?'] : []),
+                    ...(candidateFormConfig.address.verificationLocations ?? []).map((location) => `Upload at least one address proof for ${location} address *`),
+                    ...(!(candidateFormConfig.address.verificationLocations ?? []).length && candidateFormConfig.address.showVerificationLocationSelector && (candidateFormConfig.address.currentAddressEnabled || candidateFormConfig.address.permanentAddressEnabled) ? ['Which address should be verified?'] : []),
                     ...(candidateFormConfig.address.currentAddressEnabled ? [`Current address${candidateFormConfig.address.currentAddressRequired ? ' *' : ''}`] : []),
                     ...(candidateFormConfig.address.permanentAddressEnabled ? [`Permanent address${candidateFormConfig.address.permanentAddressRequired ? ' *' : ''}`] : []),
                     ...addressDocs.map((document) => `${CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? document.type}${document.required ? ' *' : ''}`),
@@ -1597,6 +1633,27 @@ export default function ClientDetailPage() {
           <div id="candidate-address-settings" className="mt-5 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <h3 className="text-[13px] font-semibold">Address details and verification</h3>
             <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">Choose which address fields and address documents this client requests. Required items block consent until completed.</p>
+            <fieldset className="mt-3 rounded-lg border border-[var(--border)] p-3">
+              <legend className="px-1 text-[12px] font-semibold">Address verification locations</legend>
+              <p className="mb-2 text-[11px] text-[var(--muted)]">Select each address that must be verified. The candidate will be asked to upload at least one enabled address proof for every selected location.</p>
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                {([
+                  ['current', 'Current address', candidateFormConfig.address.currentAddressEnabled],
+                  ['permanent', 'Permanent address', candidateFormConfig.address.permanentAddressEnabled],
+                ] as const).map(([location, label, addressEnabled]) => (
+                  <label key={location} className={`flex items-center gap-2 text-[12px] ${!addressEnabled ? 'opacity-50' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={(candidateFormConfig.address.verificationLocations ?? []).includes(location)}
+                      onChange={(event) => updateAddressVerificationLocation(location, event.target.checked)}
+                      disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.address.enabled || !addressEnabled}
+                      className="accent-[var(--primary)]"
+                    />
+                    Verify {label.toLowerCase()}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border border-[var(--border)] p-3 text-[12px]">
               <input
                 type="checkbox"
@@ -1609,11 +1666,11 @@ export default function ClientDetailPage() {
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-2 font-medium">
                   Show “Which address should be verified?” in candidate portal
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${candidateFormConfig.address.showVerificationLocationSelector ? 'bg-emerald-100 text-emerald-800' : 'bg-[var(--surface-muted)] text-[var(--muted)]'}`}>
-                    {candidateFormConfig.address.showVerificationLocationSelector ? 'On' : 'Off'}
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${candidateFormConfig.address.showVerificationLocationSelector && !(candidateFormConfig.address.verificationLocations ?? []).length ? 'bg-emerald-100 text-emerald-800' : 'bg-[var(--surface-muted)] text-[var(--muted)]'}`}>
+                    {candidateFormConfig.address.showVerificationLocationSelector && !(candidateFormConfig.address.verificationLocations ?? []).length ? 'On' : 'Off'}
                   </span>
                 </span>
-                <span className="mt-0.5 block text-[11px] text-[var(--muted)]">When on, candidates can choose their current address, permanent address, or both for verification. Save the candidate form to apply changes.</span>
+                <span className="mt-0.5 block text-[11px] text-[var(--muted)]">Use this only when no verification location is selected above; it lets candidates choose their address locations. Save the candidate form to apply changes.</span>
               </span>
             </label>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1654,10 +1711,13 @@ export default function ClientDetailPage() {
                 const document = candidateFormConfig.address.documents.find((item) => item.type === type);
                 const enabled = document?.enabled ?? false;
                 const required = document?.required ?? false;
+                const onlyEnabledAddressDocument = enabled
+                  && candidateFormConfig.address.documents.filter((item) => item.enabled).length === 1
+                  && (candidateFormConfig.address.verificationLocations ?? []).length > 0;
                 return (
                   <div key={type} className="grid gap-3 rounded-lg border border-[var(--border)] p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
                     <label className="flex items-center gap-2 text-[12px] font-medium">
-                      <input type="checkbox" checked={enabled} onChange={(event) => updateAddressDocument(type, 'enabled', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.address.enabled} className="accent-[var(--primary)]" />
+                      <input type="checkbox" checked={enabled} onChange={(event) => updateAddressDocument(type, 'enabled', event.target.checked)} disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.address.enabled || onlyEnabledAddressDocument} className="accent-[var(--primary)]" />
                       {label}{required && <span className="font-bold text-red-600" aria-hidden="true">*</span>}
                     </label>
                     <label className={`flex items-center gap-2 text-[11px] ${!enabled ? 'opacity-50' : ''}`}>

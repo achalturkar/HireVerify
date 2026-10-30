@@ -24,6 +24,15 @@ export function candidateDocumentTypeLabel(
   document: CandidateFormDocument & { documentType: string },
   configuredForms: CandidateCustomForm[],
 ): string {
+  const addressVerificationLocation = document.documentNumber?.startsWith('ADDRESS_VERIFICATION:')
+    ? document.documentNumber.slice('ADDRESS_VERIFICATION:'.length)
+    : null;
+  const addressLocationLabel = addressVerificationLocation === 'current'
+    ? 'current address'
+    : addressVerificationLocation === 'permanent'
+      ? 'permanent address'
+      : null;
+
   const supportingCategory = document.documentNumber?.startsWith('CHECK_SUPPORTING:')
     ? document.documentNumber.slice('CHECK_SUPPORTING:'.length)
     : null;
@@ -40,6 +49,11 @@ export function candidateDocumentTypeLabel(
   };
   if (supportingCategory && supportingCategoryLabels[supportingCategory]) {
     return supportingCategoryLabels[supportingCategory];
+  }
+  if (addressLocationLabel) {
+    const typeLabel = CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === document.documentType)?.label
+      ?? document.documentType.replaceAll('_', ' ').toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
+    return `${typeLabel} — ${addressLocationLabel}`;
   }
 
   const formId = document.documentNumber?.startsWith('CUSTOM_FORM:')

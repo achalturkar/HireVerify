@@ -21,6 +21,14 @@ describe('displayable custom forms', () => {
 
   it('uses readable labels for expanded candidate document types', () => {
     expect(candidateDocumentTypeLabel({ documentType: 'GAS_BILL' }, [])).toBe('Gas bill');
+    expect(candidateDocumentTypeLabel(
+      { documentType: 'AADHAAR', documentNumber: 'ADDRESS_VERIFICATION:current' },
+      [],
+    )).toBe('Aadhaar card (address proof) — current address');
+    expect(candidateDocumentTypeLabel(
+      { documentType: 'ELECTRICITY_BILL', documentNumber: 'ADDRESS_VERIFICATION:permanent' },
+      [],
+    )).toBe('Electricity bill — permanent address');
     expect(candidateDocumentTypeLabel({ documentType: 'ARTICLESHIP_DOCUMENT' }, [])).toBe('Articleship document');
     expect(candidateDocumentTypeLabel({ documentType: 'CONSOLIDATED_MARKSHEET' }, [])).toBe('Consolidated marksheet');
     expect(candidateDocumentTypeLabel(

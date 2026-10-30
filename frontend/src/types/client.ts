@@ -179,6 +179,7 @@ export type CandidateFormConfig = Record<CandidateIdentityFieldKey, {
   sections: Record<CandidateFormSectionKey, { enabled: boolean }>;
   address: {
     showVerificationLocationSelector: boolean;
+    verificationLocations: ('current' | 'permanent')[];
     currentAddressEnabled: boolean;
     currentAddressRequired: boolean;
     permanentAddressEnabled: boolean;
@@ -223,6 +224,7 @@ export const DEFAULT_CANDIDATE_FORM_CONFIG: CandidateFormConfig = {
   },
   address: {
     showVerificationLocationSelector: false,
+    verificationLocations: [],
     currentAddressEnabled: true,
     currentAddressRequired: true,
     permanentAddressEnabled: true,

@@ -268,12 +268,31 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
           <div className="grid gap-4 sm:grid-cols-2">
             {config.address.currentAddressEnabled && <ReadonlyField label="Current address" value={candidate.currentAddress} required={config.address.currentAddressRequired} wide />}
             {config.address.permanentAddressEnabled && <ReadonlyField label="Permanent address" value={candidate.permanentAddress} required={config.address.permanentAddressRequired} wide />}
-            {config.address.showVerificationLocationSelector && <ReadonlyField label="Addresses selected for verification" value={candidate.addressVerificationLocations} wide />}
+            {!(config.address.verificationLocations ?? []).length && config.address.showVerificationLocationSelector && <ReadonlyField label="Addresses selected for verification" value={candidate.addressVerificationLocations} wide />}
           </div>
         </PortalCard>
         <PortalCard icon={FileCheck} title="Address verification documents">
+          {(config.address.verificationLocations ?? []).map((location) => (
+            <div key={location} className="mb-4">
+              <h3 className="mb-2 text-sm font-semibold">Address proof for {location} address</h3>
+              <p className="mb-2 text-xs text-slate-600">Candidate must upload at least one enabled address proof for this location.</p>
+              {renderDocuments(
+                documentsFor(
+                  CANDIDATE_ADDRESS_DOCUMENT_TYPES.map(({ type }) => type),
+                  `ADDRESS_VERIFICATION:${location}`,
+                ),
+                `No ${location} address proof uploaded.`,
+              )}
+            </div>
+          ))}
           {config.address.requireAnyDocument && <p className="mb-3 text-xs font-medium text-slate-700">At least one enabled address document is required.</p>}
-          {renderDocuments(documentsFor(CANDIDATE_ADDRESS_DOCUMENT_TYPES.map(({ type }) => type)), 'No address documents uploaded.')}
+          {renderDocuments(
+            documents.filter((document) =>
+              CANDIDATE_ADDRESS_DOCUMENT_TYPES.some(({ type }) => type === document.documentType)
+              && !document.documentNumber?.startsWith('ADDRESS_VERIFICATION:'),
+            ),
+            'No unassigned address documents uploaded.',
+          )}
         </PortalCard>
       </div>
     ),

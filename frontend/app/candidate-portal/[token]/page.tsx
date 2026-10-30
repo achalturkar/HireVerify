@@ -398,6 +398,7 @@ const FORM_CATEGORY_SECTIONS: Partial<Record<CandidateCustomForm['category'], ke
   OTHER_CHECKS: 'otherChecks',
 };
 const STANDARD_FORM_CHECKS = new Set([...Object.values(FORM_CHECKS).flat(), 'CIBIL']);
+const ADDRESS_VERIFICATION_DOCUMENT_PREFIX = 'ADDRESS_VERIFICATION:';
 
 const DOCUMENT_GROUPS = [
   { title: 'Other documents', description: 'Anything else the verification team asked for.', types: ['OTHER'] },
@@ -1203,6 +1204,12 @@ export default function CandidatePortalPage() {
     </SectionCard>
   );
   const addressDocuments = useMemo(() => (portal?.documents ?? []).filter((document) => ADDRESS_TYPES.includes(document.documentType)), [portal]);
+  const configuredAddressVerificationLocations = candidateFormConfig.address.verificationLocations ?? [];
+  const genericAddressDocuments = addressDocuments.filter((document) =>
+    !document.documentNumber?.startsWith(ADDRESS_VERIFICATION_DOCUMENT_PREFIX),
+  );
+  const addressVerificationDocumentsFor = (location: 'current' | 'permanent') =>
+    addressDocuments.filter((document) => document.documentNumber === `${ADDRESS_VERIFICATION_DOCUMENT_PREFIX}${location}`);
   const addressUploadTypes = Array.from(new Set([
     ...candidateFormConfig.address.documents.filter((document) => document.enabled).map((document) => document.type),
     ...(portal?.progress.pending ?? [])
@@ -1212,7 +1219,10 @@ export default function CandidatePortalPage() {
   const requiredAddressUploadTypes = Array.from(new Set([
     ...candidateFormConfig.address.documents.filter((document) => document.enabled && document.required).map((document) => document.type),
     ...(portal?.progress.pending ?? [])
-      .filter((item): item is PendingItem & { documentType: string } => item.category === 'ADDRESS' && item.key !== 'address-document-any' && Boolean(item.documentType))
+      .filter((item): item is PendingItem & { documentType: string } => item.category === 'ADDRESS'
+        && !item.key.startsWith('address-verification-')
+        && item.key !== 'address-document-any'
+        && Boolean(item.documentType))
       .map((item) => item.documentType),
   ]));
   const requireAnyAddressDocument = candidateFormConfig.address.requireAnyDocument
@@ -1279,12 +1289,14 @@ export default function CandidatePortalPage() {
     });
   };
 
-  const getAddressVerificationLocations = () => (form.addressVerificationLocations ?? '')
-    .split(',')
-    .filter((location) => (
+  const getAddressVerificationLocations = (): ('current' | 'permanent')[] => configuredAddressVerificationLocations.length
+    ? configuredAddressVerificationLocations
+    : (form.addressVerificationLocations ?? '')
+      .split(',')
+      .filter((location) => (
       (location === 'current' && candidateFormConfig.address.currentAddressEnabled)
       || (location === 'permanent' && candidateFormConfig.address.permanentAddressEnabled)
-    ));
+      )) as ('current' | 'permanent')[];
 
   // Each tab saves only its own fields, so one section can never block another.
   const saveSection = async (section: SectionKey, automatic = false): Promise<boolean> => {
@@ -1963,7 +1975,8 @@ export default function CandidatePortalPage() {
               'Current and permanent address',
               'Enter the addresses where you currently live and where you are permanently registered.',
               'Save addresses',
-              candidateFormConfig.address.showVerificationLocationSelector
+              !configuredAddressVerificationLocations.length
+              && candidateFormConfig.address.showVerificationLocationSelector
               && (candidateFormConfig.address.currentAddressEnabled || candidateFormConfig.address.permanentAddressEnabled) && (
                 <fieldset className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <legend className="px-1 text-sm font-semibold text-slate-800">Which address should be verified?</legend>
@@ -1994,6 +2007,41 @@ export default function CandidatePortalPage() {
               ),
             )}
             <SectionCard icon={Camera} title="Address verification documents" description="Upload an accepted address proof such as Aadhaar, and a clear GPS-enabled photo of your current address when requested.">
+              {configuredAddressVerificationLocations.map((location) => {
+                const label = location === 'current' ? 'current address' : 'permanent address';
+                return (
+                  <div key={location} className="mb-5 rounded-xl border border-slate-200 p-4">
+                    <h3 className="text-sm font-semibold text-slate-900">Address proof for {label}<RequiredMark /></h3>
+                    <p className="mt-1 text-xs text-slate-600">Upload at least one enabled document that proves your {label}.</p>
+                    {addressUploadTypes.length > 0 ? (
+                      <div className="mt-3">
+                        <AttachmentUploader
+                          token={token}
+                          title={`Upload ${label} proof`}
+                          description="Choose the requested document type before adding your PDF or image."
+                          types={addressUploadTypes}
+                          requireAnyType
+                          documentNumber={`${ADDRESS_VERIFICATION_DOCUMENT_PREFIX}${location}`}
+                          documentCategory="ADDRESS"
+                          onUploaded={afterUpload}
+                          readOnly={uploadReadOnly}
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-red-600">No address document types are enabled. Contact the company administrator.</p>
+                    )}
+                    <div className="mt-3">
+                      <DocumentList
+                        documents={addressVerificationDocumentsFor(location)}
+                        emptyText={`No ${label} proof uploaded yet.`}
+                        onDeleteDocument={deleteUploadedDocument}
+                        deletingDocumentId={deletingDocumentId}
+                        readOnly={uploadReadOnly}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
               <div className="mb-4 flex flex-wrap gap-2">
                 {addressUploadTypes.map((type) => {
                   const label = CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === type)?.label ?? humanize(type);
@@ -2014,8 +2062,8 @@ export default function CandidatePortalPage() {
                 />
               ) : <p className="text-sm text-slate-500">This client has not requested address verification documents.</p>}
               <div className="mt-4">
-                <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded address documents ({addressDocuments.length})</h3>
-                <DocumentList documents={addressDocuments} emptyText="No address documents uploaded yet." onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
+                <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded address documents ({genericAddressDocuments.length})</h3>
+                <DocumentList documents={genericAddressDocuments} emptyText="No unassigned address documents uploaded yet." onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
               </div>
             </SectionCard>
           </div>

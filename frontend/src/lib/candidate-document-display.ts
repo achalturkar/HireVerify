@@ -28,6 +28,8 @@ function configuredForms(candidate: CandidateDocumentContext): CandidateCustomFo
 }
 
 export function candidateDocumentDisplayName(document: DocumentRecord, candidate: CandidateDocumentContext): string {
+  const documentTypeLabel = candidateDocumentTypeLabel(document, configuredForms(candidate));
+
   const supportingCategory = document.documentNumber?.startsWith('CHECK_SUPPORTING:')
     ? document.documentNumber.slice('CHECK_SUPPORTING:'.length)
     : null;
@@ -51,7 +53,6 @@ export function candidateDocumentDisplayName(document: DocumentRecord, candidate
     : null;
   if (customFormLabel && customFormLabel !== 'Other') return customFormLabel;
 
-  const documentTypeLabel = candidateDocumentTypeLabel(document, configuredForms(candidate));
   if (document.documentType === 'OTHER') return 'Other document';
   if (document.documentType === 'EDUCATION_CERTIFICATE') {
     const educationRecord = records(candidate.educationHistory).find((record) => record.id === document.documentNumber)

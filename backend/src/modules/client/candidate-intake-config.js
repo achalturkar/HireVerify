@@ -119,6 +119,7 @@ const DEFAULT_CANDIDATE_FORM_CONFIG = Object.fromEntries(
 DEFAULT_CANDIDATE_FORM_CONFIG.sections = DEFAULT_SECTION_CONFIG;
 DEFAULT_CANDIDATE_FORM_CONFIG.address = {
   showVerificationLocationSelector: false,
+  verificationLocations: [],
   currentAddressEnabled: true,
   currentAddressRequired: true,
   permanentAddressEnabled: true,
@@ -208,6 +209,9 @@ const normalizeConfig = (value) => {
   const sourceAddressDocuments = Array.isArray(sourceAddress.documents) ? sourceAddress.documents : [];
   const address = {
     showVerificationLocationSelector: sourceAddress.showVerificationLocationSelector === true,
+    verificationLocations: Array.isArray(sourceAddress.verificationLocations)
+      ? [...new Set(sourceAddress.verificationLocations.filter((location) => ['current', 'permanent'].includes(location)))]
+      : [],
     currentAddressEnabled: sourceAddress.currentAddressEnabled !== false,
     currentAddressRequired: sourceAddress.currentAddressEnabled !== false && sourceAddress.currentAddressRequired !== false,
     permanentAddressEnabled: sourceAddress.permanentAddressEnabled !== false,
@@ -301,7 +305,7 @@ const validateConfig = (value, clientId) => {
       if (!field || typeof field !== 'object' || Array.isArray(field)) {
         throw new BadRequestError('Candidate address settings must be an object.');
       }
-      const allowedAddressKeys = new Set(['showVerificationLocationSelector', 'currentAddressEnabled', 'currentAddressRequired', 'permanentAddressEnabled', 'permanentAddressRequired', 'requireAnyDocument', 'documents']);
+      const allowedAddressKeys = new Set(['showVerificationLocationSelector', 'verificationLocations', 'currentAddressEnabled', 'currentAddressRequired', 'permanentAddressEnabled', 'permanentAddressRequired', 'requireAnyDocument', 'documents']);
       for (const property of Object.keys(field)) {
         if (!allowedAddressKeys.has(property)) throw new BadRequestError(`Invalid candidate address setting: ${property}.`);
       }
@@ -309,6 +313,24 @@ const validateConfig = (value, clientId) => {
         if (field[property] !== undefined && typeof field[property] !== 'boolean') {
           throw new BadRequestError(`Invalid ${property} setting for candidate address.`);
         }
+      }
+      if (field.verificationLocations !== undefined
+        && (!Array.isArray(field.verificationLocations)
+          || field.verificationLocations.some((location) => !['current', 'permanent'].includes(location))
+          || new Set(field.verificationLocations).size !== field.verificationLocations.length)) {
+        throw new BadRequestError('Select valid, unique address locations for verification.');
+      }
+      if (field.verificationLocations?.length
+        && (value.sections?.address?.enabled === false
+          || field.verificationLocations.some((location) => (
+            location === 'current' ? field.currentAddressEnabled === false : field.permanentAddressEnabled === false
+          )))) {
+        throw new BadRequestError('A verified address location must be enabled in the candidate form.');
+      }
+      if (field.verificationLocations?.length
+        && Array.isArray(field.documents)
+        && !field.documents.some((document) => document?.enabled === true)) {
+        throw new BadRequestError('Enable at least one address document type for address verification.');
       }
       if ((field.currentAddressRequired && field.currentAddressEnabled === false)
         || (field.permanentAddressRequired && field.permanentAddressEnabled === false)) {

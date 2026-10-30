@@ -66,6 +66,7 @@ const FORM_CATEGORY_SECTIONS = {
   OTHER_CHECKS: 'otherChecks',
 };
 const CHECK_SUPPORTING_DOCUMENT_PREFIX = 'CHECK_SUPPORTING:';
+const ADDRESS_VERIFICATION_DOCUMENT_PREFIX = 'ADDRESS_VERIFICATION:';
 
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 const createToken = () => crypto.randomBytes(32).toString('hex');
@@ -259,12 +260,28 @@ const pendingFor = (candidate) => {
     }
   }
   if (candidateFormConfig.sections.address.enabled) {
+    const enabledAddressDocumentTypes = addressConfig.documents
+      .filter((document) => document.enabled)
+      .map((document) => document.type);
     for (const field of [
       { key: 'currentAddress', label: 'current address', required: addressConfig.currentAddressRequired },
       { key: 'permanentAddress', label: 'permanent address', required: addressConfig.permanentAddressRequired },
     ]) {
       if (field.required && !candidate[field.key]) {
         pending.push({ key: `field-${field.key}`, label: `Provide your ${field.label}`, type: 'profile', category: 'ADDRESS' });
+      }
+    }
+    for (const location of addressConfig.verificationLocations || []) {
+      const documentNumber = `${ADDRESS_VERIFICATION_DOCUMENT_PREFIX}${location}`;
+      if (!existingDocuments.some((item) => item.documentNumber === documentNumber
+        && enabledAddressDocumentTypes.includes(item.documentType))) {
+        pending.push({
+          key: `address-verification-${location}`,
+          label: `Upload address proof for ${location} address`,
+          type: 'document',
+          documentType: enabledAddressDocumentTypes[0],
+          category: 'ADDRESS',
+        });
       }
     }
     for (const document of addressConfig.documents) {
@@ -279,9 +296,6 @@ const pendingFor = (candidate) => {
         });
       }
     }
-    const enabledAddressDocumentTypes = addressConfig.documents
-      .filter((document) => document.enabled)
-      .map((document) => document.type);
     if (addressConfig.requireAnyDocument
       && enabledAddressDocumentTypes.length > 0
       && !existingDocuments.some((item) => enabledAddressDocumentTypes.includes(item.documentType))) {
@@ -588,7 +602,9 @@ const toDto = (invitation) => {
       ],
       currentAddress: candidate.currentAddress,
       permanentAddress: candidate.permanentAddress,
-      addressVerificationLocations: candidate.addressVerificationLocations || [],
+      addressVerificationLocations: candidateFormConfig.address.verificationLocations?.length
+        ? candidateFormConfig.address.verificationLocations
+        : candidate.addressVerificationLocations || [],
     },
     company: candidate.company,
     client: candidate.client ? {
@@ -871,6 +887,11 @@ const updateProfile = async (token, payload) => {
       || new Set(data.addressVerificationLocations).size !== data.addressVerificationLocations.length) {
       throw new BadRequestError('Select only enabled address locations for verification.');
     }
+    if (addressConfig.verificationLocations?.length
+      && (data.addressVerificationLocations.length !== addressConfig.verificationLocations.length
+        || addressConfig.verificationLocations.some((location) => !data.addressVerificationLocations.includes(location)))) {
+      throw new BadRequestError('Address verification locations are set by the client and cannot be changed.');
+    }
   }
   for (const field of IDENTITY_FIELDS) {
     if (data[field.key] !== undefined && !candidateFormConfig.sections.identity.enabled) {
@@ -1085,6 +1106,16 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
   if (documentCategory !== undefined && !['EMPLOYMENT', 'ADDRESS', 'EDUCATION'].includes(documentCategory)) {
     await rejectDocumentUpload(file, 'Document category is invalid.');
   }
+  const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
+  const addressVerificationLocation = documentNumber?.startsWith(ADDRESS_VERIFICATION_DOCUMENT_PREFIX)
+    ? documentNumber.slice(ADDRESS_VERIFICATION_DOCUMENT_PREFIX.length)
+    : null;
+  if (addressVerificationLocation
+    && (documentCategory !== 'ADDRESS'
+      || !['current', 'permanent'].includes(addressVerificationLocation)
+      || !candidateFormConfig.address.verificationLocations.includes(addressVerificationLocation))) {
+    await rejectDocumentUpload(file, 'This address verification location is not requested by the client.');
+  }
   if (documentNumber?.startsWith(CHECK_SUPPORTING_DOCUMENT_PREFIX)) {
     const category = documentNumber.slice(CHECK_SUPPORTING_DOCUMENT_PREFIX.length);
     const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
@@ -1095,7 +1126,6 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
     }
   }
   if (documentCategory === 'ADDRESS') {
-    const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
     const addressDocument = candidateFormConfig.address.documents.find((item) => item.type === documentType && item.enabled);
     const requestedByCase = invitation.candidate.bgvCases[0]?.checks.some((check) => check.type === documentType);
     if ((!candidateFormConfig.sections.address.enabled || !addressDocument) && !requestedByCase) {
@@ -1141,7 +1171,6 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
     await rejectDocumentUpload(file, 'Word documents can only be uploaded as completed BGV/PCC forms.');
   }
   const identityField = IDENTITY_FIELDS.find((field) => field.documentType === documentType);
-  const candidateFormConfig = getCandidateFormConfig(invitation.candidate);
   const requestedIdentityCheck = invitation.candidate.bgvCases[0]?.checks.some((check) => check.type === documentType);
   if (identityField && documentCategory !== 'ADDRESS' && !ADDRESS_DOCUMENT_TYPES.includes(documentType)
     && ((!candidateFormConfig.sections.identity.enabled || !candidateFormConfig[identityField.key].enabled) && !requestedIdentityCheck)) {
