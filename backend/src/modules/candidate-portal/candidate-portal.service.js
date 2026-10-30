@@ -315,6 +315,17 @@ const pendingFor = (candidate) => {
   if (candidateFormConfig.sections.employment.enabled && employmentRequested) {
     const storedEmploymentHistory = Array.isArray(candidate.employmentHistory) ? candidate.employmentHistory : [];
     const isFresher = storedEmploymentHistory.some((record) => record?.isCurrent === true && record.isFresher === true);
+    const savedPastEmploymentRecords = storedEmploymentHistory.filter((record) =>
+      record && record.isCurrent !== true && hasEmploymentHistoryDetails(record),
+    );
+    if (savedPastEmploymentRecords.length > candidateFormConfig.maxPastEmploymentRecords) {
+      pending.push({
+        key: 'employment-past-limit',
+        label: `Remove past employer records so no more than ${candidateFormConfig.maxPastEmploymentRecords} remain`,
+        type: 'profile',
+        category: 'EMPLOYMENT',
+      });
+    }
     const currentEmploymentValues = {
       employerName: candidate.currentEmployer,
       employeeId: candidate.employeeId,
@@ -985,8 +996,10 @@ const updateProfile = async (token, payload) => {
     if (!candidateFormConfig.sections.employment.enabled) {
       throw new BadRequestError('employment details are not enabled for this client’s candidate form.');
     }
-    if (!Array.isArray(payload.employmentHistory) || payload.employmentHistory.length < 1 || payload.employmentHistory.length > 10) {
-      throw new BadRequestError('Provide between 1 and 10 employment records.');
+    if (!Array.isArray(payload.employmentHistory)
+      || payload.employmentHistory.length < 1
+      || payload.employmentHistory.length > candidateFormConfig.maxPastEmploymentRecords + 1) {
+      throw new BadRequestError(`Provide no more than ${candidateFormConfig.maxPastEmploymentRecords} past employer records.`);
     }
     data.employmentHistory = payload.employmentHistory.map((record, index) => {
       if (!record || typeof record !== 'object' || Array.isArray(record) || record.isCurrent !== (index === 0)) {

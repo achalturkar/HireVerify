@@ -134,6 +134,7 @@ DEFAULT_CANDIDATE_FORM_CONFIG.employmentDocuments = EMPLOYMENT_DOCUMENT_TYPES.ma
   required: false,
 }));
 DEFAULT_CANDIDATE_FORM_CONFIG.currentEmploymentEnabled = true;
+DEFAULT_CANDIDATE_FORM_CONFIG.maxPastEmploymentRecords = 9;
 DEFAULT_CANDIDATE_FORM_CONFIG.requireEmploymentDocumentPerEmployer = false;
 DEFAULT_CANDIDATE_FORM_CONFIG.requiredEmploymentEmployerCount = 3;
 DEFAULT_CANDIDATE_FORM_CONFIG.includeCurrentEmployerInDocumentRequirements = true;
@@ -193,6 +194,11 @@ const normalizeConfig = (value) => {
   });
   const requireEmploymentDocumentPerEmployer = source.requireEmploymentDocumentPerEmployer === true;
   const currentEmploymentEnabled = source.currentEmploymentEnabled !== false;
+  const maxPastEmploymentRecords = Number.isInteger(source.maxPastEmploymentRecords)
+    && source.maxPastEmploymentRecords >= 1
+    && source.maxPastEmploymentRecords <= 50
+    ? source.maxPastEmploymentRecords
+    : 9;
   const requiredEmploymentEmployerCount = Number.isInteger(source.requiredEmploymentEmployerCount)
     && source.requiredEmploymentEmployerCount >= 1
     && source.requiredEmploymentEmployerCount <= 10
@@ -232,6 +238,7 @@ const normalizeConfig = (value) => {
     customForms,
     employmentDocuments,
     currentEmploymentEnabled,
+    maxPastEmploymentRecords,
     requireEmploymentDocumentPerEmployer,
     requiredEmploymentEmployerCount,
     includeCurrentEmployerInDocumentRequirements,
@@ -243,7 +250,7 @@ const validateConfig = (value, clientId) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new BadRequestError('Candidate form configuration must be an object.');
   }
-  const allowedKeys = new Set([...IDENTITY_FIELDS.map(({ key }) => key), 'invitationExpiryDays', 'fields', 'sections', 'address', 'customForms', 'employmentDocuments', 'currentEmploymentEnabled', 'requireEmploymentDocumentPerEmployer', 'requiredEmploymentEmployerCount', 'includeCurrentEmployerInDocumentRequirements', 'educationDocuments']);
+  const allowedKeys = new Set([...IDENTITY_FIELDS.map(({ key }) => key), 'invitationExpiryDays', 'fields', 'sections', 'address', 'customForms', 'employmentDocuments', 'currentEmploymentEnabled', 'maxPastEmploymentRecords', 'requireEmploymentDocumentPerEmployer', 'requiredEmploymentEmployerCount', 'includeCurrentEmployerInDocumentRequirements', 'educationDocuments']);
   for (const [key, field] of Object.entries(value)) {
     if (key === 'invitationExpiryDays') {
       if (!Number.isInteger(field) || field < 1 || field > 30) {
@@ -260,6 +267,12 @@ const validateConfig = (value, clientId) => {
     if (key === 'currentEmploymentEnabled') {
       if (typeof field !== 'boolean') {
         throw new BadRequestError('Current employment visibility setting must be a boolean.');
+      }
+      continue;
+    }
+    if (key === 'maxPastEmploymentRecords') {
+      if (!Number.isInteger(field) || field < 1 || field > 50) {
+        throw new BadRequestError('The maximum number of past employer records must be a whole number from 1 to 50.');
       }
       continue;
     }

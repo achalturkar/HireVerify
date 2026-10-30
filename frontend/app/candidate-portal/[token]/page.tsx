@@ -1037,6 +1037,7 @@ export default function CandidatePortalPage() {
 
   const accent = useMemo(() => safeColor(portal?.company.primaryColor), [portal]);
   const candidateFormConfig = portal?.candidateFormConfig ?? DEFAULT_CANDIDATE_FORM_CONFIG;
+  const maxPastEmploymentRecords = candidateFormConfig.maxPastEmploymentRecords ?? 9;
   const configuredField = useCallback((field: FieldDef, key: CandidateFormRequiredFieldKey = field.key as CandidateFormRequiredFieldKey): FieldDef => ({
     ...field,
     required: candidateFormConfig.fields?.[key]?.required ?? field.required ?? false,
@@ -1311,6 +1312,9 @@ export default function CandidatePortalPage() {
       })))
       : validateFields(form, fields, automatic);
     if (section === 'employment') {
+      if (pastEmployments.length > maxPastEmploymentRecords) {
+        found.past_employment_limit = `Remove past employer records so no more than ${maxPastEmploymentRecords} remain.`;
+      }
       if (form.isFresher !== 'true') {
         pastEmployments.forEach((record, index) => {
           const recordStarted = hasPastEmploymentDetails(record);
@@ -1456,6 +1460,9 @@ export default function CandidatePortalPage() {
       });
     }
     if (candidateFormConfig.sections.employment.enabled) {
+      if (pastEmployments.length > maxPastEmploymentRecords) {
+        found.past_employment_limit = `Remove past employer records so no more than ${maxPastEmploymentRecords} remain.`;
+      }
       if (form.isFresher !== 'true') {
         const hasPastEmployer = pastEmployments.some((record) => record.employerName.trim() !== '');
         if (!hasPastEmployer) {
@@ -1710,7 +1717,7 @@ export default function CandidatePortalPage() {
       title: 'Employment history',
       description: isFresher
         ? 'You indicated that you are a fresher. Past employment details and required employment documents are not needed.'
-        : 'Enter your current employer first, then add past employers from most recent to oldest. You can enter up to 10 employers total.',
+        : `Enter your current employer first, then add up to ${maxPastEmploymentRecords} past employers from most recent to oldest.`,
       details: isFresher
         ? effectiveSectionFields.employment.map((field) => field.label)
         : [
@@ -2042,29 +2049,33 @@ export default function CandidatePortalPage() {
                   </div>
                 );
               })}
-              <div className="mb-4 flex flex-wrap gap-2">
-                {addressUploadTypes.map((type) => {
-                  const label = CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === type)?.label ?? humanize(type);
-                  return <span key={type} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{label}{requiredAddressUploadTypes.includes(type) && <RequiredMark />}</span>;
-                })}
-              </div>
-              {addressUploadTypes.length > 0 ? (
-                <AttachmentUploader
-                  token={token}
-                  title="Upload address documents"
-                  description="Choose the requested document type before adding your PDF or image."
-                  types={addressUploadTypes}
-                  requiredTypes={requiredAddressUploadTypes}
-                  requireAnyType={requireAnyAddressDocument}
-                  documentCategory="ADDRESS"
-                  onUploaded={afterUpload}
-                  readOnly={uploadReadOnly}
-                />
-              ) : <p className="text-sm text-slate-500">This client has not requested address verification documents.</p>}
-              <div className="mt-4">
-                <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded address documents ({genericAddressDocuments.length})</h3>
-                <DocumentList documents={genericAddressDocuments} emptyText="No unassigned address documents uploaded yet." onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
-              </div>
+              {configuredAddressVerificationLocations.length === 0 && (
+                <>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {addressUploadTypes.map((type) => {
+                      const label = CANDIDATE_ADDRESS_DOCUMENT_TYPES.find((item) => item.type === type)?.label ?? humanize(type);
+                      return <span key={type} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{label}{requiredAddressUploadTypes.includes(type) && <RequiredMark />}</span>;
+                    })}
+                  </div>
+                  {addressUploadTypes.length > 0 ? (
+                    <AttachmentUploader
+                      token={token}
+                      title="Upload address documents"
+                      description="Choose the requested document type before adding your PDF or image."
+                      types={addressUploadTypes}
+                      requiredTypes={requiredAddressUploadTypes}
+                      requireAnyType={requireAnyAddressDocument}
+                      documentCategory="ADDRESS"
+                      onUploaded={afterUpload}
+                      readOnly={uploadReadOnly}
+                    />
+                  ) : <p className="text-sm text-slate-500">This client has not requested address verification documents.</p>}
+                  <div className="mt-4">
+                    <h3 className="mb-2 text-sm font-semibold text-slate-900">Uploaded address documents ({genericAddressDocuments.length})</h3>
+                    <DocumentList documents={genericAddressDocuments} emptyText="No unassigned address documents uploaded yet." onDeleteDocument={deleteUploadedDocument} deletingDocumentId={deletingDocumentId} readOnly={uploadReadOnly} />
+                  </div>
+                </>
+              )}
             </SectionCard>
           </div>
         )}
@@ -2199,7 +2210,7 @@ export default function CandidatePortalPage() {
               </>
             )}
             {candidateFormConfig.sections.employment.enabled && form.isFresher !== 'true' && (
-              <SectionCard icon={BriefcaseBusiness} title="Past employers" description="Add your previous employment, starting with your most recent past employer. You can include up to 9 past employers.">
+              <SectionCard icon={BriefcaseBusiness} title="Past employers" description={`Add your previous employment, starting with your most recent past employer. You can include up to ${maxPastEmploymentRecords} past employers.`}>
                 <div className="space-y-4">
                   {pastEmployments.map((employment, index) => (
                     <div key={employment.id} className="rounded-xl border border-slate-200 p-4">
@@ -2258,12 +2269,15 @@ export default function CandidatePortalPage() {
                       )}
                     </div>
                   ))}
-                  {1 + pastEmployments.length < 10 && (
+                  {pastEmployments.length < maxPastEmploymentRecords && (
                     <button type="button" onClick={() => setPastEmployments((previous) => [...previous, emptyPastEmployment()])} disabled={profileReadOnly} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                       <Plus size={16} aria-hidden="true" /> Add more
                     </button>
                   )}
-                  <p className="text-xs text-slate-500">{1 + pastEmployments.length} of 10 employer records shown, including your current employer.</p>
+                  {pastEmployments.length > maxPastEmploymentRecords && (
+                    <p role="alert" className="text-xs text-amber-700">This form currently has {pastEmployments.length} past employer records, but the limit is {maxPastEmploymentRecords}. Remove {pastEmployments.length - maxPastEmploymentRecords} before saving.</p>
+                  )}
+                  <p className="text-xs text-slate-500">{pastEmployments.length} of {maxPastEmploymentRecords} past employer records.</p>
                 </div>
               </SectionCard>
             )}

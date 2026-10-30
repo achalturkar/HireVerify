@@ -190,6 +190,7 @@ export type CandidateFormConfig = Record<CandidateIdentityFieldKey, {
   customForms: CandidateCustomForm[];
   employmentDocuments: CandidateEmploymentDocumentConfig[];
   currentEmploymentEnabled: boolean;
+  maxPastEmploymentRecords: number;
   requireEmploymentDocumentPerEmployer: boolean;
   requiredEmploymentEmployerCount: number;
   includeCurrentEmployerInDocumentRequirements: boolean;
@@ -235,6 +236,7 @@ export const DEFAULT_CANDIDATE_FORM_CONFIG: CandidateFormConfig = {
   customForms: [],
   employmentDocuments: CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.map(({ type }) => ({ type, enabled: true, required: false })),
   currentEmploymentEnabled: true,
+  maxPastEmploymentRecords: 9,
   requireEmploymentDocumentPerEmployer: false,
   requiredEmploymentEmployerCount: 3,
   includeCurrentEmployerInDocumentRequirements: true,

@@ -462,6 +462,14 @@ export default function ClientDetailPage() {
     }));
   };
 
+  const updateMaxPastEmploymentRecords = (count: number) => {
+    setCandidateFormSaved(false);
+    setCandidateFormConfig((current) => ({
+      ...current,
+      maxPastEmploymentRecords: count,
+    }));
+  };
+
   const updateRequiredEmploymentEmployerCount = (count: number) => {
     setCandidateFormSaved(false);
     setCandidateFormConfig((current) => ({
@@ -1562,6 +1570,7 @@ export default function ClientDetailPage() {
                     ...previewForms.map((form) => `${form.name}${form.required ? ' *' : ''}`),
                   ]} />}
                   {selectedPreviewTab === 'employment' && <CandidateFormPreviewFields title="Employment details and upload types" fields={[
+                    `Maximum of ${candidateFormConfig.maxPastEmploymentRecords} past employer records`,
                     ...candidateRequiredFieldsFor('employment').map((field) => `${field.label}${candidateFormConfig.fields[field.key]?.required ? ' *' : ''}`),
                     ...employmentDocs.map((document) =>
                       `${CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? document.type}${document.required ? ` · required for the first ${candidateFormConfig.requiredEmploymentEmployerCount} ${candidateFormConfig.includeCurrentEmployerInDocumentRequirements ? 'employers (including current)' : 'past employers'}` : ''}`,
@@ -1782,6 +1791,24 @@ export default function ClientDetailPage() {
                 <span className="block font-semibold">Show current employment to candidates</span>
                 <span className="mt-0.5 block text-[var(--muted)]">When unchecked, current employer details and its document uploads are hidden. Past employment remains available.</span>
               </span>
+            </label>
+            <label className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] p-3 text-[11px]">
+              <span className="font-medium">Maximum past employment records candidates can add</span>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                step={1}
+                value={candidateFormConfig.maxPastEmploymentRecords}
+                onChange={(event) => {
+                  const count = Number(event.target.value);
+                  if (Number.isInteger(count) && count >= 1 && count <= 50) updateMaxPastEmploymentRecords(count);
+                }}
+                aria-label="Maximum past employment records"
+                disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.employment.enabled}
+                className="w-20 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1.5 text-[11px]"
+              />
+              <span className="text-[var(--muted)]">records (1-50)</span>
             </label>
             <label className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] p-3 text-[11px]">
               <span className="font-medium">Apply employment document requirements to the first</span>
