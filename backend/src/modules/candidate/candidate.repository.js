@@ -37,15 +37,20 @@ const findById = (id, companyId, { includeDeleted = false } = {}) =>
   prisma.candidate.findFirst({
     where: { id, companyId, ...(includeDeleted ? {} : { isDeleted: false }) },
     include: {
-      client: { select: { id: true, name: true, clientCode: true, contactEmail: true, contactPhone: true, logoUrl: true, candidateFormConfig: true } },
+      client: { select: { id: true, name: true, clientCode: true, contactEmail: true, contactPhone: true, supportEmail: true, supportPhone: true, logoUrl: true, candidateFormConfig: true } },
       company: { select: { name: true, logoUrl: true, primaryColor: true } },
-      subclient: { select: { id: true, name: true, clientCode: true, serviceRates: true } },
+      subclient: { select: { id: true, name: true, clientCode: true, supportEmail: true, supportPhone: true, serviceRates: true, candidateFormConfig: true } },
       _count: { select: { bgvCases: true } },
       documents: true,
       consents: {
         where: { consentType: 'BGV_CONSENT' },
         orderBy: { createdAt: 'desc' },
         select: { consentGiven: true, consentVersion: true, consentText: true, consentedAt: true, revokedAt: true, createdAt: true, caseId: true },
+      },
+      bgvCases: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        include: { checks: { include: { documents: true } }, consents: true },
       },
       portalInvitation: { select: { activatedAt: true, lastSentAt: true, expiresAt: true, revokedAt: true, reminderCount: true, lastRemindedAt: true } },
     },
@@ -68,8 +73,8 @@ const list = async ({ companyId, skip, limit, search, clientId, subclientId, sta
       take: limit,
       orderBy: { [sortBy]: sortOrder },
       include: {
-        client: { select: { id: true, name: true, clientCode: true, contactEmail: true, contactPhone: true, candidateFormConfig: true } },
-        subclient: { select: { id: true, name: true, clientCode: true, serviceRates: true, candidateFormConfig: true } },
+        client: { select: { id: true, name: true, clientCode: true, contactEmail: true, contactPhone: true, supportEmail: true, supportPhone: true, candidateFormConfig: true } },
+        subclient: { select: { id: true, name: true, clientCode: true, supportEmail: true, supportPhone: true, serviceRates: true, candidateFormConfig: true } },
         _count: { select: { bgvCases: true } },
         documents: true,
         bgvCases: {

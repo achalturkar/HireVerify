@@ -36,7 +36,7 @@ export interface PortalCandidate {
   phone: string | null;
   status: string;
   createdAt: string;
-  subclient: Pick<PortalSubclient, 'id' | 'name' | 'clientCode'> | null;
+  subclient: (Pick<PortalSubclient, 'id' | 'name' | 'clientCode'> & { candidateFormConfig?: CandidateFormConfig }) | null;
 }
 
 export interface PortalSubclient {
@@ -128,6 +128,11 @@ export interface PortalCandidateDetail extends PortalCandidate {
   documents: { id: string; documentType: string; documentNumber: string | null; fileName: string; fileUrl: string; verificationStatus: string; uploadedAt: string }[];
   bgvCases: PortalCase[];
   portalInvitation: { activatedAt: string | null; lastSentAt: string | null; expiresAt: string; revokedAt: string | null; reminderCount: number } | null;
+  intakeProgress: {
+    pending: { key: string; label: string; type: string }[];
+    pendingCount: number;
+    profileComplete: boolean;
+  };
   client?: { candidateFormConfig: CandidateFormConfig };
 }
 

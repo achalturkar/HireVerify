@@ -181,7 +181,8 @@ const buildStandalonePdf = async ({ type, inputData, apiVersion }) => {
   const initiatedAt = inputData?.initiatedAt ? new Date(inputData.initiatedAt) : new Date();
   const response = await executeStandalone({ type, inputData, apiVersion });
   const completedAt = new Date();
-  const doc = new PDFDocument({ size: 'A4', margin: 0, layout: 'portrait' });
+  const doc = new PDFDocument({ size: 'A4', margin: 0, layout: 'portrait', bufferPages: type === 'UAN' });
+  const pageMargin = 24;
   const data = response?.resultData || {};
   const rawPanDetails = data.rawPanDetails || {};
   const address = data.address || rawPanDetails.address || {};
@@ -221,8 +222,8 @@ const buildStandalonePdf = async ({ type, inputData, apiVersion }) => {
     ['Client ID', toDisplay(data.clientId || rawPanDetails.client_id || '—')],
   ];
 
-  const tableX = 15;
-  const tableW = doc.page.width - 36;
+  const tableX = pageMargin;
+  const tableW = doc.page.width - pageMargin * 2;
   const labelW = tableW * 0.4;
   const valueW = tableW - labelW;
   const borderColor = '#C5CEDB';
@@ -241,14 +242,130 @@ const buildStandalonePdf = async ({ type, inputData, apiVersion }) => {
       });
   };
 
+  if (type === 'UAN') {
+    const envelope = data;
+    const uanData = envelope.data && typeof envelope.data === 'object' ? envelope.data : {};
+    const history = Array.isArray(uanData.employment_history) ? uanData.employment_history : [];
+    const uanValue = uanData.uan || inputData?.uan;
+    const pageTitle = 'UAN Verification';
+    const summaryRows = [
+      ['UAN Number', uanValue || '—'],
+      ['Name', uanData.name || history[0]?.name || '—'],
+      ['Father Name', uanData.father_name || history[0]?.guardian_name || '—'],
+      ['Verification Date', completedAt.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')],
+      ['Verification Source', 'https://www.epfindia.gov.in/site_en/index.php'],
+    ];
+    const tableX = pageMargin;
+    const tableW = doc.page.width - pageMargin * 2;
+    const labelW = tableW * 0.4;
+    const valueW = tableW - labelW;
+    const navy = '#1F417A';
+    const borderColor = '#C5CEDB';
+    const labelFill = '#E8EDF5';
+    const dateColumnW = tableW / 2;
+    const footerY = doc.page.height - pageMargin - 12;
+    const contentBottom = footerY - 52;
+    let y = 0;
+
+    const drawTitle = (title) => {
+      doc.fillColor('#FFFFFF').rect(0, 0, doc.page.width, doc.page.height).fill();
+      doc.fillColor('#EEF2F8').rect(tableX, pageMargin, tableW, 36).fill();
+      doc.fillColor(navy).font('Helvetica-Bold').fontSize(15).text(title, tableX, pageMargin + 11, { align: 'center', width: tableW });
+      doc.fillColor(navy).rect(tableX, pageMargin + 41, tableW, 27).fill();
+      doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(10).text(title, tableX, pageMargin + 49, { align: 'center', width: tableW });
+    };
+
+    const drawDateHeader = () => {
+      const dates = [
+        ['Initiated Date', formatDateTime(initiatedAt)],
+        ['Completed Date', formatDateTime(completedAt)],
+      ];
+      dates.forEach(([label], index) => drawCell(tableX + dateColumnW * index, y, dateColumnW, 22, label, { fill: labelFill, bold: true }));
+      y += 22;
+      dates.forEach(([, value], index) => drawCell(tableX + dateColumnW * index, y, dateColumnW, 24, value, { fill: '#FFFFFF' }));
+      y += 24;
+    };
+
+    const drawEmploymentHeader = () => {
+      const widths = [tableW * 0.26, tableW * 0.42, tableW * 0.16, tableW * 0.16];
+      const labels = ['Member ID', 'Establishment Name', 'Joining', 'Exit'];
+      let x = tableX;
+      labels.forEach((label, index) => {
+        doc.fillColor('#4E73A6').rect(x, y, widths[index], 21).fill();
+        doc.strokeColor(borderColor).lineWidth(0.55).rect(x, y, widths[index], 21).stroke();
+        doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8).text(label, x + 5, y + 6, { width: widths[index] - 10, ellipsis: true });
+        x += widths[index];
+      });
+      y += 21;
+      return widths;
+    };
+
+    drawTitle(pageTitle);
+    y = pageMargin + 75;
+    drawDateHeader();
+    summaryRows.forEach(([label, value]) => {
+      const displayValue = toDisplay(value);
+      doc.font('Helvetica').fontSize(8);
+      const rowHeight = Math.max(22, Math.ceil(doc.heightOfString(displayValue, { width: valueW - textInset * 2 }) + 10));
+      drawCell(tableX, y, labelW, rowHeight, label, { fill: labelFill, bold: true });
+      drawCell(tableX + labelW, y, valueW, rowHeight, displayValue, { fill: '#FFFFFF' });
+      y += rowHeight;
+    });
+
+    y += 10;
+    let employmentWidths = drawEmploymentHeader();
+    history.forEach((entry) => {
+      const values = [entry?.member_id, entry?.establishment_name, entry?.date_of_joining, entry?.date_of_exit].map(toDisplay);
+      doc.font('Helvetica').fontSize(7.5);
+      const rowHeight = Math.max(21, ...values.map((value, index) =>
+        Math.ceil(doc.heightOfString(value, { width: employmentWidths[index] - 10 }) + 9),
+      ));
+      if (y + rowHeight > contentBottom) {
+        doc.addPage();
+        drawTitle(`${pageTitle} - Continued`);
+        y = pageMargin + 82;
+        employmentWidths = drawEmploymentHeader();
+      }
+      let x = tableX;
+      values.forEach((value, index) => {
+        doc.fillColor('#FFFFFF').rect(x, y, employmentWidths[index], rowHeight).fill();
+        doc.strokeColor(borderColor).lineWidth(0.55).rect(x, y, employmentWidths[index], rowHeight).stroke();
+        doc.fillColor(navy).font('Helvetica').fontSize(7.5).text(value, x + 5, y + 6, {
+          width: employmentWidths[index] - 10,
+          height: rowHeight - 3,
+          ellipsis: true,
+        });
+        x += employmentWidths[index];
+      });
+      y += rowHeight;
+    });
+
+    if (y + 28 > contentBottom) {
+      doc.addPage();
+      drawTitle(pageTitle);
+      y = pageMargin + 82;
+    }
+    const disclaimer = 'Disclaimer: The content of this report has been sourced from the Employees’ Provident Fund Organisation (EPFO) verification response and is accurate as of the verification date. The data may be changed, deleted or modified thereafter.';
+    doc.fillColor('#667085').font('Helvetica-Oblique').fontSize(7).text(disclaimer, tableX, y + 10, { width: tableW, align: 'left' });
+
+    const pageRange = doc.bufferedPageRange();
+    for (let pageIndex = 0; pageIndex < pageRange.count; pageIndex += 1) {
+      doc.switchToPage(pageRange.start + pageIndex);
+      doc.strokeColor(navy).lineWidth(0.7).moveTo(tableX, footerY).lineTo(tableX + tableW, footerY).stroke();
+      doc.fillColor('#667085').font('Helvetica').fontSize(7).text('Confidential . © Brainhunt Ventures Pvt Ltd', tableX, footerY + 6, { width: tableW / 2 });
+      doc.text(`Page ${pageIndex + 1} / ${pageRange.count}`, tableX + tableW / 2, footerY + 6, { width: tableW / 2, align: 'right' });
+    }
+    return doc;
+  }
+
   doc.fillColor('#FFFFFF').rect(0, 0, doc.page.width, doc.page.height).fill();
-  doc.fillColor('#EEF2F8').rect(tableX, 7, tableW, 41).fill();
-  doc.fillColor(navy).font('Helvetica-Bold').fontSize(16).text(pageTitle, tableX, 20, { align: 'center', width: tableW });
+  doc.fillColor('#EEF2F8').rect(tableX, pageMargin, tableW, 41).fill();
+  doc.fillColor(navy).font('Helvetica-Bold').fontSize(16).text(pageTitle, tableX, pageMargin + 13, { align: 'center', width: tableW });
 
-  doc.fillColor(navy).rect(tableX, 56, tableW, 32).fill();
-  doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(11).text(pageTitle, tableX, 66, { align: 'center', width: tableW });
+  doc.fillColor(navy).rect(tableX, pageMargin + 49, tableW, 32).fill();
+  doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(11).text(pageTitle, tableX, pageMargin + 59, { align: 'center', width: tableW });
 
-  let y = 99;
+  let y = pageMargin + 91;
   const dateColumnW = tableW / 2;
   const dateLabels = [['Initiated Date', formatDateTime(initiatedAt)], ['Completed Date', formatDateTime(completedAt)]];
   dateLabels.forEach(([label], index) => drawCell(tableX + dateColumnW * index, y, dateColumnW, 24, label, { fill: labelFill, bold: true }));
@@ -270,10 +387,10 @@ const buildStandalonePdf = async ({ type, inputData, apiVersion }) => {
   const disclaimer = 'Disclaimer: The content of this report has been sourced from the government of India websites & this report has been updated on the date of verification. The data might have been changed, deleted or modified from thereon.';
   doc.fillColor('#667085').font('Helvetica-Oblique').fontSize(8).text(disclaimer, tableX, disclaimerY, { width: tableW, align: 'left' });
 
-  const footerY = doc.page.height - 35;
+  const footerY = doc.page.height - pageMargin - 12;
   doc.strokeColor(navy).lineWidth(0.7).moveTo(tableX, footerY).lineTo(tableX + tableW, footerY).stroke();
-  doc.fillColor('#667085').font('Helvetica').fontSize(7).text('Confidential . © Brainhunt Ventures Pvt Ltd', tableX, footerY + 7, { width: tableW / 2 });
-  doc.text('Page 1 / 1', tableX + tableW / 2, footerY + 7, { width: tableW / 2, align: 'right' });
+  doc.fillColor('#667085').font('Helvetica').fontSize(7).text('Confidential . © Brainhunt Ventures Pvt Ltd', tableX, footerY + 6, { width: tableW / 2 });
+  doc.text('Page 1 / 1', tableX + tableW / 2, footerY + 6, { width: tableW / 2, align: 'right' });
 
   return doc;
 };

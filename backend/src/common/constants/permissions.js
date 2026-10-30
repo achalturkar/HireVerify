@@ -77,6 +77,7 @@ const PERMISSIONS = [
   // ==========================
   { key: 'bgv.verification.view', module: 'bgv.verification', action: 'view', description: 'View verification checks' },
   { key: 'bgv.verification.create', module: 'bgv.verification', action: 'create', description: 'Create verification checks' },
+  { key: 'bgv.provider.view', module: 'bgv.provider', action: 'view', description: 'Access standalone document verification providers' },
   { key: 'bgv.verification.retry', module: 'bgv.verification', action: 'retry', description: 'Retry verification checks' },
   { key: 'bgv.verification.review', module: 'bgv.verification', action: 'review', description: 'Review verification results' },
   { key: 'bgv.verification.override', module: 'bgv.verification', action: 'override', description: 'Override verification results' },

@@ -20,7 +20,10 @@ const toDto = (candidate) => ({
     clientCode: candidate.client.clientCode,
     contactEmail: candidate.client.contactEmail,
     contactPhone: candidate.client.contactPhone,
+    supportEmail: candidate.client.supportEmail,
+    supportPhone: candidate.client.supportPhone,
     logoUrl: candidate.client.logoUrl,
+    candidateFormConfig: normalizeConfig(candidate.client.candidateFormConfig),
   } : null,
   company: candidate.company ? {
     name: candidate.company.name,
@@ -32,7 +35,10 @@ const toDto = (candidate) => ({
     id: candidate.subclient.id,
     name: candidate.subclient.name,
     clientCode: candidate.subclient.clientCode,
+    supportEmail: candidate.subclient.supportEmail,
+    supportPhone: candidate.subclient.supportPhone,
     serviceRates: candidate.subclient.serviceRates,
+    candidateFormConfig: normalizeConfig(candidate.subclient.candidateFormConfig),
   } : null,
   candidateCode: candidate.candidateCode,
   portalLinkExpiryDays: normalizeConfig(candidate.client?.candidateFormConfig).invitationExpiryDays,
@@ -85,6 +91,7 @@ const toDto = (candidate) => ({
   documents: candidate.documents?.map((document) => ({ id: document.id, documentType: document.documentType, documentNumber: document.documentNumber, fileName: document.fileName, fileUrl: document.fileUrl, verificationStatus: document.verificationStatus, uploadedAt: document.uploadedAt })) || [],
   consents: candidate.consents || [],
   portalInvitation: candidate.portalInvitation || null,
+  intakeProgress: candidatePortalService.getCandidateProgress(candidate),
 });
 
 const createCandidateCode = async (clientId, companyId) => {

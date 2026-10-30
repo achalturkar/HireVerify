@@ -3,7 +3,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 ## Getting Started
 
 Copy `.env.example` to `.env.local`. The same-origin `/api/v1` route is proxied
-to the backend at `http://localhost:5000` by default. Set
+to the backend at `http://127.0.0.1:5000` by default. Set
 `NEXT_PUBLIC_API_PROXY_TARGET` in `.env.local` if the backend uses a different
 host or port.
 Start the backend before starting the frontend so API calls and uploaded assets
@@ -51,6 +51,11 @@ case is completed or cancelled.
 Company users can download a formatted candidate form PDF from the candidate
 detail page, including submitted profile sections, employment history,
 uploaded document status, and recorded consent.
+
+Superadmins can enable or disable the standalone Document Verification page
+per company by editing that company's Company Admin role in **Super Admin →
+Roles** and granting or removing the **Document Verification: view** permission.
+Other company roles can be granted the same permission independently.
 
 Templates are stored outside the public uploads directory and are downloaded
 through an authenticated company route or the candidate's active portal link.

@@ -58,7 +58,7 @@ const menuGroups: { label: string; items: CompanyMenuItem[] }[] = [
       { name: 'BGV Cases', href: '/company/bgv-cases', icon: FileCheck2, permission: 'bgv.case.view' },
       { name: 'Reports', href: '/company/reports', icon: FileText, permission: 'bgv.report.view' },
       // { name: 'Verification Checks', href: '/company/verifications', icon: ShieldCheck, permission: 'bgv.verification.view' },
-      { name: 'Document Verification', href: '/company/document-verification', icon: FileCheck2, permission: 'bgv.document.view' },
+      { name: 'Document Verification', href: '/company/document-verification', icon: FileCheck2, permission: 'bgv.provider.view' },
     ],
   },
     {

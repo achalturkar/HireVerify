@@ -740,6 +740,21 @@ const lock = async ({ candidateId, companyId, clientId, locked }) => {
 };
 
 const getPortal = async (token) => toDto(await findInvitation(token));
+const getCandidateProgress = (candidate) => {
+  const progress = pendingFor({
+    ...candidate,
+    client: candidate.client || null,
+    subclient: candidate.subclient || null,
+    documents: candidate.documents || [],
+    consents: candidate.consents || [],
+    bgvCases: candidate.bgvCases || [],
+  });
+  return {
+    pending: progress.pending,
+    pendingCount: progress.pending.length,
+    profileComplete: progress.profileComplete,
+  };
+};
 const getCandidateFormTemplate = async (token, formId) => {
   const invitation = await findInvitation(token);
   if (!/^[0-9a-f-]{36}$/i.test(formId || '')) throw new NotFoundError('Form template is not available.');
@@ -1131,4 +1146,4 @@ const deletePortalDocument = async (token, documentId) => {
   return status;
 };
 
-module.exports = { issue, extend, unlockForCorrections, remind, getPortal, getCandidateFormTemplate, getStaffStatus, lock, getCandidateIntakeStatus, updateProfile, recordConsent, assertPortalEditable, addDocument, deletePortalDocument };
+module.exports = { issue, extend, unlockForCorrections, remind, getPortal, getCandidateFormTemplate, getStaffStatus, lock, getCandidateIntakeStatus, getCandidateProgress, updateProfile, recordConsent, assertPortalEditable, addDocument, deletePortalDocument };

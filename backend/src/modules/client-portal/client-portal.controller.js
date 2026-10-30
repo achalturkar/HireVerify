@@ -637,17 +637,34 @@ const getCandidate = asyncHandler(async (req, res) => {
       employerHrPhone: true, employmentHistory: true, currentAddress: true, permanentAddress: true,
       addressVerificationLocations: true, createdAt: true, updatedAt: true,
       documents: { select: { id: true, documentType: true, documentNumber: true, fileName: true, fileUrl: true, verificationStatus: true, uploadedAt: true }, orderBy: { uploadedAt: 'desc' } },
-      bgvCases: { select: { id: true, caseNumber: true, status: true, overallResult: true, initiatedAt: true, completedAt: true, createdAt: true }, orderBy: { createdAt: 'desc' } },
+      consents: { where: { consentType: 'BGV_CONSENT' }, select: { consentType: true, consentGiven: true, revokedAt: true, createdAt: true } },
+      bgvCases: {
+        orderBy: { createdAt: 'desc' },
+        include: { checks: { include: { documents: true } }, consents: true },
+      },
       portalInvitation: { select: { activatedAt: true, lastSentAt: true, expiresAt: true, revokedAt: true, reminderCount: true } },
       client: { select: { candidateFormConfig: true } },
+      subclient: { select: { id: true, name: true, clientCode: true, candidateFormConfig: true } },
     },
   });
   if (!candidate) throw new NotFoundError('Candidate not found.');
+  const intakeProgress = candidatePortalService.getCandidateProgress(candidate);
+  const candidateData = { ...candidate };
+  delete candidateData.consents;
+  const bgvCases = candidate.bgvCases.map(({ checks, consents, ...item }) => item);
   return success(res, {
     message: 'Client candidate',
     data: {
-      ...candidate,
+      ...candidateData,
+      bgvCases,
+      intakeProgress,
       client: { candidateFormConfig: normalizeConfig(candidate.client?.candidateFormConfig) },
+      subclient: candidate.subclient ? {
+        id: candidate.subclient.id,
+        name: candidate.subclient.name,
+        clientCode: candidate.subclient.clientCode,
+        candidateFormConfig: normalizeConfig(candidate.subclient.candidateFormConfig),
+      } : null,
     },
   });
 });

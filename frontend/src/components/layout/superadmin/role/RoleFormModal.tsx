@@ -27,6 +27,7 @@ const ACTION_STYLES: Record<string, string> = {
 };
 
 function moduleLabel(module: string) {
+  if (module === 'bgv.provider') return 'Document Verification';
   return module.charAt(0).toUpperCase() + module.slice(1);
 }
 

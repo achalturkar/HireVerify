@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { candidatePortalFileUrl } from '@/src/lib/candidate-portal-forms';
+import { candidateDocumentDisplayName, candidateDocumentReviewClass, candidateDocumentReviewLabel } from '@/src/lib/candidate-document-display';
 
 type FieldDefinition = { key: string; label: string };
 type SectionDefinition = { title: string; fields: FieldDefinition[] };
@@ -286,19 +287,24 @@ export default function CandidateSubmittedDetails({ candidate }: { candidate: ob
             {documents.map((document, index) => {
               const fileUrl = document.get('fileUrl');
               const fileName = document.get('fileName');
-              const documentType = document.get('documentType');
+              const documentType = String(document.get('documentType') || 'OTHER');
+              const documentNumber = document.get('documentNumber');
+              const verificationStatus = String(document.get('verificationStatus') || 'PENDING');
+              const displayName = candidateDocumentDisplayName(
+                { documentType, documentNumber: typeof documentNumber === 'string' ? documentNumber : null },
+                candidate as Parameters<typeof candidateDocumentDisplayName>[1],
+              );
               return (
                 <li key={String(document.get('id') || `${documentType}-${index}`)} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
                   <div>
-                    <p className="font-medium">{String(documentType || 'Document').replaceAll('_', ' ')}</p>
+                    <p className="font-medium">{displayName}</p>
                     <p className="mt-0.5 text-xs text-[var(--muted)]">
                       {String(fileName || 'File name unavailable')}
-                      {isFilled(document.get('documentNumber')) && ` · Reference ${String(document.get('documentNumber'))}`}
                       {isFilled(document.get('uploadedAt')) && ` · Uploaded ${String(document.get('uploadedAt')).slice(0, 10)}`}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-[var(--muted)]">{String(document.get('verificationStatus') || 'Uploaded').replaceAll('_', ' ')}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${candidateDocumentReviewClass(verificationStatus)}`}>{candidateDocumentReviewLabel(verificationStatus)}</span>
                     {typeof fileUrl === 'string' && fileUrl && (
                       <a href={candidatePortalFileUrl(fileUrl)} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[var(--primary)] hover:underline">
                         Open file

@@ -21,8 +21,8 @@ router.patch('/:id', authorize('bgv.verification.review'), validate(v.updateVali
 router.post('/:id/retry', authorize('bgv.verification.retry'), validate(v.idParamValidator), controller.retry);
 router.post('/:id/execute-pan', authorize('bgv.verification.create'), validate(v.executePanValidator), controller.executePan);
 router.post('/:id/execute', authorize('bgv.verification.create'), validate(v.executeCheckValidator), controller.executeCheck);
-router.post('/provider/verify', authorize('bgv.verification.create'), validate(v.providerValidator), controller.providerVerify);
-router.post('/provider/pdf', authorize('bgv.verification.view'), validate(v.providerValidator), controller.providerPdf);
+router.post('/provider/verify', authorize('bgv.provider.view'), validate(v.providerValidator), controller.providerVerify);
+router.post('/provider/pdf', authorize('bgv.provider.view'), validate(v.providerValidator), controller.providerPdf);
 router.get('/:id/pdf', authorize('bgv.verification.view'), validate(v.idParamValidator), controller.downloadPdf);
 router.patch('/:id/lock', authorize('bgv.verification.review'), validate(v.lockValidator), controller.lock);
 router.post('/:id/documents', authorize('bgv.document.upload'), validate(v.documentValidator), documentUpload.single('file'), controller.uploadDocument);

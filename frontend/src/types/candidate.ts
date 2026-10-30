@@ -1,4 +1,5 @@
 import type { PaginationMeta } from '@/src/types/user';
+import type { CandidateFormConfig } from '@/src/types/client';
 
 export type CandidateStatus = 'PENDING' | 'INVITED' | 'IN_PROGRESS' | 'VERIFICATION_IN_PROGRESS' | 'COMPLETED' | 'WITHDRAWN' | 'ON_HOLD';
 
@@ -28,6 +29,7 @@ export interface CandidatePortalSummary {
 }
 
 export interface CandidateEmploymentRecord {
+  id?: string;
   isCurrent: boolean;
   isFresher?: boolean;
   employerName: string | null;
@@ -64,8 +66,9 @@ export interface Candidate {
   companyId: string;
   clientId: string;
   subclientId?: string | null;
-  client?: { id: string; name: string; clientCode?: string | null; contactEmail?: string | null; contactPhone?: string | null } | null;
-  subclient?: { id: string; name: string; clientCode?: string | null; serviceRates?: { checkType: string; rate: number }[] } | null;
+  client?: { id: string; name: string; clientCode?: string | null; contactEmail?: string | null; contactPhone?: string | null; supportEmail?: string | null; supportPhone?: string | null; logoUrl?: string | null; candidateFormConfig?: CandidateFormConfig } | null;
+  company?: { name: string; logoUrl?: string | null; primaryColor?: string | null } | null;
+  subclient?: { id: string; name: string; clientCode?: string | null; supportEmail?: string | null; supportPhone?: string | null; serviceRates?: { checkType: string; rate: number }[]; candidateFormConfig?: CandidateFormConfig } | null;
   candidateCode: string;
   fullName: string;
   firstName: string;
@@ -115,6 +118,11 @@ export interface Candidate {
   bgvCaseCount?: number;
   consents?: { consentGiven: boolean; consentVersion: string | null; consentedAt: string | null; revokedAt: string | null; createdAt: string }[];
   portalInvitation?: CandidatePortalSummary | null;
+  intakeProgress?: {
+    pending: { key: string; label: string; type: string }[];
+    pendingCount: number;
+    profileComplete: boolean;
+  };
 }
 
 

@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, BriefcaseBusiness, Check, Copy, Download, FileText, GraduationCap, Hash, Home, LayoutDashboard, Loader2, Lock, Mail, Pencil, ShieldCheck, Unlock, Users, Save, X } from 'lucide-react';
+import { ArrowLeft, BriefcaseBusiness, Check, ClipboardList, Copy, Download, FileText, GraduationCap, Hash, Home, LayoutDashboard, Loader2, Lock, Mail, Pencil, ShieldCheck, Unlock, Users, Save, X } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { ClientPortalApiError, downloadPortalCandidatePdf, getPortalCandidate, getPortalCandidateAccess, invitePortalCandidate, remindPortalCandidate, savePortalCandidate, setPortalCandidateAccess, type PortalCandidateAccess, type PortalCandidateDetail } from '@/src/lib/api/client-portal';
 import { hasPortalPermission } from '@/src/lib/api/client-portal';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import { CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
 import CandidateSubmittedDetails from '@/src/components/CandidateSubmittedDetails';
+import CandidatePendingItems from '@/src/components/CandidatePendingItems';
+import { candidateDocumentDisplayName, candidateDocumentReviewClass, candidateDocumentReviewLabel, isDocumentRejected } from '@/src/lib/candidate-document-display';
+import { candidatePortalFileUrl } from '@/src/lib/candidate-portal-forms';
 
 const profileFields = [
   ['fullName', 'Full name'], ['firstName', 'First name'], ['middleName', 'Middle name'], ['lastName', 'Last name'], ['email', 'Email'], ['phone', 'Phone'],
@@ -27,8 +30,8 @@ const profileFields = [
 ] as const;
 
 const inputClass = 'mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[12px] text-[var(--foreground)]';
-type CandidateTab = 'summary' | 'submitted' | 'personal' | 'family' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal';
-const TAB_FIELDS: Record<Exclude<CandidateTab, 'summary' | 'submitted' | 'documents' | 'portal'>, string[]> = {
+type CandidateTab = 'summary' | 'submitted' | 'pending' | 'personal' | 'family' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal';
+const TAB_FIELDS: Record<Exclude<CandidateTab, 'summary' | 'submitted' | 'pending' | 'documents' | 'portal'>, string[]> = {
   personal: ['fullName', 'firstName', 'middleName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'candidateNotes'],
   family: ['fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount'],
   identity: ['aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber'],
@@ -192,9 +195,12 @@ export default function ClientPortalCandidatePage() {
 
   const formConfig = candidate.client?.candidateFormConfig ?? DEFAULT_CANDIDATE_FORM_CONFIG;
   const enabledIdentityKeys = CANDIDATE_IDENTITY_FIELDS.filter((field) => formConfig[field.key].enabled).map((field) => field.key);
-  const tabItems: { id: CandidateTab; label: string; icon: typeof Users }[] = [
+  const pendingItems = candidate.intakeProgress.pending;
+  const rejectedDocuments = candidate.documents.filter((document) => isDocumentRejected(document.verificationStatus));
+  const tabItems: { id: CandidateTab; label: string; icon: typeof Users; count?: number }[] = [
     { id: 'summary', label: 'Summary', icon: LayoutDashboard },
     { id: 'submitted', label: 'Submitted details', icon: FileText },
+    { id: 'pending', label: 'Pending items', icon: ClipboardList, count: pendingItems.length + rejectedDocuments.length },
     { id: 'personal', label: 'Personal', icon: Users },
     { id: 'family', label: 'Family', icon: Users },
     ...(enabledIdentityKeys.length ? [{ id: 'identity' as const, label: 'Identity', icon: Hash }] : []),
@@ -229,7 +235,7 @@ export default function ClientPortalCandidatePage() {
       {error && <p role="alert" className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-[12px] text-rose-700">{error}</p>}
       {message && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-[12px] text-emerald-700">{message}</p>}
       <nav className="flex gap-1 overflow-x-auto border-b border-[var(--border)]" aria-label="Candidate sections">
-        {tabItems.map(({ id: tabId, label, icon: Icon }) => <button key={tabId} type="button" onClick={() => { setActiveTab(tabId); setEditing(false); }} className={`inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-[11px] font-medium ${activeTab === tabId ? 'border-[var(--primary)] text-[var(--foreground)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'}`}><Icon size={14} />{label}</button>)}
+        {tabItems.map(({ id: tabId, label, icon: Icon, count }) => <button key={tabId} type="button" onClick={() => { setActiveTab(tabId); setEditing(false); }} className={`inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-[11px] font-medium ${activeTab === tabId ? 'border-[var(--primary)] text-[var(--foreground)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'}`}><Icon size={14} />{label}{count !== undefined && count > 0 && <span className="rounded-full bg-[var(--surface-muted)] px-1.5 text-[10px]">{count}</span>}</button>)}
       </nav>
 
       {activeTab === 'summary' && <div className="grid gap-4 lg:grid-cols-3">
@@ -237,7 +243,11 @@ export default function ClientPortalCandidatePage() {
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><h3 className="text-[14px] font-semibold">BGV cases</h3><p className="mt-2 text-3xl font-semibold">{candidate.bgvCases.length}</p><p className="text-[11px] text-[var(--muted)]">linked verification cases</p><div className="mt-4 space-y-2">{candidate.bgvCases.slice(0, 3).map((item) => <Link key={item.id} href={`/client-portal/cases/${item.id}`} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-muted)] px-3 py-2 text-[11px] hover:text-[var(--primary)]"><span className="font-mono">{item.caseNumber}</span><span>{item.status.replaceAll('_', ' ')}</span></Link>)}</div></section>
       </div>}
 
-      {activeTab === 'submitted' && <CandidateSubmittedDetails candidate={candidate} />}
+      {activeTab === 'submitted' && <div className="space-y-3">
+        <p className="text-[11px] text-[var(--muted)]">Saved candidate-submitted information and documents remain available here even after the portal link expires.</p>
+        <CandidateSubmittedDetails candidate={candidate} />
+      </div>}
+      {activeTab === 'pending' && <CandidatePendingItems pending={pendingItems} documents={candidate.documents} candidate={candidate} />}
 
       {TAB_FIELDS[activeTab as keyof typeof TAB_FIELDS] && <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-[14px] font-semibold">{tabItems.find((item) => item.id === activeTab)?.label} details</h3><p className="mt-1 text-[11px] text-[var(--muted)]">Candidate information for this section.</p></div>{canUpdate && !profileLocked && !editing && <button type="button" onClick={() => { setEditing(true); setMessage(null); }} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-medium hover:bg-[var(--surface-muted)]"><Pencil size={14} />Edit details</button>}{editing && !profileLocked && <div className="flex gap-2"><button type="button" onClick={() => { setEditing(false); void load(); }} className="rounded-lg border border-[var(--border)] px-3 py-2 text-[11px]">Cancel</button><button type="button" onClick={() => void save()} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Save size={14} />{saving ? 'Saving…' : 'Save changes'}</button></div>}</div>
@@ -317,7 +327,7 @@ export default function ClientPortalCandidatePage() {
         </section>
       )}
 
-      {activeTab === 'documents' && <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><h3 className="text-[14px] font-semibold">Candidate documents</h3>{candidate.documents.length ? <div className="mt-4 divide-y divide-[var(--border)]">{candidate.documents.map((document) => <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-[12px]"><div><p className="font-medium">{document.documentType.replaceAll('_', ' ')}</p><p className="mt-0.5 text-[10px] text-[var(--muted)]">{document.fileName} · {dateLabel(document.uploadedAt)}</p></div><span className="rounded-full bg-[var(--surface-muted)] px-2 py-1 text-[10px]">{document.verificationStatus.replaceAll('_', ' ')}</span><a href=      {document.fileUrl.startsWith('http') ? document.fileUrl : document.fileUrl} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-[var(--primary)] hover:underline">Open document</a></div>)}</div> : <p className="mt-4 text-[12px] text-[var(--muted)]">No documents uploaded.</p>}</section>}
+      {activeTab === 'documents' && <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5"><h3 className="text-[14px] font-semibold">Candidate documents</h3>{candidate.documents.length ? <div className="mt-4 divide-y divide-[var(--border)]">{candidate.documents.map((document) => <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-[12px]"><div><p className="font-medium">{candidateDocumentDisplayName(document, candidate)}</p><p className="mt-0.5 text-[10px] text-[var(--muted)]">{document.fileName} · Uploaded {dateLabel(document.uploadedAt)}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-medium ${candidateDocumentReviewClass(document.verificationStatus)}`}>{candidateDocumentReviewLabel(document.verificationStatus)}</span><a href={candidatePortalFileUrl(document.fileUrl)} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-[var(--primary)] hover:underline">Open document</a></div>)}</div> : <p className="mt-4 text-[12px] text-[var(--muted)]">No documents uploaded.</p>}</section>}
 
       {activeTab === 'portal' && <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-[14px] font-semibold">Candidate portal access</h3><p className="mt-1 text-[11px] text-[var(--muted)]">Send the secure candidate link to {candidate.email || 'the candidate'}.</p></div><span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-semibold">{candidatePortalStatus}</span></div>

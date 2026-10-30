@@ -117,20 +117,45 @@ const genericResult = (payload) => {
   };
 };
 
+const uanResult = (payload) => {
+  const data = payload?.data || {};
+  const success = payload?.success !== false && !(Number(payload?.status_code) >= 400);
+  const hasEmploymentHistory = Array.isArray(data.employment_history);
+  return {
+    result: success && hasEmploymentHistory && data.employment_history.length > 0 ? 'VERIFIED' : success ? 'REQUIRES_REVIEW' : 'NOT_VERIFIED',
+    resultData: payload,
+    providerRequestId: payload?.request_id || payload?.requestId || data?.request_id || null,
+    providerReferenceId: payload?.reference_id || payload?.referenceId || data?.reference_id || null,
+    rawResponse: payload,
+  };
+};
+
 const verifyCheck = async ({ type, inputData, apiVersion = 'v1' }) => {
   if (!config.surepass.baseUrl || !config.surepass.bearerToken) throw new BadRequestError('Surepass verification is not configured');
   const endpoint = endpointFor(type);
   if (!endpoint) throw new BadRequestError(`Surepass endpoint is not configured for ${type}`);
   const path = endpoint.replace(/^\//, '').replace(/^v1\//, `${apiVersion}/`);
+  const requestData = type === 'UAN'
+    ? { id_number: String(inputData?.uan || '').trim() }
+    : inputData || {};
   const response = await fetch(`${config.surepass.baseUrl.replace(/\/$/, '')}/${path}`, {
     method: 'POST',
     headers: defaultHeaders(),
-    body: JSON.stringify(inputData || {}),
+    body: JSON.stringify(requestData),
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
+    if (type === 'UAN' && body && typeof body === 'object' && body.message_code) {
+      return uanResult(body);
+    }
     const message = extractErrorMessage(body, `Surepass ${type} verification failed`);
     throw new UnprocessableEntityError(`Surepass ${type} verification failed: ${message}`);
+  }
+  if (type === 'UAN') {
+    if (!body || typeof body !== 'object') {
+      throw new UnprocessableEntityError('Surepass UAN verification returned an invalid response.');
+    }
+    return uanResult(body);
   }
   return genericResult(body);
 };

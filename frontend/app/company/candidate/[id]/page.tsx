@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   BriefcaseBusiness,
   CheckCircle2,
+  ClipboardList,
   Clock,
   Copy,
   Download,
@@ -39,7 +40,10 @@ import { useAuth } from '@/src/auth/AuthProvider';
 import { ApiError, activateCandidatePortal, downloadCandidateExcel, downloadCandidateFormPdf, extendCandidatePortal, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, unlockCandidatePortalForCorrections, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import CandidateSubmittedDetails from '@/src/components/CandidateSubmittedDetails';
+import CandidatePortalPreview from '@/src/components/CandidatePortalPreview';
+import CandidatePendingItems from '@/src/components/CandidatePendingItems';
 import { listBGVCases } from '@/src/lib/api/bgv';
+import { candidateDocumentDisplayName, candidateDocumentReviewLabel, isDocumentRejected } from '@/src/lib/candidate-document-display';
 import type { BGVCase } from '@/src/types/bgv';
 import type { Candidate } from '@/src/types/candidate';
 
@@ -48,7 +52,7 @@ import type { Candidate } from '@/src/types/candidate';
 /* ------------------------------------------------------------------ */
 type CandidateDocument = { id: string; documentType: string; documentNumber?: string | null; fileName: string; fileUrl: string; verificationStatus: string; uploadedAt: string };
 type CandidateDetail = Candidate & { documents?: CandidateDocument[] };
-type Tab = 'summary' | 'submitted' | 'personal' | 'family' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal';
+type Tab = 'summary' | 'submitted' | 'pending' | 'personal' | 'family' | 'identity' | 'education' | 'employment' | 'addresses' | 'documents' | 'portal' | 'full-form';
 type ProfileKey = keyof Pick<Candidate, 'fullName' | 'firstName' | 'middleName' | 'lastName' | 'email' | 'phone' | 'dateOfBirth' | 'gender' | 'fatherName' | 'motherName' | 'maritalStatus' | 'spouseName' | 'childrenCount' | 'candidateNotes' | 'aadhaarNumber' | 'panNumber' | 'uanNumber' | 'passportNumber' | 'drivingLicenseNumber' | 'voterIdNumber' | 'highestQualification' | 'courseName' | 'institutionName' | 'universityName' | 'yearOfPassing' | 'gradeOrPercentage' | 'employeeId' | 'employeeDesignation' | 'employeeDepartment' | 'employmentType' | 'joiningDate' | 'workLocation' | 'currentEmployer' | 'employerHrName' | 'employerHrPhone' | 'currentAddress' | 'permanentAddress'>;
 type ProfileDraft = Record<ProfileKey, string>;
 type PortalState = 'none' | 'active' | 'expiring' | 'expired' | 'locked';
@@ -146,6 +150,7 @@ const statusStyle = (status: string): { className: string; icon: LucideIcon } =>
   const value = status.toUpperCase();
   if (/(VERIFIED|APPROVED|ACCEPTED|COMPLETED)/.test(value)) return { className: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: CheckCircle2 };
   if (/(REJECT|FAIL|INVALID)/.test(value)) return { className: 'bg-red-50 text-red-700 ring-red-200', icon: XCircle };
+  if (value === 'UPLOADED') return { className: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: CheckCircle2 };
   return { className: 'bg-amber-50 text-amber-700 ring-amber-200', icon: Clock };
 };
 
@@ -249,7 +254,7 @@ function ProgressBar({ percent }: { percent: number }) {
   );
 }
 
-function DocumentRow({ document, origin, showCategory = false }: { document: CandidateDocument; origin: string; showCategory?: boolean }) {
+function DocumentRow({ document, origin, candidate, showCategory = false }: { document: CandidateDocument; origin: string; candidate?: CandidateDetail; showCategory?: boolean }) {
   const rejected = /(REJECT|FAIL|INVALID)/i.test(document.verificationStatus);
   return (
     <li className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -257,7 +262,7 @@ function DocumentRow({ document, origin, showCategory = false }: { document: Can
         <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--surface-muted)] text-[var(--muted)]"><FileText size={17} aria-hidden="true" /></span>
         <div className="min-w-0">
           <p className="text-sm font-semibold">
-            {humanize(document.documentType)}
+            {candidate ? candidateDocumentDisplayName(document, candidate) : humanize(document.documentType)}
             {showCategory && <span className="ml-2 text-xs font-medium text-[var(--muted)]">{CATEGORY_LABEL[categoryOf(document.documentType)]}</span>}
           </p>
           <p className="truncate text-sm text-[var(--muted)]">{document.fileName}</p>
@@ -266,7 +271,7 @@ function DocumentRow({ document, origin, showCategory = false }: { document: Can
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-1.5">
-        <DocStatus status={document.verificationStatus} />
+        <DocStatus status={candidateDocumentReviewLabel(document.verificationStatus)} />
         <a href={fileHref(document.fileUrl, origin)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--primary)] hover:underline">
           Open file <ExternalLink size={12} aria-hidden="true" />
         </a>
@@ -275,18 +280,18 @@ function DocumentRow({ document, origin, showCategory = false }: { document: Can
   );
 }
 
-function DocumentList({ documents, origin, emptyText, showCategory }: { documents: CandidateDocument[]; origin: string; emptyText: string; showCategory?: boolean }) {
+function DocumentList({ documents, origin, emptyText, candidate, showCategory }: { documents: CandidateDocument[]; origin: string; emptyText: string; candidate?: CandidateDetail; showCategory?: boolean }) {
   if (!documents.length) {
     return <p className="rounded-xl border border-dashed border-[var(--border)] px-4 py-8 text-center text-sm text-[var(--muted)]">{emptyText}</p>;
   }
   return (
     <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-xl border border-[var(--border)]">
-      {documents.map((document) => <DocumentRow key={document.id} document={document} origin={origin} showCategory={showCategory} />)}
+      {documents.map((document) => <DocumentRow key={document.id} document={document} origin={origin} candidate={candidate} showCategory={showCategory} />)}
     </ul>
   );
 }
 
-function IdentityCard({ title, value, documents, origin, editing, onChange }: { title: string; value: unknown; documents: CandidateDocument[]; origin: string; editing?: boolean; onChange?: (value: string) => void }) {
+function IdentityCard({ title, value, documents, origin, candidate, editing, onChange }: { title: string; value: unknown; documents: CandidateDocument[]; origin: string; candidate?: CandidateDetail; editing?: boolean; onChange?: (value: string) => void }) {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
   const text = isFilled(value) ? String(value) : '';
@@ -329,7 +334,7 @@ function IdentityCard({ title, value, documents, origin, editing, onChange }: { 
           </div>
         )}
       </div>
-      {documents.length > 0 && <div className="mt-3"><DocumentList documents={documents} origin={origin} emptyText="" /></div>}
+      {documents.length > 0 && <div className="mt-3"><DocumentList documents={documents} origin={origin} emptyText="" candidate={candidate} /></div>}
     </section>
   );
 }
@@ -494,6 +499,8 @@ export default function CandidateDetailPage() {
   const verifiedCount = documents.filter((document) => /(VERIFIED|APPROVED|ACCEPTED|COMPLETED)/i.test(document.verificationStatus)).length;
   const rejectedCount = documents.filter((document) => /(REJECT|FAIL|INVALID)/i.test(document.verificationStatus)).length;
   const reviewCount = documents.length - verifiedCount - rejectedCount;
+  const pendingItems = candidate?.intakeProgress?.pending ?? [];
+  const rejectedDocuments = documents.filter((document) => isDocumentRejected(document.verificationStatus));
   const consentHistory = [
     ...bgvCases.flatMap((bgvCase) => (bgvCase.consents ?? []).map((consent) => ({ ...consent, caseNumber: bgvCase.caseNumber }))),
     ...(candidate?.consents ?? []).map((consent) => ({ ...consent, caseNumber: null as string | null })),
@@ -656,6 +663,7 @@ export default function CandidateDetailPage() {
   const tabs: { key: Tab; label: string; icon: LucideIcon; count?: number }[] = [
     { key: 'summary', label: 'Summary', icon: LayoutDashboard },
     { key: 'submitted', label: 'Submitted details', icon: FileText },
+    { key: 'pending', label: 'Pending items', icon: ClipboardList, count: pendingItems.length + rejectedDocuments.length },
     { key: 'personal', label: 'Personal', icon: UserRound },
     { key: 'family', label: 'Family', icon: Users },
     { key: 'identity', label: 'Identity', icon: Hash, count: docsOf('identity').length },
@@ -664,6 +672,7 @@ export default function CandidateDetailPage() {
     { key: 'addresses', label: 'Addresses', icon: Home },
     { key: 'documents', label: 'Documents', icon: FileText, count: documents.length },
     { key: 'portal', label: 'Portal access', icon: ShieldCheck },
+    { key: 'full-form', label: 'Full candidate form', icon: FileText },
   ];
 
   const attention: { text: string; tab: Tab; tone: 'red' | 'amber' }[] = [];
@@ -796,7 +805,13 @@ export default function CandidateDetailPage() {
         </div>
       )}
 
-      {tab === 'submitted' && <CandidateSubmittedDetails candidate={candidate} />}
+      {tab === 'submitted' && <div className="space-y-3">
+        <CandidateSubmittedDetails candidate={candidate} />
+      </div>}
+      {tab === 'full-form' && <div className="space-y-3">
+        <CandidatePortalPreview candidate={candidate} />
+      </div>}
+      {tab === 'pending' && <CandidatePendingItems pending={pendingItems} documents={documents} candidate={candidate} />}
 
       {tab === 'summary' && (
         <div className="space-y-5">
@@ -916,7 +931,7 @@ export default function CandidateDetailPage() {
         <div className="space-y-4">
           <p className="px-1 text-sm text-[var(--muted)]">Numbers are hidden by default. Show a number to compare it with the uploaded copy.</p>
           {IDENTITY_ITEMS.map((item) => (
-            <IdentityCard key={item.docType} title={item.title} value={profileValues?.[item.fieldKey as ProfileKey] ?? field(item.fieldKey)} documents={documents.filter((document) => document.documentType === item.docType)} origin={origin} editing={editingProfile} onChange={(value) => setProfileValues((current) => current ? { ...current, [item.fieldKey as ProfileKey]: value } : current)} />
+            <IdentityCard key={item.docType} title={item.title} value={profileValues?.[item.fieldKey as ProfileKey] ?? field(item.fieldKey)} documents={documents.filter((document) => document.documentType === item.docType)} origin={origin} candidate={candidate} editing={editingProfile} onChange={(value) => setProfileValues((current) => current ? { ...current, [item.fieldKey as ProfileKey]: value } : current)} />
           ))}
         </div>
       )}
@@ -945,7 +960,7 @@ export default function CandidateDetailPage() {
             </div>
           </Panel> : null}
           <Panel title="Education documents" description="Certificates and marksheets uploaded by the candidate.">
-            <DocumentList documents={docsOf('education')} origin={origin} emptyText="No education documents uploaded yet." />
+            <DocumentList documents={docsOf('education')} origin={origin} candidate={candidate} emptyText="No education documents uploaded yet." />
           </Panel>
         </div>
       )}
@@ -981,7 +996,7 @@ export default function CandidateDetailPage() {
             </div>
           </Panel> : null}
           <Panel title="Employment documents" description="Experience letters and salary slips uploaded by the candidate.">
-            <DocumentList documents={docsOf('employment')} origin={origin} emptyText="No employment documents uploaded yet." />
+            <DocumentList documents={docsOf('employment')} origin={origin} candidate={candidate} emptyText="No employment documents uploaded yet." />
           </Panel>
         </div>
       )}
@@ -1005,7 +1020,7 @@ export default function CandidateDetailPage() {
             </div>
           </Panel>
           <Panel title="Address proof" description="Documents that confirm the candidate's address.">
-            <DocumentList documents={docsOf('address')} origin={origin} emptyText="No address proof uploaded yet." />
+            <DocumentList documents={docsOf('address')} origin={origin} candidate={candidate} emptyText="No address proof uploaded yet." />
           </Panel>
         </div>
       )}
@@ -1022,7 +1037,7 @@ export default function CandidateDetailPage() {
               );
             })}
           </div>
-          <DocumentList documents={filteredDocuments} origin={origin} emptyText={documents.length ? 'No documents in this category.' : 'No documents uploaded yet.'} showCategory />
+          <DocumentList documents={filteredDocuments} origin={origin} candidate={candidate} emptyText={documents.length ? 'No documents in this category.' : 'No documents uploaded yet.'} showCategory />
         </Panel>
       )}
 
