@@ -5,6 +5,9 @@ Disallow: /company/
 Disallow: /super-admin/
 Disallow: /candidate-portal/
 Disallow: /candidate/
+Disallow: /client-portal/
+Disallow: /subclient-portal/
+Disallow: /login
 Disallow: /forgot-password
 Disallow: /reset-password
 Disallow: /api/

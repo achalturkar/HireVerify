@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import {
-  LogIn,
   Mail,
   ArrowRight,
   BarChart3,
@@ -49,25 +48,26 @@ import { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: {
-    absolute: "HireVerify | BGV Platform by Brainhunt Ventures",
+    absolute: "BGV Services for Indian Employers | HireVerify",
   },
 
   description:
-    "HireVerify is a secure, multi-tenant background verification (BGV) platform. Run PAN, UAN, court and identity checks, manage candidates and clients, and deliver confidential verification reports — all from one dashboard.",
+    "HireVerify by Brainhunt Ventures provides employee background verification services for employers and screening teams, including employment, address, identity, education and more.",
 
   keywords: [
-    "background verification",
-    "background verification platform",
-    "BGV platform",
-    "BGV software",
+    "background verification services India",
+    "BGV services India",
     "candidate background verification",
     "employee background verification",
     "pre employment verification",
     "PAN verification",
     "UAN verification",
     "court verification",
+    "employment verification",
+    "address verification",
+    "CIBIL verification",
+    "reference checks",
     "employee screening",
-    "background check software India",
   ],
 
   alternates: {
@@ -75,10 +75,10 @@ export const metadata: Metadata = {
   },
 
   openGraph: {
-    title: "HireVerify | Background Verification Platform by Brainhunt Ventures",
+    title: "BGV Services for Indian Employers | HireVerify",
     description:
-      "HireVerify by Brainhunt Ventures helps Indian employers manage candidate background verification, PAN, UAN and court checks, and confidential reports in one secure platform.",
-    url: "https://hireverify.brainhuntventures.com",
+      "HireVerify by Brainhunt Ventures helps employers arrange candidate background checks, including employment, address, identity, education, PAN, UAN and court verification.",
+    url: "https://hireverify.brainhuntventures.com/",
     siteName: "HireVerify by Brainhunt Ventures",
     locale: "en_IN",
     type: "website",
@@ -87,15 +87,14 @@ export const metadata: Metadata = {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "HireVerify background verification platform by Brainhunt Ventures",
+        alt: "HireVerify background verification services by Brainhunt Ventures",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "HireVerify | BGV Platform by Brainhunt Ventures",
-    description:
-      "Manage candidate background verification, checks and client reports with HireVerify.",
+    title: "BGV Services for Indian Employers | HireVerify",
+    description: "Arrange candidate background checks with HireVerify by Brainhunt Ventures.",
     images: ["/opengraph-image"],
   },
 };
@@ -129,7 +128,7 @@ const FEATURES = [
     icon: ShieldCheck,
     title: 'Multiple verification checks',
     description:
-      'Run PAN, UAN and court checks today, from one platform — with more verification types rolling out as they go live.',
+      'Choose checks that fit the role, including identity, address, employment, education, financial and court verification.',
     color: PALETTE[1],
   },
   {
@@ -163,33 +162,33 @@ const FEATURES = [
 ];
 
 // ---------------------------------------------------------------------------
-// Verification services — PAN / UAN / Court are live today; everything else
-// is presented honestly as upcoming, per current provider integration status.
+// Background verification services offered to business clients.
 // ---------------------------------------------------------------------------
-const SERVICES: { icon: typeof ShieldCheck; title: string; description: string; status: 'available' }[] = [
-  { icon: ShieldCheck, title: 'PAN Verification', description: 'Verify PAN details and identity information against trusted verification sources.', status: 'available' },
-  { icon: Briefcase, title: 'UAN Verification', description: 'Verify employment-related UAN information through supported verification providers.', status: 'available' },
-  { icon: Gavel, title: 'Court / Litigation Verification', description: 'Check available court and litigation records to flag potential verification concerns.', status: 'available' },
-  { icon: Fingerprint, title: 'Identity Verification', description: 'Cross-check identity documents and submitted details for consistency.', status: 'available' },
-  { icon: IdCard, title: 'Aadhaar Verification', description: 'Consent-based Aadhaar verification with masked storage of sensitive numbers.', status: 'available' },
-  { icon: Home, title: 'Address Verification', description: 'Confirm current and permanent address details supplied by a candidate.', status: 'available' },
-  { icon: Building2, title: 'Employment Verification', description: 'Confirm prior employment, tenure and designation directly with past employers.', status: 'available' },
-  { icon: GraduationCap, title: 'Education Verification', description: 'Verify degrees, certificates and institute records for education history.', status: 'available' },
-  { icon: Siren, title: 'Criminal Record Check', description: 'Screen available court and police-record sources for adverse findings.', status: 'available' },
-  { icon: BadgeCheck, title: 'Police Verification', description: 'Character-certificate style checks coordinated through local processes.', status: 'available' },
-  { icon: Users2, title: 'Reference Check', description: 'Structured reference checks with verified professional contacts.', status: 'available' },
-  { icon: CreditCard, title: 'Credit / Financial Check', description: 'Financial-integrity screening for roles that handle money or risk.', status: 'available' },
-  { icon: FlaskConical, title: 'Drug Test Verification', description: 'Lab-coordinated drug test results with a documented chain of custody.', status: 'available' },
-  { icon: Globe2, title: 'Global Database Check', description: 'Sanctions, watchlist and adverse-media screening for cross-border hires.', status: 'available' },
-  { icon: FileText, title: 'Passport Verification', description: 'Validate passport authenticity and status through supported channels.', status: 'available' },
-  { icon: Truck, title: 'Driving Licence Verification', description: 'Check licence authenticity, class and validity where required for a role.', status: 'available' },
-  { icon: Landmark, title: 'Vendor Verification', description: 'Registration and director-level due diligence on third-party vendors.', status: 'available' },
-  { icon: UserCheck, title: 'Director Due Diligence', description: 'Deeper checks on company directors and signatory history.', status: 'available' },
-  { icon: DoorOpen, title: 'Tenant Verification', description: 'Combined identity, address and background checks for tenancy screening.', status: 'available' },
-  { icon: MessageSquareWarning, title: 'Social Media Screening', description: 'Configurable review of public profile signals, public data only.', status: 'available' },
-  { icon: Database, title: 'Watchlist / DNH Check', description: 'Internal and external watchlist checks, including do-not-hire lists.', status: 'available' },
-  { icon: Factory, title: 'Business Verification', description: 'Company-level KYB checks: incorporation, address and ownership.', status: 'available' },
+const SERVICES: { icon: typeof ShieldCheck; title: string; description: string }[] = [
+  { icon: ShieldCheck, title: 'PAN Verification', description: 'Review PAN details as part of a candidate identity check.' },
+  { icon: Briefcase, title: 'UAN Verification', description: 'Review employment-related UAN information as part of a candidate screening.' },
+  { icon: Gavel, title: 'Court / Litigation Verification', description: 'Check relevant court and litigation records for potential verification concerns.' },
+  { icon: Fingerprint, title: 'Identity Verification', description: 'Compare submitted identity documents and candidate details.' },
+  { icon: IdCard, title: 'Aadhaar Verification', description: 'Aadhaar checks can be arranged with required authorization and consent.' },
+  { icon: Home, title: 'Address Verification', description: 'Verify current or permanent address details supplied by a candidate.' },
+  { icon: Building2, title: 'Employment Verification', description: 'Verify employment history, tenure and designation with previous employers.' },
+  { icon: GraduationCap, title: 'Education Verification', description: 'Check degrees, certificates and education history.' },
+  { icon: Siren, title: 'Criminal Record Check', description: 'Screen relevant criminal-record sources for potential concerns.' },
+  { icon: BadgeCheck, title: 'Police Verification', description: 'Coordinate police verification through applicable local processes.' },
+  { icon: Users2, title: 'Reference Check', description: 'Collect structured feedback from professional references.' },
+  { icon: CreditCard, title: 'Credit / CIBIL Check', description: 'Credit checks for roles where they are appropriate and authorized.' },
+  { icon: FlaskConical, title: 'Drug Test Verification', description: 'Coordinate drug testing and verification of results.' },
+  { icon: Globe2, title: 'Global Database Check', description: 'Screen relevant international databases and watchlists.' },
+  { icon: FileText, title: 'Passport Verification', description: 'Review passport details through applicable verification channels.' },
+  { icon: Truck, title: 'Driving Licence Verification', description: 'Check driving licence details where relevant to the role.' },
+  { icon: Landmark, title: 'Vendor Verification', description: 'Review vendor registration and business details.' },
+  { icon: UserCheck, title: 'Director Due Diligence', description: 'Review company director and signatory information.' },
+  { icon: DoorOpen, title: 'Tenant Verification', description: 'Combine relevant identity, address and background checks for tenant screening.' },
+  { icon: MessageSquareWarning, title: 'Social Media Screening', description: 'Review relevant public profile information.' },
+  { icon: Database, title: 'Watchlist / DNH Check', description: 'Compare details with relevant watchlists and do-not-hire lists.' },
+  { icon: Factory, title: 'Business Verification', description: 'Review company registration, address and ownership information.' },
 ];
+const SERVICE_COUNT = SERVICES.length;
 
 // ---------------------------------------------------------------------------
 // How it works — candidate is verified, client receives the report
@@ -197,32 +196,32 @@ const SERVICES: { icon: typeof ShieldCheck; title: string; description: string; 
 const STEPS = [
   {
     icon: FileEdit,
-    title: 'Create a candidate',
-    description: 'Add the candidate under the right client and capture the information a case needs.',
+    title: 'Define the screening scope',
+    description: 'Choose checks that match the role and share your required candidate details.',
     color: PALETTE[0],
   },
   {
     icon: Send,
-    title: 'Choose verification checks',
-    description: 'Select PAN, UAN, Court or other required checks, and collect candidate consent.',
+    title: 'Collect consent and documents',
+    description: 'Get candidate authorization and gather the information needed for the selected checks.',
     color: PALETTE[1],
   },
   {
     icon: Timer,
-    title: 'Run verification',
-    description: 'Requests are processed through integrated verification providers or manual review.',
+    title: 'Complete the checks',
+    description: 'Our team coordinates the selected verification checks and tracks case progress.',
     color: PALETTE[3],
   },
   {
     icon: TrendingUp,
-    title: 'Review & share results',
-    description: 'Review findings, resolve exceptions, and deliver the final report to the authorized client.',
+    title: 'Review the report',
+    description: 'Receive a structured summary of findings for authorized hiring decision-makers.',
     color: PALETTE[4],
   },
 ];
 
 // ---------------------------------------------------------------------------
-// Use cases — who runs their BGV program on the platform
+// Business teams served by HireVerify
 // ---------------------------------------------------------------------------
 const USE_CASES = [
   { icon: Users2, title: 'Recruitment Agencies', description: 'Manage verification for candidates placed across multiple clients, without mixing data between them.', color: PALETTE[0] },
@@ -233,28 +232,28 @@ const USE_CASES = [
 ];
 
 // ---------------------------------------------------------------------------
-// Industries — sectors the platform's verification workflow adapts to
+// Industries that commonly need candidate screening
 // ---------------------------------------------------------------------------
 const INDUSTRIES = [
-  { icon: Code2, title: 'Technology & IT', description: 'Fast-moving hiring pipelines, verified without slowing down offer cycles.', color: PALETTE[0] },
+  { icon: Code2, title: 'Technology & IT', description: 'Candidate checks for fast-moving hiring teams and technical roles.', color: PALETTE[0] },
   { icon: HeartPulse, title: 'Healthcare', description: 'Credential and background checks for patient-facing and clinical support roles.', color: PALETTE[6] },
   { icon: Landmark, title: 'BFSI', description: 'Banking, financial services and insurance hiring with integrity-sensitive checks.', color: PALETTE[1] },
-  { icon: ShoppingBag, title: 'Retail & E-commerce', description: 'High-volume, seasonal hiring without losing track of case status.', color: PALETTE[3] },
-  { icon: Factory, title: 'Manufacturing', description: 'Verification workflows built for large, distributed shop-floor workforces.', color: PALETTE[5] },
-  { icon: Headset, title: 'BPO & ITES', description: 'Standardized screening across large applicant pools, at consistent turnaround.', color: PALETTE[2] },
-  { icon: Truck, title: 'Logistics & Supply Chain', description: 'Address and identity checks suited to field and delivery workforces.', color: PALETTE[7] },
-  { icon: Building2, title: 'Real Estate & Construction', description: 'Site and vendor personnel verification across multiple project locations.', color: PALETTE[4] },
+  { icon: ShoppingBag, title: 'Retail & E-commerce', description: 'Candidate screening for high-volume and seasonal hiring.', color: PALETTE[3] },
+  { icon: Factory, title: 'Manufacturing', description: 'Checks for large, distributed and shop-floor workforces.', color: PALETTE[5] },
+  { icon: Headset, title: 'BPO & ITES', description: 'Standardized screening processes for large applicant pools.', color: PALETTE[2] },
+  { icon: Truck, title: 'Logistics & Supply Chain', description: 'Address, identity and role-related checks for field and delivery workforces.', color: PALETTE[7] },
+  { icon: Building2, title: 'Real Estate & Construction', description: 'Personnel and vendor checks for site-based teams.', color: PALETTE[4] },
   { icon: GraduationCap, title: 'Education', description: 'Background and education-credential checks for academic and campus staff.', color: PALETTE[0] },
 ];
 
 const INDUSTRY_STATS = [
-  { value: `${INDUSTRIES.length}`, label: 'Industries served' },
-  { value: `${SERVICES.length}+`, label: 'Verification services' },
-  { value: '4', label: 'User roles supported' },
+  { value: `${INDUSTRIES.length}`, label: 'Hiring sectors' },
+  { value: `${SERVICE_COUNT}`, label: 'Verification categories' },
+  { value: 'Consent-led', label: 'Candidate screening' },
 ];
 
 const TRUST_STATS = [
-  { icon: ShieldCheck, value: `${SERVICES.length}+`, label: 'Verification services available', color: PALETTE[0] },
+  { icon: ShieldCheck, value: `${SERVICE_COUNT}`, label: 'Verification service categories', color: PALETTE[0] },
   { icon: Lock, value: 'Isolated', label: 'Company & client-level tenancy', color: PALETTE[2] },
   { icon: BarChart3, value: 'Audited', label: 'Every action, tracked', color: PALETTE[3] },
   { icon: Clock3, value: '1 place', label: 'Cases, checks & reports', color: PALETTE[4] },
@@ -272,42 +271,42 @@ const FAQS = [
   {
     question: 'What is HireVerify?',
     answer:
-      'HireVerify is a background verification (BGV) platform for companies and their authorized client users. You create candidates and verification cases, run checks such as PAN, UAN and court verification, capture consent, and review secure reports — all in one place.',
+      'HireVerify by Brainhunt Ventures provides background verification services for employers and screening teams. Share your hiring requirements with us and we will help scope the checks, candidate information and reporting needed for your process.',
   },
   {
     question: 'Which verification checks are supported?',
     answer:
-      'Identity, PAN, Aadhaar, address, employment, education, court, criminal record, police, reference, credit, drug test, global database, passport, driving licence, vendor and several other checks are all available through integrated verification providers and manual review — run any combination from one case.',
+      'Our screening services include identity, PAN, Aadhaar, address, employment, UAN, education, court, criminal-record, police, reference, credit/CIBIL, drug-test, global database, passport, driving-licence, vendor, director, tenant, social-media, watchlist and business verification. The exact scope is confirmed with you before a case starts.',
   },
   {
     question: 'Can clients receive verification reports?',
     answer:
-      'Yes. Once a case is reviewed and approved, authorized client users can view and download the final report from their own secure workspace. Candidates do not receive the final report — the report is a client deliverable.',
+      'Yes. We provide a structured summary of verification findings to the authorized business contact for the engagement. Report contents depend on the checks requested and the information available for review.',
   },
   {
     question: 'Can I manage verification for multiple clients?',
     answer:
-      'Yes. Candidates, cases and reports are scoped per client and company, so agencies managing multiple clients keep everything separated within a single account.',
+      'Yes. Recruitment agencies and screening teams can discuss workflows for multiple business clients when requesting a quotation.',
   },
   {
     question: 'Can individuals request a personal verification?',
     answer:
-      'Yes — individuals can initiate supported checks and track their own verification progress. The platform is built primarily for company and client use, with individual verification as a secondary option.',
+      'HireVerify focuses on employer and business screening requests. Contact our team to discuss an individual verification requirement.',
   },
   {
     question: 'How is candidate data protected?',
     answer:
-      'Access is controlled by role and by tenant — company and client boundaries are enforced throughout the platform, and every verification action is logged for audit purposes.',
+      'We request candidate authorization for checks that require it and restrict access to candidate information to authorized people involved in the verification engagement. Contact us for details about data handling for your requirements.',
   },
   {
     question: 'Which verification providers do you use?',
     answer:
-      'Verification checks are processed through integrated third-party verification providers. Additional providers can be added as the platform expands, without changing how a case or report looks to you.',
+      'The process and sources vary by check type and location. We confirm the applicable verification approach with you when scoping an engagement.',
   },
   {
     question: 'How do I get a quotation?',
     answer:
-      'Use the "Get Quotation" button on this page or the Contact page to reach our team with your verification volume and requirements, and we\u2019ll get back to you with pricing.',
+      'Use the quotation form to tell us about your organization, expected candidate volume and required checks. Our team will contact you to discuss the scope and pricing.',
   },
 ];
 
@@ -334,6 +333,24 @@ export default function HomePage() {
       <PublicNav />
 
       <main className="flex-1">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Service',
+              '@id': 'https://hireverify.brainhuntventures.com/#bgv-service',
+              name: 'HireVerify Background Verification Services',
+              serviceType: 'Employee background verification and candidate screening',
+              description:
+                'Background verification services for employers and screening teams, including identity, address, employment, education, financial, reference and court checks.',
+              url: 'https://hireverify.brainhuntventures.com/',
+              provider: {
+                '@id': 'https://hireverify.brainhuntventures.com/#organization',
+              },
+            }),
+          }}
+        />
         {/* ================= HERO ================= */}
         <section className="relative overflow-hidden">
           <div className="absolute inset-x-0 -top-24 h-96 bg-[radial-gradient(circle_at_top,color-mix(in_srgb,var(--primary)_16%,transparent),transparent_60%)] pointer-events-none" />
@@ -352,14 +369,14 @@ export default function HomePage() {
 
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] text-[11px] font-medium px-3 py-1.5 mb-5" style={{ color: PALETTE[4] }}>
                   <Award size={12} />
-                  {SERVICES.length}+ verification checks · {INDUSTRIES.length} industries served
+                  Background verification services for Indian employers
                 </span>
 
                 <h1
                   className="text-[42px] sm:text-[60px] font-bold tracking-tight leading-[1.04] text-[var(--foreground)]"
                   style={{ fontFamily: 'var(--font-display)' }}
                 >
-                  Background verification
+                  Employee background checks
                   <br />
                   for confident{' '}
                   <span className="relative whitespace-nowrap">
@@ -373,30 +390,24 @@ export default function HomePage() {
                 </h1>
 
                 <p className="text-[16px] text-[var(--muted)] mt-6 max-w-xl mx-auto lg:mx-0 leading-relaxed">
-                  HireVerify by Brainhunt Ventures helps employers and screening teams manage candidate
-                  background verification, PAN, UAN, court and other checks in one secure BGV platform.
+                  HireVerify by Brainhunt Ventures provides candidate background verification for
+                  employers and screening teams. Request identity, address, employment, education,
+                  credit/CIBIL, reference, court and other checks for your hiring process.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 mt-8">
                   <Link
-                    href="/signup"
+                    href="/contact#contact-form"
                     className="flex items-center gap-2 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] text-[13.5px] font-semibold px-6 py-3 hover:opacity-90 transition-opacity"
                   >
-                    <LogIn size={16} />
-                    Get started
-                  </Link>
-                  <Link
-                    href="/contact?intent=quote"
-                    className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] text-[13.5px] font-medium px-6 py-3 hover:bg-[var(--surface-muted)] transition-colors"
-                  >
                     <Quote size={16} />
-                    Get a quotation
+                    Request a BGV quotation
                   </Link>
                   <Link
                     href="#verifications"
                     className="flex items-center gap-2 text-[13.5px] font-medium px-3 py-3 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
                   >
-                    Explore verifications
+                    Explore services
                     <ArrowRight size={14} />
                   </Link>
                 </div>
@@ -553,17 +564,17 @@ export default function HomePage() {
           <div className="text-center mb-4">
             <Eyebrow>Verify what matters</Eyebrow>
             <h2 className="text-[26px] sm:text-[30px] font-semibold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
-              {SERVICES.length}+ background verification services
+              Background verification services
             </h2>
             <p className="text-[14px] text-[var(--muted)] mt-3 max-w-xl mx-auto leading-relaxed">
-              End-to-end checks under one roof — every service below is available through integrated
-              verification providers and manual review, all tracked from a single case.
+              Select the checks that fit your hiring needs. Our team will confirm the scope,
+              information required and pricing for your request.
             </p>
           </div>
 
           <div className="flex items-center justify-center gap-2 mb-10 text-[12px] font-medium" style={{ color: PALETTE[4] }}>
             <CheckCircle2 size={13} />
-            All services available
+            Discuss your required checks with our team
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -591,7 +602,7 @@ export default function HomePage() {
                       style={{ background: translucent(PALETTE[4], 10), color: PALETTE[4] }}
                     >
                       <CheckCircle2 size={10} />
-                      Available
+                      On request
                     </span>
                   </div>
                   <h3 className="text-[13.5px] font-semibold mb-1.5" style={{ fontFamily: 'var(--font-display)' }}>
@@ -652,13 +663,12 @@ export default function HomePage() {
                   Built for client-centric verification
                 </h2>
                 <p className="text-[14px] text-[var(--muted)] leading-relaxed">
-                  Create and manage verification cases for your clients, track every check, review results, and
-                  deliver final reports from one centralized platform — the candidate is verified, the client
-                  receives the report.
+                  We coordinate candidate checks for your client, review the available findings and provide a
+                  structured report to the authorized business contact.
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-center gap-2.5 text-[12px]">
-                {['Client', 'Candidate', 'BGV case', 'PAN / UAN / Court', 'Verification', 'Review', 'Final report', 'Client'].map((step, i, arr) => (
+                {['Client', 'Candidate', 'BGV case', 'Selected checks', 'Verification', 'Review', 'Final report', 'Client'].map((step, i, arr) => (
                   <div key={`${step}-${i}`} className="flex items-center gap-2.5">
                     <span className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 font-medium whitespace-nowrap">
                       {step}
@@ -678,8 +688,7 @@ export default function HomePage() {
               Need a personal background verification?
             </h3>
             <p className="text-[13.5px] text-[var(--muted)] max-w-lg mx-auto leading-relaxed mb-5">
-              Individuals can initiate supported background verification checks and track their verification
-              process on their own.
+              Contact our team to discuss an individual background verification requirement.
             </p>
             <Link
               href="/contact?intent=individual"
@@ -793,7 +802,7 @@ export default function HomePage() {
               Built with security in mind
             </h2>
             <p className="text-[14px] text-[var(--muted)] mt-3 max-w-xl mx-auto leading-relaxed">
-              Designed with security and controlled access in mind, at every layer of the platform.
+              Candidate documents and findings should be shared only with people authorized for the verification engagement.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -848,8 +857,8 @@ export default function HomePage() {
               Verification workflows that fit your sector
             </h2>
             <p className="text-[14px] text-[var(--muted)] mt-3 max-w-lg mx-auto leading-relaxed">
-              Every sector screens differently. HireVerify adapts case types, required checks and turnaround
-              expectations to what actually matters in your industry.
+              Screening needs vary by role and industry. Tell us which checks matter to your hiring process and
+              we will discuss the appropriate scope.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mt-7">
@@ -930,22 +939,22 @@ export default function HomePage() {
                 Make every hiring decision with more confidence
               </h2>
               <p className="text-[14px] text-[var(--muted)] mt-1">
-                Centralize candidate verification, simplify your workflow, and deliver clear results to your clients.
+                Tell us your candidate volume and required checks. We will help scope a background verification service for your hiring process.
               </p>
             </div>
             <div className="relative flex flex-col sm:flex-row items-center gap-3 shrink-0">
               <Link
-                href="/contact?intent=quote"
+                href="/contact#contact-form"
                 className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] text-[13.5px] font-semibold px-5 py-3 hover:bg-[var(--surface-muted)] transition-colors"
               >
                 <Quote size={15} />
                 Get a quotation
               </Link>
               <Link
-                href="/signup"
+                href="#verifications"
                 className="flex items-center gap-2 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] text-[13.5px] font-semibold px-5 py-3 hover:opacity-90 transition-opacity"
               >
-                Get started
+                Explore services
                 <ArrowRight size={15} />
               </Link>
             </div>
@@ -967,13 +976,13 @@ export default function HomePage() {
                 </span>
               </span>
               <p className="text-[12.5px] text-[var(--muted)] leading-relaxed">
-                Secure, multi-tenant background verification for companies and their clients.
+                Candidate background verification services for employers and screening teams.
               </p>
             </div>
 
             <div>
               <p className="text-[11px] uppercase tracking-[0.1em] text-[var(--muted)] mb-3" style={{ fontFamily: 'var(--font-mono)' }}>
-                Product
+                Services
               </p>
               <ul className="space-y-2 text-[13px]">
                 <li><Link href="/#features" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">Features</Link></li>
@@ -1002,7 +1011,7 @@ export default function HomePage() {
               </p>
               <ul className="space-y-2 text-[13px]">
                 <li><Link href="/contact" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">Contact</Link></li>
-                <li><Link href="/contact?intent=quote" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">Get a quotation</Link></li>
+                <li><Link href="/contact#contact-form" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">Get a quotation</Link></li>
                 <li><Link href="/#faq" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">FAQ</Link></li>
               </ul>
             </div>

@@ -34,10 +34,10 @@ const SIDE_CHECKS = [
 ];
 
 const SIDE_HIGHLIGHTS = [
-  { icon: ClipboardList, title: 'Centralized case management', color: 'var(--primary)' },
-  { icon: Users, title: 'Invite & track candidates', color: '#818CF8' },
-  { icon: BarChart3, title: 'Client-ready reports', color: '#F2AE55' },
-  { icon: ShieldCheck, title: 'Role-based access', color: '#F472B6' },
+  { icon: ClipboardList, title: 'Employment & role checks', color: 'var(--primary)' },
+  { icon: Users, title: 'Candidate consent & documents', color: '#818CF8' },
+  { icon: BarChart3, title: 'Reports for client teams', color: '#F2AE55' },
+  { icon: ShieldCheck, title: 'Secure portal access', color: '#F472B6' },
 ];
 
 function LoginContent() {
@@ -167,21 +167,22 @@ function LoginContent() {
               style={{ borderColor: 'var(--border)', background: 'var(--surface-muted)', color: 'var(--muted)' }}
             >
               <Sparkles size={12} className="text-[var(--primary)]" />
-              Background verification platform
+              Background checks for your hiring needs
             </div>
 
             <h2
               className="text-[24px] xl:text-[28px] font-semibold tracking-tight leading-[1.15]"
               style={{ fontFamily: 'var(--font-display)', color: 'var(--foreground)' }}
             >
-              Hiring decisions,{' '}
+              Employee background checks,{' '}
               <span className="bg-gradient-to-r from-[var(--primary)] to-[color-mix(in_srgb,var(--primary)_58%,#F2AE55)] bg-clip-text text-transparent">
-                backed by verified facts.
+                made easier to manage.
               </span>
             </h2>
             <p className="text-[13px] mt-2.5 leading-relaxed" style={{ color: 'var(--muted)' }}>
-              Manage verification cases, review findings, and share approved reports securely
-              with your clients once a candidate submits their information.
+              Request employment, address, identity, education, credit/CIBIL, reference, PAN, UAN,
+              court and other candidate checks. Existing clients can sign in to their secure portal
+              to manage candidates and review reports.
             </p>
 
             {/* Feature highlights — compact 2x2 grid */}
@@ -215,7 +216,7 @@ function LoginContent() {
                   className="text-[9.5px] uppercase tracking-[0.14em]"
                   style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}
                 >
-                  Sample verification case
+                  Illustrative report preview
                 </p>
                 <span className="flex items-center gap-1 rounded-full bg-[var(--primary)]/12 text-[var(--primary)] text-[10px] font-semibold px-2 py-0.5">
                   <BarChart3 size={10} />
@@ -256,13 +257,13 @@ function LoginContent() {
               </span>
               <div className="min-w-0">
                 <p className="text-[11.5px] font-semibold leading-tight" style={{ color: 'var(--foreground)' }}>
-                  Want to register your company?
+                  Need background checks for your team?
                 </p>
                 <Link
-                  href="/contact"
+                  href="/contact#contact-form"
                   className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[var(--primary)] hover:underline mt-1"
                 >
-                  Contact us
+                  Request a BGV quotation
                   <ArrowRight size={11} />
                 </Link>
               </div>
@@ -284,7 +285,7 @@ function LoginContent() {
                 Welcome back
               </h1>
               <p className="text-[12px] mt-1" style={{ color: 'var(--muted)' }}>
-                Sign in to your HireVerify account
+                Existing clients and authorized team members: sign in to your portal.
               </p>
             </Link>
 
@@ -297,7 +298,7 @@ function LoginContent() {
                 Welcome back
               </h1>
               <p className="text-[12.5px] mt-1" style={{ color: 'var(--muted)' }}>
-                Sign in to your HireVerify account
+                Existing clients and authorized team members: sign in to your portal.
               </p>
             </div>
 
@@ -429,13 +430,13 @@ function LoginContent() {
               </span>
               <div className="min-w-0">
                 <p className="text-[11.5px] font-semibold leading-tight" style={{ color: 'var(--foreground)' }}>
-                  Want to register your company?
+                  Need background checks for your team?
                 </p>
                 <Link
-                  href="/contact"
+                  href="/contact#contact-form"
                   className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--primary)] hover:underline"
                 >
-                  Contact us
+                  Request a BGV quotation
                   <ArrowRight size={10} />
                 </Link>
               </div>

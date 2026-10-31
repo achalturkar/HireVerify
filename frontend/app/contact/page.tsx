@@ -3,24 +3,24 @@ import ContactClient from "@/src/components/layout/contactClient";
 
 export const metadata: Metadata = {
   title: {
-    absolute: "Contact HireVerify | Brainhunt Ventures",
+    absolute: "Request a BGV Quote | HireVerify by Brainhunt Ventures",
   },
   description:
-    "Contact HireVerify by Brainhunt Ventures for employee background verification, BGV platform demonstrations, pricing, company onboarding, and customer support in India.",
+    "Request a quotation for employee background verification services from HireVerify by Brainhunt Ventures. Tell us your candidate volume and required checks.",
   keywords: [
-    "HireVerify Contact",
-    "Background Verification Support",
-    "BGV platform demo",
-    "background verification pricing India",
-    "company onboarding",
+    "BGV services quotation",
+    "background verification services pricing",
+    "employee background check quote India",
+    "HireVerify contact",
+    "candidate screening services",
   ],
   alternates: {
     canonical: "/contact",
   },
   openGraph: {
-    title: "Contact HireVerify | Brainhunt Ventures",
+    title: "Request a BGV Quote | HireVerify",
     description:
-      "Talk to the Brainhunt Ventures team about HireVerify background verification workflows, pricing, onboarding, or support.",
+      "Tell the HireVerify team about your candidate volume and required background checks to discuss service scope and pricing.",
     url: "https://hireverify.brainhuntventures.com/contact",
     siteName: "HireVerify by Brainhunt Ventures",
     locale: "en_IN",
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Contact HireVerify | Brainhunt Ventures",
     description:
-      "Request a demo, pricing, onboarding information or support for HireVerify BGV.",
+      "Request a background verification services quotation from HireVerify.",
     images: ["/opengraph-image"],
   },
 };

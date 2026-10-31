@@ -2,11 +2,16 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: {
-    absolute: 'Sign in | HireVerify by Brainhunt Ventures',
+    absolute: 'HireVerify Portal Login | Background Verification',
+  },
+  description:
+    'Sign in to the HireVerify portal to manage candidate background verification and review reports. New businesses can contact Brainhunt Ventures to request BGV services.',
+  alternates: {
+    canonical: '/login',
   },
   robots: {
-    index: false,
-    follow: false,
+    index: true,
+    follow: true,
   },
 };
 

@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 
-export const alt = 'HireVerify background verification platform by Brainhunt Ventures';
+export const alt = 'HireVerify background verification services by Brainhunt Ventures';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -47,13 +47,13 @@ export default function OpenGraphImage() {
         </div>
         <div style={{ display: 'flex', maxWidth: '980px', flexDirection: 'column' }}>
           <span style={{ color: '#56d9a7', fontSize: '20px', fontWeight: 700, letterSpacing: '3px' }}>
-            BACKGROUND VERIFICATION PLATFORM
+            BACKGROUND VERIFICATION SERVICES
           </span>
           <span style={{ marginTop: '22px', fontSize: '58px', fontWeight: 700, lineHeight: 1.12 }}>
             Confident hiring starts with clear verification.
           </span>
           <span style={{ marginTop: '22px', color: '#cbd5e1', fontSize: '24px' }}>
-            Candidate checks, case management and client-ready reports.
+            Candidate screening across identity, employment, address, education and more.
           </span>
         </div>
         <div style={{ display: 'flex', color: '#aab7cb', fontSize: '18px' }}>

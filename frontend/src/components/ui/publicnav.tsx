@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Mail, Menu, UserPlus, X } from 'lucide-react';
+import { Home, Mail, Menu, X } from 'lucide-react';
 import { ThemeToggle } from '@/src/components/layout/theme-toggle';
 import BrandMark from '@/src/components/ui/BrandMark';
 
@@ -20,7 +20,7 @@ const iconMuted = 'text-slate-500 dark:text-[#AAB2D4] hover:text-slate-900 dark:
 const LINKS = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/contact', label: 'Contact', icon: Mail },
-  { href: '/signup', label: 'Get started', icon: UserPlus },
+  { href: '/contact#contact-form', label: 'Request a quote', icon: Mail },
 ];
 
 export default function PublicNav() {

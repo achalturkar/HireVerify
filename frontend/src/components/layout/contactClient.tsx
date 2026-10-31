@@ -5,7 +5,6 @@ import {
   Mail,
   Phone,
   MapPin,
-  Clock3,
   MessageSquareText,
   ShieldCheck,
   Loader2,
@@ -26,7 +25,7 @@ const PHONE_NUMBERS = [
 const CONTACT_OPTIONS = [
   {
     title: 'Sales & quotations',
-    description: 'Discuss verification packages, pricing, onboarding, and rollout plans for your team.',
+    description: 'Discuss background verification checks, service scope, and pricing for your team.',
     phone: PHONE_NUMBERS[0],
     email: 'contact@brainhuntventures.com',
     icon: MessageSquareText,
@@ -48,9 +47,8 @@ const CONTACT_OPTIONS = [
 ];
 
 const HERO_HIGHLIGHTS = [
-  { icon: Clock3, label: 'Response within 1 business day' },
-  { icon: ShieldCheck, label: 'Secure, role-based access by design' },
-  { icon: FileText, label: 'PAN, UAN, Court & more' },
+  { icon: ShieldCheck, label: 'Consent-led candidate checks' },
+  { icon: FileText, label: 'Employment, address, CIBIL & more' },
 ];
 
 export default function ContactClient() {
@@ -113,11 +111,11 @@ export default function ContactClient() {
                 className="text-4xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl"
                 style={{ fontFamily: 'var(--font-display)' }}
               >
-                Let&rsquo;s make background verification clearer, faster, and more reliable.
+                Employee background verification, scoped to your hiring needs.
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-8 text-[var(--muted)]">
-                Whether you&rsquo;re exploring the platform, planning a rollout, requesting a quotation, or need
-                help with a candidate verification case, our team is ready to help.
+                Tell us about your organization, candidate volume, and required checks. Our team can discuss
+                service scope, the information needed, and pricing.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
@@ -243,11 +241,11 @@ export default function ContactClient() {
                     className="mt-2 text-2xl font-semibold tracking-tight text-[var(--foreground)]"
                     style={{ fontFamily: 'var(--font-display)' }}
                   >
-                    Share your goals and we&rsquo;ll help you shape the right verification workflow.
+                    Request a background verification services quotation.
                   </h2>
                   <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                    Tell us about your team, your candidate volume, and the checks you need — PAN, UAN, court,
-                    or others. We&rsquo;ll reach out with the next steps and, if you&rsquo;d like, a quotation.
+                    Tell us about your team, candidate volume, and required checks — such as employment,
+                    address, credit/CIBIL, reference, PAN, UAN, court, or others.
                   </p>
                 </div>
               </div>
@@ -344,7 +342,7 @@ export default function ContactClient() {
                   value={formData.message}
                   onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                   className="w-full rounded-2xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm outline-none ring-0 transition focus:border-[var(--primary)]"
-                  placeholder="Tell us about your team, verification volume, and the checks you need — PAN, UAN, court, or others."
+                  placeholder="Tell us your candidate volume and the checks you need — for example, employment, address, credit/CIBIL, reference, PAN, UAN, or court."
                 />
               </label>
 

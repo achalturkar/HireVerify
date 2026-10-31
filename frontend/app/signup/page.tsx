@@ -34,6 +34,10 @@ export const metadata: Metadata = {
     'BGV software demo India',
     'employee screening onboarding',
   ],
+  robots: {
+    index: false,
+    follow: true,
+  },
   alternates: { canonical: '/signup' },
   openGraph: {
     title: 'Request a HireVerify Company Account | Brainhunt Ventures',

@@ -20,25 +20,26 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://hireverify.brainhuntventures.com"),
 
   title: {
-    default: "HireVerify | BGV Platform by Brainhunt Ventures",
+    default: "HireVerify | Background Verification Services",
     template: "%s | HireVerify by Brainhunt Ventures",
   },
 
   description:
-    "HireVerify is a background verification platform that helps companies manage candidates, verification checks, documents, consent, and authorized client reports.",
+    "HireVerify by Brainhunt Ventures provides background verification services for employers and screening teams, including employment, address, identity, education and other checks.",
 
   keywords: [
     "HireVerify",
     "Background Verification",
-    "BGV Platform",
-    "Candidate Verification",
-    "Verification Checks",
+    "BGV Services India",
+    "Candidate Background Verification",
+    "Employee Screening",
     "Employment Verification",
+    "Address Verification",
     "Identity Verification",
-    "Recruitment Software",
-    "Hiring Platform",
-    "Campus Recruitment",
-    "Client Reports",
+    "Education Verification",
+    "Court Verification",
+    "Credit Verification",
+    "Reference Checks",
   ],
 
   authors: [{ name: "Brainhunt Ventures" }],
@@ -61,9 +62,9 @@ export const metadata: Metadata = {
   },
 
   openGraph: {
-    title: "HireVerify | BGV Platform by Brainhunt Ventures",
+    title: "HireVerify | Background Verification Services",
     description:
-      "Manage candidate background verification, checks, consent, documents, and client reports with HireVerify by Brainhunt Ventures.",
+      "Arrange candidate background checks with HireVerify by Brainhunt Ventures, including employment, address, identity, education, financial and court verification.",
     url: "https://hireverify.brainhuntventures.com",
     siteName: "HireVerify by Brainhunt Ventures",
     locale: "en_IN",
@@ -81,8 +82,8 @@ export const metadata: Metadata = {
 
   twitter: {
     card: "summary_large_image",
-    title: "HireVerify | BGV Platform by Brainhunt Ventures",
-    description: "Background verification platform for companies and authorized clients.",
+    title: "HireVerify | Background Verification Services",
+    description: "Background verification services for employers and screening teams.",
     images: ["/opengraph-image"],
   },
 
@@ -131,6 +132,18 @@ const organizationStructuredData = {
   ],
 };
 
+const websiteStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "@id": "https://hireverify.brainhuntventures.com/#website",
+  name: "HireVerify",
+  url: "https://hireverify.brainhuntventures.com/",
+  publisher: {
+    "@id": "https://hireverify.brainhuntventures.com/#organization",
+  },
+  inLanguage: "en-IN",
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -142,6 +155,10 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationStructuredData) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteStructuredData) }}
         />
         <PlatformBrandingProvider>
           <ThemeProvider>
