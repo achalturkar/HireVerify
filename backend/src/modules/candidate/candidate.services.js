@@ -56,6 +56,7 @@ const toDto = (candidate) => ({
   spouseName: candidate.spouseName,
   childrenCount: candidate.childrenCount,
   candidateNotes: candidate.candidateNotes,
+  companyRemark: candidate.companyRemark,
   aadhaarNumber: candidate.aadhaarNumber,
   panNumber: candidate.panNumber,
   uanNumber: candidate.uanNumber,
@@ -257,7 +258,8 @@ const update = async ({ id, companyId, payload, currentUser }) => {
     where: { candidateId: id, companyId, status: 'COMPLETED' },
     select: { id: true },
   });
-  if (completedCase) throw new ConflictError('Candidate details cannot be changed after the BGV case is completed.');
+  const isCompanyRemarkOnly = Object.keys(payload).length === 1 && Object.prototype.hasOwnProperty.call(payload, 'companyRemark');
+  if (completedCase && !isCompanyRemarkOnly) throw new ConflictError('Candidate details cannot be changed after the BGV case is completed.');
 
   if (payload.clientId && payload.clientId !== existing.clientId) {
     await assertClientBelongsToCompany(payload.clientId, companyId);
@@ -273,7 +275,7 @@ const update = async ({ id, companyId, payload, currentUser }) => {
 
   const data = {};
   if (hasCandidateName(payload)) Object.assign(data, normalizeCandidateName(payload, existing));
-  ['clientId', 'subclientId', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount', 'candidateNotes', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'currentAddress', 'permanentAddress', 'status']
+  ['clientId', 'subclientId', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount', 'candidateNotes', 'companyRemark', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'currentAddress', 'permanentAddress', 'status']
     .forEach((field) => {
       if (payload[field] !== undefined) {
         if (field === 'clientId' && !payload[field]) return;

@@ -377,6 +377,8 @@ export default function CandidateDetailPage() {
   const [profileValues, setProfileValues] = useState<ProfileDraft | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [companyRemarkDraft, setCompanyRemarkDraft] = useState('');
+  const [savingCompanyRemark, setSavingCompanyRemark] = useState(false);
   const [downloadingForm, setDownloadingForm] = useState(false);
   const [downloadingCandidateExcel, setDownloadingCandidateExcel] = useState(false);
   const [daysInput, setDaysInput] = useState('2');
@@ -410,6 +412,7 @@ export default function CandidateDetailPage() {
       ]);
       const candidateDetail = detail as CandidateDetail;
       setCandidate(candidateDetail);
+      setCompanyRemarkDraft(candidateDetail.companyRemark || '');
       setDaysInput(String(candidateDetail.portalLinkExpiryDays ?? 2));
       setProfileValues(toProfileDraft(candidateDetail));
       setPortal(status ?? (detail.portalInvitation ? { ...detail.portalInvitation, url: null } : null));
@@ -438,6 +441,22 @@ export default function CandidateDetailPage() {
       setError(saveError instanceof ApiError ? saveError.message : 'Could not save candidate details.');
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  const saveCompanyRemark = async () => {
+    setSavingCompanyRemark(true);
+    setError('');
+    setNotice('');
+    try {
+      const updated = await updateCandidate(id, { companyRemark: companyRemarkDraft.trim() || null }, accessToken);
+      setCandidate((current) => current ? { ...current, companyRemark: updated.companyRemark } : current);
+      setCompanyRemarkDraft(updated.companyRemark || '');
+      setNotice('Candidate remark saved and shared with the client.');
+    } catch (saveError) {
+      setError(saveError instanceof ApiError ? saveError.message : 'Could not save candidate remark.');
+    } finally {
+      setSavingCompanyRemark(false);
     }
   };
 
@@ -836,6 +855,20 @@ export default function CandidateDetailPage() {
 
       {tab === 'summary' && (
         <div className="space-y-5">
+          <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-[14px] font-semibold">Company admin remark</h3>
+                <p className="mt-1 text-[11px] text-[var(--muted)]">Add a note about the candidate’s BGV cooperation. The client can see this remark.</p>
+              </div>
+              {canUpdateCandidate && <button type="button" onClick={() => void saveCompanyRemark()} disabled={savingCompanyRemark || companyRemarkDraft.length > 5000} className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Save size={14} />{savingCompanyRemark ? 'Saving…' : 'Save remark'}</button>}
+            </div>
+            {canUpdateCandidate ? (
+              <textarea aria-label="Company admin remark visible to the client" maxLength={5000} rows={4} value={companyRemarkDraft} onChange={(event) => setCompanyRemarkDraft(event.target.value)} className="mt-4 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm" placeholder="Example: Candidate is not cooperating with the BGV process." />
+            ) : (
+              <p className="mt-4 whitespace-pre-wrap text-sm leading-6">{candidate.companyRemark?.trim() || 'No company admin remark has been added.'}</p>
+            )}
+          </section>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               ['Documents', documents.length, 'Files uploaded'],

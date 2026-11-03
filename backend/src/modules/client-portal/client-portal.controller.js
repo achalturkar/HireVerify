@@ -629,7 +629,7 @@ const getCandidate = asyncHandler(async (req, res) => {
     select: {
       id: true, candidateCode: true, fullName: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, status: true,
       dateOfBirth: true, gender: true, fatherName: true, motherName: true, maritalStatus: true, spouseName: true,
-      childrenCount: true, candidateNotes: true, aadhaarNumber: true, panNumber: true,
+      childrenCount: true, candidateNotes: true, companyRemark: true, aadhaarNumber: true, panNumber: true,
       uanNumber: true, passportNumber: true, drivingLicenseNumber: true, voterIdNumber: true,
       highestQualification: true, courseName: true, institutionName: true, universityName: true, yearOfPassing: true,
       gradeOrPercentage: true, educationHistory: true, employeeId: true, employeeDesignation: true, employeeDepartment: true,

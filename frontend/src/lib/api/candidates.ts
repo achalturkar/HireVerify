@@ -255,6 +255,7 @@ export interface CandidatePayload {
   firstName: string;
   middleName?: string | null;
   lastName: string;
+  companyRemark?: string | null;
   email?: string;
   phone?: string;
   dateOfBirth?: string | null;

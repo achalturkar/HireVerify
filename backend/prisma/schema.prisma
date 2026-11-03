@@ -431,6 +431,7 @@ model Candidate {
   spouseName String? @map("spouse_name") @db.VarChar(255)
   childrenCount Int? @map("children_count")
   candidateNotes String? @map("candidate_notes") @db.Text
+  companyRemark String? @map("company_remark") @db.Text
 
   aadhaarNumber        String? @map("aadhaar_number") @db.VarChar(20)
   panNumber            String? @map("pan_number") @db.VarChar(20)

@@ -65,6 +65,7 @@ const updateValidator = {
     spouseName: Joi.string().max(255).allow(null, ''),
     childrenCount: Joi.number().integer().min(0).max(20).allow(null, ''),
     candidateNotes: Joi.string().max(2000).allow(null, ''),
+    companyRemark: Joi.string().max(5000).allow(null, ''),
     aadhaarNumber: Joi.string().max(20).allow(null, ''),
     panNumber: Joi.string().max(20).allow(null, ''),
     uanNumber: Joi.string().max(20).allow(null, ''),

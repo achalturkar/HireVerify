@@ -84,6 +84,7 @@ export interface Candidate {
   spouseName?: string | null;
   childrenCount?: number | null;
   candidateNotes?: string | null;
+  companyRemark?: string | null;
   aadhaarNumber?: string | null;
   panNumber?: string | null;
   uanNumber?: string | null;
