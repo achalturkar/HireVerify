@@ -70,6 +70,7 @@ const sections: SectionDefinition[] = [
       { key: 'workLocation', label: 'Work location' },
       { key: 'employerHrName', label: 'Employer HR contact name' },
       { key: 'employerHrPhone', label: 'Employer HR contact number' },
+      { key: 'employerHrEmail', label: 'Employer HR email' },
     ],
   },
   {
@@ -102,6 +103,7 @@ const employmentFields: FieldDefinition[] = [
   { key: 'workLocation', label: 'Work location' },
   { key: 'employerHrName', label: 'Employer HR contact name' },
   { key: 'employerHrPhone', label: 'Employer HR contact number' },
+  { key: 'employerHrEmail', label: 'Employer HR email' },
 ];
 
 const identityKeys = new Set([

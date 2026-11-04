@@ -634,7 +634,7 @@ const getCandidate = asyncHandler(async (req, res) => {
       highestQualification: true, courseName: true, institutionName: true, universityName: true, yearOfPassing: true,
       gradeOrPercentage: true, educationHistory: true, employeeId: true, employeeDesignation: true, employeeDepartment: true,
       employmentType: true, joiningDate: true, workLocation: true, currentEmployer: true, employerHrName: true,
-      employerHrPhone: true, employmentHistory: true, currentAddress: true, permanentAddress: true,
+      employerHrPhone: true, employerHrEmail: true, employmentHistory: true, currentAddress: true, permanentAddress: true,
       addressVerificationLocations: true, createdAt: true, updatedAt: true,
       documents: { select: { id: true, documentType: true, documentNumber: true, fileName: true, fileUrl: true, verificationStatus: true, uploadedAt: true }, orderBy: { uploadedAt: 'desc' } },
       consents: { where: { consentType: 'BGV_CONSENT' }, select: { consentType: true, consentGiven: true, revokedAt: true, createdAt: true } },

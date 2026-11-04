@@ -24,6 +24,7 @@ const EMPLOYMENT_HISTORY_FIELDS = {
   workLocation: 150,
   employerHrName: 255,
   employerHrPhone: 50,
+  employerHrEmail: 255,
 };
 const EDUCATION_HISTORY_FIELDS = {
   qualification: 120,
@@ -336,10 +337,11 @@ const pendingFor = (candidate) => {
       workLocation: candidate.workLocation,
       employerHrName: candidate.employerHrName,
       employerHrPhone: candidate.employerHrPhone,
+      employerHrEmail: candidate.employerHrEmail,
     };
     if (candidateFormConfig.currentEmploymentEnabled && !isFresher) {
       for (const [field, value] of Object.entries(currentEmploymentValues)) {
-        if (requiredFields[field]?.required && (value === null || value === undefined || value === '')) {
+        if (candidateFormConfig.employmentFieldRequirements.current[field] && (value === null || value === undefined || value === '')) {
           pending.push({ key: `field-current-employment-${field}`, label: `Provide your current employer ${field.replaceAll(/([A-Z])/g, ' $1').toLowerCase()}`, type: 'profile', category: 'EMPLOYMENT' });
         }
       }
@@ -347,7 +349,8 @@ const pendingFor = (candidate) => {
     storedEmploymentHistory.filter((record) => !isFresher && record && record.isCurrent !== true
       && hasEmploymentHistoryDetails(record)).forEach((record, index) => {
       for (const [field, value] of Object.entries(record)) {
-        if (field === 'isCurrent' || field === 'id' || !requiredFields[field]?.required || (value !== null && value !== undefined && value !== '')) continue;
+        if (field === 'isCurrent' || field === 'id' || !candidateFormConfig.employmentFieldRequirements.past[field]
+          || (value !== null && value !== undefined && value !== '')) continue;
         pending.push({ key: `field-past-employment-${index}-${field}`, label: `Provide ${field.replaceAll(/([A-Z])/g, ' $1').toLowerCase()} for past employer ${index + 1}`, type: 'profile', category: 'EMPLOYMENT' });
       }
     });
@@ -549,6 +552,7 @@ const toDto = (invitation) => {
     workLocation: candidate.workLocation,
     employerHrName: candidate.employerHrName,
     employerHrPhone: candidate.employerHrPhone,
+    employerHrEmail: candidate.employerHrEmail,
   };
   const storedEducationHistory = Array.isArray(candidate.educationHistory) ? candidate.educationHistory : [];
   const educationHistory = storedEducationHistory.length > 0 ? storedEducationHistory : (
@@ -868,7 +872,7 @@ const updateProfile = async (token, payload) => {
   if (immutableFields.some((field) => Object.prototype.hasOwnProperty.call(payload, field))) {
     throw new BadRequestError('Name and email address cannot be changed from the candidate portal. Contact the inviting company to request a correction.');
   }
-  const allowed = ['phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount', 'candidateNotes', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'educationHistory', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'currentAddress', 'permanentAddress', 'addressVerificationLocations'];
+  const allowed = ['phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount', 'candidateNotes', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'educationHistory', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'employerHrEmail', 'currentAddress', 'permanentAddress', 'addressVerificationLocations'];
   const data = {};
   for (const field of allowed) {
     if (payload[field] !== undefined) data[field] = payload[field];
@@ -915,7 +919,7 @@ const updateProfile = async (token, payload) => {
   const disabledSectionFields = {
     family: ['fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount'],
     education: ['highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage'],
-    employment: ['employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone'],
+    employment: ['employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'employerHrEmail'],
   };
   for (const [section, fields] of Object.entries(disabledSectionFields)) {
     if (!candidateFormConfig.sections[section].enabled && fields.some((field) => data[field] !== undefined)) {
@@ -971,7 +975,7 @@ const updateProfile = async (token, payload) => {
         }
         const text = typeof value === 'string' ? value.trim() : '';
         if (text.length > maxLength) throw new BadRequestError(`${field} cannot exceed ${maxLength} characters.`);
-        normalized[field] = text || null;
+        normalized[field] = field === 'employerHrEmail' ? text.toLowerCase() || null : text || null;
       }
       if (normalized.yearOfPassing) {
         const year = Number(normalized.yearOfPassing);
@@ -1034,6 +1038,9 @@ const updateProfile = async (token, payload) => {
       if (normalized.employerHrPhone && !/^[+()\-\s\d]{7,18}$/.test(normalized.employerHrPhone)) {
         throw new BadRequestError('Enter a valid employer HR contact number.');
       }
+      if (normalized.employerHrEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized.employerHrEmail)) {
+        throw new BadRequestError('Enter a valid employer HR email address.');
+      }
       if (index === 0 && endDate) throw new BadRequestError('Current employment cannot have an end date.');
       if (startDate && endDate && endDate < startDate) {
         throw new BadRequestError('Employment end date cannot be before the start date.');
@@ -1055,12 +1062,19 @@ const updateProfile = async (token, payload) => {
     data.workLocation = current.workLocation;
     data.employerHrName = current.employerHrName;
     data.employerHrPhone = current.employerHrPhone;
+    data.employerHrEmail = current.employerHrEmail;
   }
   validateIdentityValues(data);
   for (const field of IDENTITY_FIELDS) {
     if (data[field.key] !== undefined) data[field.key] = normalizeIdentityValue(field.key, data[field.key]) || null;
   }
   if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) throw new BadRequestError('Email address must be valid.');
+  if (data.employerHrEmail !== undefined) {
+    data.employerHrEmail = typeof data.employerHrEmail === 'string' ? data.employerHrEmail.trim().toLowerCase() || null : data.employerHrEmail;
+    if (data.employerHrEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.employerHrEmail)) {
+      throw new BadRequestError('Enter a valid employer HR email address.');
+    }
+  }
   for (const dateField of ['dateOfBirth', 'joiningDate']) {
     if (data[dateField] === '') {
       data[dateField] = null;

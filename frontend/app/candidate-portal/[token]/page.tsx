@@ -71,6 +71,7 @@ type EmploymentRecord = {
   workLocation: string | null;
   employerHrName?: string | null;
   employerHrPhone?: string | null;
+  employerHrEmail?: string | null;
 };
 type PastEmploymentForm = {
   id: string;
@@ -84,6 +85,7 @@ type PastEmploymentForm = {
   workLocation: string;
   employerHrName: string;
   employerHrPhone: string;
+  employerHrEmail: string;
 };
 type EducationRecord = {
   id: string;
@@ -246,6 +248,7 @@ const EMPLOYMENT_FIELDS: FieldDef[] = [
   { key: 'workLocation', label: 'Work location' },
   { key: 'employerHrName', label: 'Employer HR contact name' },
   { key: 'employerHrPhone', label: 'Employer HR contact number', type: 'tel', validate: (value) => (/^[+()\-\s\d]{7,18}$/.test(value) ? null : 'Enter a valid HR contact number.') },
+  { key: 'employerHrEmail', label: 'Employer HR email', type: 'email', validate: (value) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? null : 'Enter a valid HR email address.') },
 ];
 const CURRENT_EMPLOYMENT_FIELD_KEYS = new Set(EMPLOYMENT_FIELDS.map((field) => field.key));
 const PAST_EMPLOYMENT_FIELDS: FieldDef[] = [
@@ -259,11 +262,12 @@ const PAST_EMPLOYMENT_FIELDS: FieldDef[] = [
   { key: 'workLocation', label: 'Work location' },
   { key: 'employerHrName', label: 'Employer HR contact name' },
   { key: 'employerHrPhone', label: 'Employer HR contact number', type: 'tel', validate: (value) => (/^[+()\-\s\d]{7,18}$/.test(value) ? null : 'Enter a valid HR contact number.') },
+  { key: 'employerHrEmail', label: 'Employer HR email', type: 'email', validate: (value) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? null : 'Enter a valid HR email address.') },
 ];
 const CURRENT_EMPLOYMENT_RECORD_ID = 'employment-current';
 const emptyPastEmployment = (): PastEmploymentForm => ({
   id: `employment-past-${crypto.randomUUID()}`,
-  employerName: '', employeeId: '', designation: '', department: '', employmentType: '', startDate: '', endDate: '', workLocation: '', employerHrName: '', employerHrPhone: '',
+  employerName: '', employeeId: '', designation: '', department: '', employmentType: '', startDate: '', endDate: '', workLocation: '', employerHrName: '', employerHrPhone: '', employerHrEmail: '',
 });
 const hasPastEmploymentDetails = (record: PastEmploymentForm) =>
   Object.entries(record).some(([key, value]) => key !== 'id' && value.trim() !== '');
@@ -313,6 +317,7 @@ const toPastEmploymentForms = (records: EmploymentRecord[] = []): PastEmployment
     workLocation: record.workLocation ?? '',
     employerHrName: record.employerHrName ?? '',
     employerHrPhone: record.employerHrPhone ?? '',
+    employerHrEmail: record.employerHrEmail ?? '',
   }));
   return pastRecords.length ? pastRecords : [emptyPastEmployment()];
 };
@@ -1049,7 +1054,14 @@ export default function CandidatePortalPage() {
     joiningDate: 'startDate',
   }[key] ?? key) as CandidateFormRequiredFieldKey, []);
   const educationRecordFields = EDUCATION_RECORD_FIELDS.map((field) => configuredField(field));
-  const pastEmploymentFields = PAST_EMPLOYMENT_FIELDS.map((field) => configuredField(field));
+  const configuredEmploymentField = useCallback((field: FieldDef, employerType: 'current' | 'past'): FieldDef => {
+    const key = employerType === 'current' ? employmentRequirementKey(field.key) : field.key;
+    return {
+      ...field,
+      required: candidateFormConfig.employmentFieldRequirements?.[employerType]?.[key as keyof CandidateFormConfig['employmentFieldRequirements']['current']] ?? false,
+    };
+  }, [candidateFormConfig.employmentFieldRequirements, employmentRequirementKey]);
+  const pastEmploymentFields = PAST_EMPLOYMENT_FIELDS.map((field) => configuredEmploymentField(field, 'past'));
   const customForms = candidateFormConfig.customForms ?? [];
   const identityConfigFor = (key: string) => candidateFormConfig[key as CandidateIdentityFieldKey];
   const isCategoryRequested = (category: CandidateCustomForm['category']) => {
@@ -1114,10 +1126,10 @@ export default function CandidatePortalPage() {
     employment: EMPLOYMENT_FIELDS
       .filter((field) => candidateFormConfig.currentEmploymentEnabled || !CURRENT_EMPLOYMENT_FIELD_KEYS.has(field.key))
       .map((field) => {
-        const configured = configuredField(field, employmentRequirementKey(field.key));
+        const configured = configuredEmploymentField(field, 'current');
         return form.isFresher === 'true' ? { ...configured, required: false } : configured;
       }),
-  }), [candidateFormConfig, configuredField, employmentRequirementKey, form.isFresher, form.maritalStatus]);
+  }), [candidateFormConfig, configuredField, configuredEmploymentField, form.isFresher, form.maritalStatus]);
 
   const dirtyBySection = useMemo(() => {
     const result = {} as Record<SectionKey, boolean>;
@@ -1409,6 +1421,7 @@ export default function CandidatePortalPage() {
         workLocation: form.workLocation?.trim() || null,
         employerHrName: form.employerHrName?.trim() || null,
         employerHrPhone: form.employerHrPhone?.trim() || null,
+        employerHrEmail: form.employerHrEmail?.trim().toLowerCase() || null,
       };
       const pastRecords = pastEmployments
         .filter((record) => hasPastEmploymentDetails(record)
@@ -1533,6 +1546,7 @@ export default function CandidatePortalPage() {
           workLocation: form.workLocation?.trim() || null,
           employerHrName: form.employerHrName?.trim() || null,
           employerHrPhone: form.employerHrPhone?.trim() || null,
+          employerHrEmail: form.employerHrEmail?.trim().toLowerCase() || null,
         }, ...pastEmployments
           .filter((record) => hasPastEmploymentDetails(record)
             || employmentDocuments.some((document) => document.documentNumber === record.id))
@@ -2537,6 +2551,7 @@ export default function CandidatePortalPage() {
                         workLocation: form.workLocation,
                         employerHrName: form.employerHrName,
                         employerHrPhone: form.employerHrPhone,
+                        employerHrEmail: form.employerHrEmail,
                       }] : []),
                       ...(form.isFresher === 'true' ? [] : pastEmployments.filter((record) => hasPastEmploymentDetails(record)
                         || employmentDocuments.some((document) => document.documentNumber === record.id)).map((record, index) => ({
@@ -2548,16 +2563,17 @@ export default function CandidatePortalPage() {
                       <dl key={`review-employment-${index}`} className="mb-3 grid gap-3 rounded-xl border border-slate-200 p-4 sm:grid-cols-2">
                         <div className="sm:col-span-2"><h4 className="text-sm font-medium text-slate-800">{record.title}</h4></div>
                         {[
-                          { key: 'employerName', label: 'Employer', value: record.employerName, required: !record.isCurrent && form.isFresher !== 'true' && candidateFormConfig.fields.employerName.required },
-                          { key: 'employeeId', label: 'Employee ID', value: record.employeeId, required: !record.isCurrent && form.isFresher !== 'true' && candidateFormConfig.fields.employeeId.required },
-                          { key: 'designation', label: 'Designation', value: record.designation, required: !record.isCurrent && form.isFresher !== 'true' && candidateFormConfig.fields.designation.required },
-                          { key: 'department', label: 'Department', value: record.department, required: !record.isCurrent && form.isFresher !== 'true' && candidateFormConfig.fields.department.required },
-                          { key: 'employmentType', label: 'Employment type', value: record.employmentType ? humanize(record.employmentType) : '', required: !record.isCurrent && form.isFresher !== 'true' && candidateFormConfig.fields.employmentType.required },
-                          { key: 'startDate', label: 'Start date', value: record.startDate ? formatDate(record.startDate) : '', required: !record.isCurrent && form.isFresher !== 'true' && candidateFormConfig.fields.startDate.required },
-                          { key: 'endDate', label: 'End date', value: record.isCurrent || !record.endDate ? '' : formatDate(record.endDate), required: !record.isCurrent && form.isFresher !== 'true' && candidateFormConfig.fields.endDate.required },
-                          { key: 'workLocation', label: 'Work location', value: record.workLocation, required: !record.isCurrent && form.isFresher !== 'true' && candidateFormConfig.fields.workLocation.required },
-                          { key: 'employerHrName', label: 'Employer HR contact name', value: record.employerHrName, required: !record.isCurrent && form.isFresher !== 'true' && candidateFormConfig.fields.employerHrName.required },
-                          { key: 'employerHrPhone', label: 'Employer HR contact number', value: record.employerHrPhone, required: !record.isCurrent && form.isFresher !== 'true' && candidateFormConfig.fields.employerHrPhone.required },
+                          { key: 'employerName', label: 'Employer', value: record.employerName, required: form.isFresher !== 'true' && (!record.isCurrent ? candidateFormConfig.employmentFieldRequirements.past.employerName : candidateFormConfig.employmentFieldRequirements.current.employerName) },
+                          { key: 'employeeId', label: 'Employee ID', value: record.employeeId, required: form.isFresher !== 'true' && (!record.isCurrent ? candidateFormConfig.employmentFieldRequirements.past.employeeId : candidateFormConfig.employmentFieldRequirements.current.employeeId) },
+                          { key: 'designation', label: 'Designation', value: record.designation, required: form.isFresher !== 'true' && (!record.isCurrent ? candidateFormConfig.employmentFieldRequirements.past.designation : candidateFormConfig.employmentFieldRequirements.current.designation) },
+                          { key: 'department', label: 'Department', value: record.department, required: form.isFresher !== 'true' && (!record.isCurrent ? candidateFormConfig.employmentFieldRequirements.past.department : candidateFormConfig.employmentFieldRequirements.current.department) },
+                          { key: 'employmentType', label: 'Employment type', value: record.employmentType ? humanize(record.employmentType) : '', required: form.isFresher !== 'true' && (!record.isCurrent ? candidateFormConfig.employmentFieldRequirements.past.employmentType : candidateFormConfig.employmentFieldRequirements.current.employmentType) },
+                          { key: 'startDate', label: 'Start date', value: record.startDate ? formatDate(record.startDate) : '', required: form.isFresher !== 'true' && (!record.isCurrent ? candidateFormConfig.employmentFieldRequirements.past.startDate : candidateFormConfig.employmentFieldRequirements.current.startDate) },
+                          { key: 'endDate', label: 'End date', value: record.isCurrent || !record.endDate ? '' : formatDate(record.endDate), required: !record.isCurrent && candidateFormConfig.employmentFieldRequirements.past.endDate },
+                          { key: 'workLocation', label: 'Work location', value: record.workLocation, required: form.isFresher !== 'true' && (!record.isCurrent ? candidateFormConfig.employmentFieldRequirements.past.workLocation : candidateFormConfig.employmentFieldRequirements.current.workLocation) },
+                          { key: 'employerHrName', label: 'Employer HR contact name', value: record.employerHrName, required: form.isFresher !== 'true' && (!record.isCurrent ? candidateFormConfig.employmentFieldRequirements.past.employerHrName : candidateFormConfig.employmentFieldRequirements.current.employerHrName) },
+                          { key: 'employerHrPhone', label: 'Employer HR contact number', value: record.employerHrPhone, required: form.isFresher !== 'true' && (!record.isCurrent ? candidateFormConfig.employmentFieldRequirements.past.employerHrPhone : candidateFormConfig.employmentFieldRequirements.current.employerHrPhone) },
+                          { key: 'employerHrEmail', label: 'Employer HR email', value: record.employerHrEmail, required: form.isFresher !== 'true' && (!record.isCurrent ? candidateFormConfig.employmentFieldRequirements.past.employerHrEmail : candidateFormConfig.employmentFieldRequirements.current.employerHrEmail) },
                         ].map(({ key, label, value, required }) => (
                           <div key={key}>
                             <dt className="text-xs font-medium text-slate-500">{label}{required && <span className="ml-1 font-bold text-red-600" aria-hidden="true">*</span>}</dt>

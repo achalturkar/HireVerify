@@ -21,7 +21,7 @@ import ClientAnalyticsPanel from '@/src/components/layout/company/client/ClientA
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
 import { CANDIDATE_ADDRESS_DOCUMENT_TYPES, CANDIDATE_EDUCATION_DOCUMENT_TYPES, CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES, CANDIDATE_FORM_REQUIRED_FIELD_GROUPS, CANDIDATE_FORM_SECTION_OPTIONS, CANDIDATE_IDENTITY_FIELDS, DEFAULT_CANDIDATE_FORM_CONFIG } from '@/src/types/client';
 import { setClientPortalScope } from '@/src/lib/api/client-portal';
-import type { CandidateCustomForm, CandidateCustomFormCategory, CandidateFormConfig, CandidateFormRequiredFieldKey, CandidateIdentityFieldKey, Client, ClientFormValues, ClientPortalAccountMethod, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
+import type { CandidateCustomForm, CandidateCustomFormCategory, CandidateEmploymentFieldKey, CandidateFormConfig, CandidateFormRequiredFieldKey, CandidateIdentityFieldKey, Client, ClientFormValues, ClientPortalAccountMethod, ClientPortalPermission, ClientPortalUser } from '@/src/types/client';
 import type { Candidate, CandidateFormValues, CandidateStatus, PaginationMeta } from '@/src/types/candidate';
 
 const PAGE_SIZE = 10;
@@ -364,6 +364,17 @@ export default function ClientDetailPage() {
     setCandidateFormConfig((current) => ({
       ...current,
       fields: { ...current.fields, [key]: { required } },
+    }));
+  };
+
+  const updateEmploymentFieldRequirement = (employerType: 'current' | 'past', key: CandidateEmploymentFieldKey, required: boolean) => {
+    setCandidateFormSaved(false);
+    setCandidateFormConfig((current) => ({
+      ...current,
+      employmentFieldRequirements: {
+        ...current.employmentFieldRequirements,
+        [employerType]: { ...current.employmentFieldRequirements[employerType], [key]: required },
+      },
     }));
   };
 
@@ -1571,7 +1582,10 @@ export default function ClientDetailPage() {
                   ]} />}
                   {selectedPreviewTab === 'employment' && <CandidateFormPreviewFields title="Employment details and upload types" fields={[
                     `Maximum of ${candidateFormConfig.maxPastEmploymentRecords} past employer records`,
-                    ...candidateRequiredFieldsFor('employment').map((field) => `${field.label}${candidateFormConfig.fields[field.key]?.required ? ' *' : ''}`),
+                    'Current employer:',
+                    ...candidateRequiredFieldsFor('employment').filter((field) => field.key !== 'endDate').map((field) => `${field.label}${candidateFormConfig.employmentFieldRequirements.current[field.key as CandidateEmploymentFieldKey] ? ' *' : ''}`),
+                    'Past employers:',
+                    ...candidateRequiredFieldsFor('employment').map((field) => `${field.label}${candidateFormConfig.employmentFieldRequirements.past[field.key as CandidateEmploymentFieldKey] ? ' *' : ''}`),
                     ...employmentDocs.map((document) =>
                       `${CANDIDATE_EMPLOYMENT_DOCUMENT_TYPES.find((item) => item.type === document.type)?.label ?? document.type}${document.required ? ` · required for the first ${candidateFormConfig.requiredEmploymentEmployerCount} ${candidateFormConfig.includeCurrentEmployerInDocumentRequirements ? 'employers (including current)' : 'past employers'}` : ''}`,
                     ),
@@ -1615,7 +1629,7 @@ export default function ClientDetailPage() {
               <span className="shrink-0 text-[11px] font-medium text-[var(--muted)]"><span className="font-bold text-red-600">*</span> Required</span>
             </div>
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              {CANDIDATE_FORM_REQUIRED_FIELD_GROUPS.map((group) => {
+              {CANDIDATE_FORM_REQUIRED_FIELD_GROUPS.filter((group) => group.key !== 'employment').map((group) => {
                 const enabled = group.key === 'details' || candidateFormConfig.sections[group.key as keyof CandidateFormConfig['sections']].enabled;
                 return (
                   <section key={group.key} className={`rounded-xl border border-[var(--border)] p-3 ${enabled ? 'bg-[var(--surface)]' : 'bg-[var(--surface-muted)] opacity-60'}`}>
@@ -1638,6 +1652,34 @@ export default function ClientDetailPage() {
                 );
               })}
             </div>
+            <section className="mt-4 rounded-xl border border-[var(--border)] p-3">
+              <h4 className="text-[12px] font-semibold">Employment field requirements</h4>
+              <p className="mt-1 text-[11px] text-[var(--muted)]">Set required fields independently for current and past employers.</p>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                {(['current', 'past'] as const).map((employerType) => (
+                  <fieldset key={employerType} disabled={!canManageAccess || candidateFormSaving || !candidateFormConfig.sections.employment.enabled}
+                    className="rounded-lg border border-[var(--border)] p-3 disabled:opacity-60">
+                    <legend className="px-1 text-[11px] font-semibold">{employerType === 'current' ? 'Current employer' : 'Past employer'}</legend>
+                    <div className="space-y-1">
+                      {candidateRequiredFieldsFor('employment').filter((field) => employerType !== 'current' || field.key !== 'endDate').map((field) => {
+                        const required = candidateFormConfig.employmentFieldRequirements[employerType][field.key as CandidateEmploymentFieldKey];
+                        return (
+                          <label key={field.key} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-[11px] hover:bg-[var(--surface-muted)]">
+                            <span className="font-medium">{field.label}{required && <span className="ml-1 font-bold text-red-600" aria-hidden="true">*</span>}</span>
+                            <span className="flex shrink-0 items-center gap-2">
+                              <span className="text-[var(--muted)]">{required ? 'Required' : 'Optional'}</span>
+                              <input type="checkbox" aria-label={`${employerType} ${field.label} required`} checked={required}
+                                onChange={(event) => updateEmploymentFieldRequirement(employerType, field.key as CandidateEmploymentFieldKey, event.target.checked)}
+                                className="h-4 w-4 accent-[var(--primary)]" />
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                ))}
+              </div>
+            </section>
           </section>
           <div id="candidate-address-settings" className="mt-5 scroll-mt-24 rounded-xl border border-[var(--border)] p-4">
             <h3 className="text-[13px] font-semibold">Address details and verification</h3>

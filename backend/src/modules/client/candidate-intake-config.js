@@ -109,7 +109,12 @@ const CANDIDATE_FORM_REQUIRED_FIELDS = {
   workLocation: false,
   employerHrName: false,
   employerHrPhone: false,
+  employerHrEmail: false,
 };
+const EMPLOYMENT_FIELD_KEYS = [
+  'employerName', 'employeeId', 'designation', 'department', 'employmentType',
+  'startDate', 'endDate', 'workLocation', 'employerHrName', 'employerHrPhone', 'employerHrEmail',
+];
 const DEFAULT_SECTION_CONFIG = Object.fromEntries(
   CANDIDATE_FORM_SECTIONS.map((key) => [key, { enabled: key !== 'policeVerification' }]),
 );
@@ -159,6 +164,18 @@ const normalizeConfig = (value) => {
   const fields = Object.fromEntries(Object.entries(CANDIDATE_FORM_REQUIRED_FIELDS).map(([key, defaultRequired]) => {
     const field = sourceFields[key] && typeof sourceFields[key] === 'object' ? sourceFields[key] : {};
     return [key, { required: typeof field.required === 'boolean' ? field.required : defaultRequired }];
+  }));
+  const sourceEmploymentRequirements = source.employmentFieldRequirements && typeof source.employmentFieldRequirements === 'object'
+    && !Array.isArray(source.employmentFieldRequirements) ? source.employmentFieldRequirements : {};
+  const employmentFieldRequirements = Object.fromEntries(['current', 'past'].map((employerType) => {
+    const sourceRequirements = sourceEmploymentRequirements[employerType] && typeof sourceEmploymentRequirements[employerType] === 'object'
+      && !Array.isArray(sourceEmploymentRequirements[employerType]) ? sourceEmploymentRequirements[employerType] : {};
+    return [employerType, Object.fromEntries(EMPLOYMENT_FIELD_KEYS.map((key) => [
+      key,
+      employerType === 'current' && key === 'endDate'
+        ? false
+        : typeof sourceRequirements[key] === 'boolean' ? sourceRequirements[key] : fields[key]?.required ?? false,
+    ]))];
   }));
   const identities = Object.fromEntries(IDENTITY_FIELDS.map(({ key }) => {
     const field = source[key] && typeof source[key] === 'object' ? source[key] : {};
@@ -233,6 +250,7 @@ const normalizeConfig = (value) => {
     ...identities,
     invitationExpiryDays,
     fields,
+    employmentFieldRequirements,
     sections,
     address,
     customForms,
@@ -250,7 +268,7 @@ const validateConfig = (value, clientId) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new BadRequestError('Candidate form configuration must be an object.');
   }
-  const allowedKeys = new Set([...IDENTITY_FIELDS.map(({ key }) => key), 'invitationExpiryDays', 'fields', 'sections', 'address', 'customForms', 'employmentDocuments', 'currentEmploymentEnabled', 'maxPastEmploymentRecords', 'requireEmploymentDocumentPerEmployer', 'requiredEmploymentEmployerCount', 'includeCurrentEmployerInDocumentRequirements', 'educationDocuments']);
+  const allowedKeys = new Set([...IDENTITY_FIELDS.map(({ key }) => key), 'invitationExpiryDays', 'fields', 'employmentFieldRequirements', 'sections', 'address', 'customForms', 'employmentDocuments', 'currentEmploymentEnabled', 'maxPastEmploymentRecords', 'requireEmploymentDocumentPerEmployer', 'requiredEmploymentEmployerCount', 'includeCurrentEmployerInDocumentRequirements', 'educationDocuments']);
   for (const [key, field] of Object.entries(value)) {
     if (key === 'invitationExpiryDays') {
       if (!Number.isInteger(field) || field < 1 || field > 30) {
@@ -310,6 +328,20 @@ const validateConfig = (value, clientId) => {
           || typeof requirement.required !== 'boolean'
           || Object.keys(requirement).some((property) => property !== 'required')) {
           throw new BadRequestError(`Invalid required setting for candidate field: ${fieldKey}.`);
+        }
+      }
+      continue;
+    }
+    if (key === 'employmentFieldRequirements') {
+      if (!field || typeof field !== 'object' || Array.isArray(field)
+        || Object.keys(field).some((employerType) => !['current', 'past'].includes(employerType))) {
+        throw new BadRequestError('Current and past employment field requirements must be an object.');
+      }
+      for (const [employerType, requirements] of Object.entries(field)) {
+        if (!requirements || typeof requirements !== 'object' || Array.isArray(requirements)
+          || Object.keys(requirements).some((fieldKey) => !EMPLOYMENT_FIELD_KEYS.includes(fieldKey))
+          || Object.values(requirements).some((required) => typeof required !== 'boolean')) {
+          throw new BadRequestError(`Invalid required fields for ${employerType} employment.`);
         }
       }
       continue;

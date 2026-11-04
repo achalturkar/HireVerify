@@ -457,6 +457,7 @@ model Candidate {
   currentEmployer     String?   @map("current_employer") @db.VarChar(255)
   employerHrName      String?   @map("employer_hr_name") @db.VarChar(255)
   employerHrPhone     String?   @map("employer_hr_phone") @db.VarChar(50)
+  employerHrEmail     String?   @map("employer_hr_email") @db.VarChar(255)
   employmentHistory   Json      @default("[]") @map("employment_history")
 
   currentAddress   String? @map("current_address")

@@ -352,6 +352,7 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
                     <ReadonlyField label="Work location" value={record.workLocation} />
                     <ReadonlyField label="Employer HR contact name" value={record.employerHrName} />
                     <ReadonlyField label="Employer HR contact number" value={record.employerHrPhone} />
+                    <ReadonlyField label="Employer HR email" value={record.employerHrEmail} />
                   </div>}
                   <div className="mt-4">{renderDocuments(record.id ? documents.filter((document) => document.documentNumber === record.id) : documentsFor(['SALARY_SLIP', 'EXPERIENCE_LETTER']), 'No documents uploaded for this employment record.')}</div>
                 </div>
@@ -369,6 +370,7 @@ export default function CandidatePortalPreview({ candidate }: { candidate: Previ
                 <ReadonlyField label="Work location" value={candidate.workLocation} />
                 <ReadonlyField label="Employer HR contact name" value={candidate.employerHrName} />
                 <ReadonlyField label="Employer HR contact number" value={candidate.employerHrPhone} />
+                <ReadonlyField label="Employer HR email" value={candidate.employerHrEmail} />
               </div>
               : <p className="text-sm text-slate-500">No past employment details submitted.</p>
           )}

@@ -109,6 +109,7 @@ export interface PortalCandidateDetail extends PortalCandidate {
   currentEmployer: string | null;
   employerHrName: string | null;
   employerHrPhone: string | null;
+  employerHrEmail: string | null;
   addressVerificationLocations: ('current' | 'permanent')[];
   employmentHistory: {
     isCurrent: boolean;
@@ -123,6 +124,7 @@ export interface PortalCandidateDetail extends PortalCandidate {
     workLocation: string | null;
     employerHrName: string | null;
     employerHrPhone: string | null;
+    employerHrEmail: string | null;
   }[];
   currentAddress: string | null;
   permanentAddress: string | null;

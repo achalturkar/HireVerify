@@ -42,6 +42,7 @@ export interface CandidateEmploymentRecord {
   workLocation: string | null;
   employerHrName?: string | null;
   employerHrPhone?: string | null;
+  employerHrEmail?: string | null;
 }
 
 export interface CandidateEducationRecord {
@@ -106,6 +107,7 @@ export interface Candidate {
   currentEmployer?: string | null;
   employerHrName?: string | null;
   employerHrPhone?: string | null;
+  employerHrEmail?: string | null;
   educationHistory?: CandidateEducationRecord[];
   employmentHistory?: CandidateEmploymentRecord[];
   currentAddress?: string | null;

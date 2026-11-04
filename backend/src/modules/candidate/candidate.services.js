@@ -79,6 +79,7 @@ const toDto = (candidate) => ({
   currentEmployer: candidate.currentEmployer,
   employerHrName: candidate.employerHrName,
   employerHrPhone: candidate.employerHrPhone,
+  employerHrEmail: candidate.employerHrEmail,
   employmentHistory: candidate.employmentHistory || [],
   currentAddress: candidate.currentAddress,
   permanentAddress: candidate.permanentAddress,
@@ -188,6 +189,7 @@ const create = async ({ payload, companyId, currentUser }) => {
     currentEmployer: payload.currentEmployer || null,
     employerHrName: payload.employerHrName || null,
     employerHrPhone: payload.employerHrPhone || null,
+    employerHrEmail: payload.employerHrEmail?.trim().toLowerCase() || null,
     currentAddress: payload.currentAddress || null,
     permanentAddress: payload.permanentAddress || null,
     status: 'PENDING',
@@ -275,7 +277,7 @@ const update = async ({ id, companyId, payload, currentUser }) => {
 
   const data = {};
   if (hasCandidateName(payload)) Object.assign(data, normalizeCandidateName(payload, existing));
-  ['clientId', 'subclientId', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount', 'candidateNotes', 'companyRemark', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'currentAddress', 'permanentAddress', 'status']
+  ['clientId', 'subclientId', 'email', 'phone', 'dateOfBirth', 'gender', 'fatherName', 'motherName', 'maritalStatus', 'spouseName', 'childrenCount', 'candidateNotes', 'companyRemark', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber', 'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate', 'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'employerHrEmail', 'currentAddress', 'permanentAddress', 'status']
     .forEach((field) => {
       if (payload[field] !== undefined) {
         if (field === 'clientId' && !payload[field]) return;
@@ -285,6 +287,8 @@ const update = async ({ id, companyId, payload, currentUser }) => {
           ? normalizeIdentityValue(field, payload[field]) || null
           : field === 'email'
           ? (payload[field]?.trim().toLowerCase() || null)
+          : field === 'employerHrEmail'
+            ? (payload[field]?.trim().toLowerCase() || null)
           : ['dateOfBirth', 'joiningDate'].includes(field)
             ? normalizeDateOfBirth(payload[field])
             : payload[field];

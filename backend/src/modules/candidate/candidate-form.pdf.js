@@ -303,6 +303,7 @@ const createCandidateFormPdf = async (candidate) => {
     workLocation: candidate.workLocation,
     employerHrName: candidate.employerHrName,
     employerHrPhone: candidate.employerHrPhone,
+    employerHrEmail: candidate.employerHrEmail,
   };
   if (isFresher) addFields([['Candidate type', 'Fresher']]);
   [currentEmployment, ...(isFresher ? [] : employmentHistory.filter((record) => record && record.isCurrent !== true))].forEach((record, index) => {
@@ -318,10 +319,11 @@ const createCandidateFormPdf = async (candidate) => {
       ['Work location', record.workLocation],
       ['Employer HR contact name', record.employerHrName],
       ['Employer HR contact number', record.employerHrPhone],
+      ['Employer HR email', record.employerHrEmail],
     ]);
     addAdditionalFields(record, new Set([
       'id', 'isCurrent', 'isFresher', 'employerName', 'employeeId', 'designation', 'department',
-      'employmentType', 'startDate', 'endDate', 'workLocation', 'employerHrName', 'employerHrPhone',
+      'employmentType', 'startDate', 'endDate', 'workLocation', 'employerHrName', 'employerHrPhone', 'employerHrEmail',
     ]));
   });
 
@@ -352,7 +354,7 @@ const createCandidateFormPdf = async (candidate) => {
     'candidateNotes', 'aadhaarNumber', 'panNumber', 'uanNumber', 'passportNumber', 'drivingLicenseNumber', 'voterIdNumber',
     'highestQualification', 'courseName', 'institutionName', 'universityName', 'yearOfPassing', 'gradeOrPercentage',
     'educationHistory', 'employeeId', 'employeeDesignation', 'employeeDepartment', 'employmentType', 'joiningDate',
-    'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'employmentHistory', 'currentAddress',
+    'workLocation', 'currentEmployer', 'employerHrName', 'employerHrPhone', 'employerHrEmail', 'employmentHistory', 'currentAddress',
     'permanentAddress', 'addressVerificationLocations', 'status', 'isDeleted', 'deletedAt', 'createdById', 'updatedById',
     'createdAt', 'updatedAt', 'bgvCaseCount', 'portalLinkExpiryDays', 'client', 'company', 'subclient', 'documents',
     'consents', 'portalInvitation',

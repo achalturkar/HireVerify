@@ -121,13 +121,14 @@ const exportCandidates = asyncHandler(async (req, res) => {
     'Start Date': history.startDate || '',
     'End Date': history.endDate || '',
     'Work Location': history.workLocation || '',
+    'Employer HR email': history.employerHrEmail || '',
   })));
-  const employmentHeaders = ['Candidate ID', 'Candidate Code', 'Candidate Name', 'Current Employment', 'Employer Name', 'Employee ID', 'Designation', 'Department', 'Employment Type', 'Start Date', 'End Date', 'Work Location'];
+  const employmentHeaders = ['Candidate ID', 'Candidate Code', 'Candidate Name', 'Current Employment', 'Employer Name', 'Employee ID', 'Designation', 'Department', 'Employment Type', 'Start Date', 'End Date', 'Work Location', 'Employer HR email'];
   const employmentWorksheet = XLSX.utils.aoa_to_sheet([
     employmentHeaders,
     ...employmentRows.map((row) => employmentHeaders.map((header) => row[header])),
   ]);
-  employmentWorksheet['!cols'] = [{ wch: 38 }, { wch: 22 }, { wch: 30 }, ...Array(9).fill({ wch: 22 })];
+  employmentWorksheet['!cols'] = [{ wch: 38 }, { wch: 22 }, { wch: 30 }, ...Array(10).fill({ wch: 22 })];
   if (employmentWorksheet['!ref']) employmentWorksheet['!autofilter'] = { ref: employmentWorksheet['!ref'] };
   XLSX.utils.book_append_sheet(workbook, employmentWorksheet, 'Employment History');
   const documentRows = items.flatMap((item) => (item.documents || []).map((document) => ({

@@ -110,6 +110,7 @@ const candidateFields = {
   currentEmployer: Joi.string().max(200).allow(null, ''),
   employerHrName: Joi.string().max(255).allow(null, ''),
   employerHrPhone: Joi.string().max(50).allow(null, ''),
+  employerHrEmail: Joi.string().email().max(255).allow(null, ''),
   currentAddress: Joi.string().max(2000).allow(null, ''),
   permanentAddress: Joi.string().max(2000).allow(null, ''),
 };

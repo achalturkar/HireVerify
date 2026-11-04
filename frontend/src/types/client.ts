@@ -88,10 +88,16 @@ export const CANDIDATE_FORM_REQUIRED_FIELD_GROUPS = [
       { key: 'workLocation', label: 'Work location', defaultRequired: false },
       { key: 'employerHrName', label: 'Employer HR contact name', defaultRequired: false },
       { key: 'employerHrPhone', label: 'Employer HR contact number', defaultRequired: false },
+      { key: 'employerHrEmail', label: 'Employer HR email', defaultRequired: false },
     ],
   },
 ] as const;
 export type CandidateFormRequiredFieldKey = typeof CANDIDATE_FORM_REQUIRED_FIELD_GROUPS[number]['fields'][number]['key'];
+export type CandidateEmploymentFieldKey = typeof CANDIDATE_FORM_REQUIRED_FIELD_GROUPS[number] extends infer Group
+  ? Group extends { key: 'employment'; fields: readonly (infer Field)[] }
+    ? Field extends { key: infer Key } ? Key : never
+    : never
+  : never;
 export const CANDIDATE_ADDRESS_DOCUMENT_TYPES = [
   { type: 'ADDRESS_PROOF', label: 'Address proof' },
   { type: 'AADHAAR', label: 'Aadhaar card (address proof)' },
@@ -176,6 +182,7 @@ export type CandidateFormConfig = Record<CandidateIdentityFieldKey, {
 }> & {
   invitationExpiryDays: number;
   fields: Record<CandidateFormRequiredFieldKey, { required: boolean }>;
+  employmentFieldRequirements: Record<'current' | 'past', Record<CandidateEmploymentFieldKey, boolean>>;
   sections: Record<CandidateFormSectionKey, { enabled: boolean }>;
   address: {
     showVerificationLocationSelector: boolean;
@@ -202,6 +209,10 @@ export const DEFAULT_CANDIDATE_FORM_CONFIG: CandidateFormConfig = {
   fields: Object.fromEntries(CANDIDATE_FORM_REQUIRED_FIELD_GROUPS.flatMap((group) =>
     group.fields.map((field) => [field.key, { required: field.defaultRequired }]),
   )) as CandidateFormConfig['fields'],
+  employmentFieldRequirements: {
+    current: Object.fromEntries(CANDIDATE_FORM_REQUIRED_FIELD_GROUPS.find((group) => group.key === 'employment')!.fields.map(({ key }) => [key, false])) as CandidateFormConfig['employmentFieldRequirements']['current'],
+    past: Object.fromEntries(CANDIDATE_FORM_REQUIRED_FIELD_GROUPS.find((group) => group.key === 'employment')!.fields.map(({ key }) => [key, false])) as CandidateFormConfig['employmentFieldRequirements']['past'],
+  },
   aadhaarNumber: { enabled: true, required: false, documentRequired: false },
   panNumber: { enabled: true, required: false, documentRequired: false },
   uanNumber: { enabled: true, required: false, documentRequired: false },
