@@ -7,6 +7,7 @@ import { useAuth } from '@/src/auth/AuthProvider';
 import { listClients, listSubclients } from '@/src/lib/api/clients';
 import { getVerificationStatus } from '@/src/lib/verification-status';
 import { formatCandidateName } from '@/src/lib/candidate-name';
+import { bgvCaseStatusClass, bgvCaseStatusLabel } from '@/src/lib/bgv-case-status';
 import { createBGVCase, downloadBGVReport, exportBGVCases, getBGVCase, listBGVCases, transitionBGVCase, updateBGVCaseChecks, updateBGVCaseMeta, ApiError } from '@/src/lib/api/bgv';
 import BGVCaseWizardModal from '@/src/components/layout/company/bgv/BGVCaseWizardModal';
 import type { BGVCase, BGVCaseStatus } from '@/src/types/bgv';
@@ -309,11 +310,11 @@ export default function BGVCaseListPage() {
         <select
           value={status}
           onChange={(event) => { setPage(1); setStatus(event.target.value as BGVCaseStatus | ''); }}
-          className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px]"
+          className={`rounded-lg border px-3 py-2.5 text-[13px] font-medium ${status ? bgvCaseStatusClass(status) : 'border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)]'}`}
         >
           <option value="">All statuses</option>
           {statuses.map((value) => (
-            <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>
+          <option key={value} value={value}>{bgvCaseStatusLabel(value)}</option>
           ))}
         </select>
         <select
@@ -391,8 +392,9 @@ export default function BGVCaseListPage() {
                       })()}
                     </td>
                     <td className="px-5 py-4">
-                      <span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[11px]">
-                        {item.status.replaceAll('_', ' ')}
+                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${bgvCaseStatusClass(item.status)}`}>
+                        <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+                        {bgvCaseStatusLabel(item.status)}
                       </span>
                     </td>
                     <td className="px-5 py-4">

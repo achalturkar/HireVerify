@@ -335,13 +335,7 @@ const orderedChecks = (checks) => checks
     return (leftOrder === -1 ? REPORT_CHECK_ORDER.length : leftOrder)
       - (rightOrder === -1 ? REPORT_CHECK_ORDER.length : rightOrder) || left.index - right.index;
   })
-  .map(({ check }) => check)
-  .filter((check) => !(check.type === 'EMPLOYMENT'
-    && check.status === 'PENDING'
-    && check.result === 'PENDING'
-    && !check.resultData
-    && !check.remarks
-    && !check.documents?.length));
+  .map(({ check }) => check);
 
 const overallVerificationStatus = (checks, fallback) => {
   const statuses = checks.map((check) => reportStatus(checkStatus(check)));

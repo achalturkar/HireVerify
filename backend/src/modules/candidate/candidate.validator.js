@@ -2,7 +2,7 @@
 
 const Joi = require('joi');
 
-const STATUSES = ['PENDING', 'INVITED', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'ON_HOLD'];
+const STATUSES = ['PENDING', 'INVITED', 'IN_PROGRESS', 'DETAILS_SUBMITTED', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'CANCELLED', 'ON_HOLD'];
 
 const createValidator = {
   body: Joi.object({

@@ -84,7 +84,7 @@ const toDto = (candidate) => ({
   currentAddress: candidate.currentAddress,
   permanentAddress: candidate.permanentAddress,
   addressVerificationLocations: candidate.addressVerificationLocations || [],
-  status: candidate.status,
+  status: candidatePortalService.getCandidateIntakeStatus(candidate),
   createdById: candidate.createdById,
   updatedById: candidate.updatedById,
   createdAt: candidate.createdAt,
@@ -212,14 +212,15 @@ const buildFormPdf = async ({ id, companyId, clientId }) => {
 };
 
 const list = async ({ companyId, query }) => {
+  const derivedStatusFilter = ['IN_PROGRESS', 'DETAILS_SUBMITTED'].includes(query.status);
   const result = await repo.list({
     companyId,
-    skip: query.skip,
-    limit: query.limit,
+    skip: derivedStatusFilter ? 0 : query.skip,
+    limit: derivedStatusFilter ? undefined : query.limit,
     search: query.search,
     clientId: query.clientId,
     subclientId: query.subclientId,
-    status: query.status,
+    status: derivedStatusFilter ? ['INVITED', 'IN_PROGRESS', 'DETAILS_SUBMITTED'] : query.status,
     dateFrom: query.dateFrom,
     dateTo: query.dateTo,
     sortBy: ['candidateCode', 'firstName', 'lastName', 'email', 'status', 'createdAt', 'updatedAt'].includes(query.sortBy)
@@ -229,29 +230,53 @@ const list = async ({ companyId, query }) => {
     includeDeleted: query.includeDeleted === 'true',
   });
 
+  const items = result.items.map((candidate) => toDto({
+    ...candidate,
+    status: candidatePortalService.getCandidateIntakeStatus(candidate),
+  }));
+  const matchingItems = derivedStatusFilter
+    ? items.filter((candidate) => candidate.status === query.status)
+    : items;
+
   return {
-    items: result.items.map((candidate) => toDto({
-      ...candidate,
-      status: candidatePortalService.getCandidateIntakeStatus(candidate),
-    })),
-    total: result.total,
+    items: derivedStatusFilter
+      ? matchingItems.slice(query.skip, query.skip + query.limit)
+      : matchingItems,
+    total: derivedStatusFilter ? matchingItems.length : result.total,
   };
 };
 
-const listForExport = async ({ companyId, query }) => repo.listForExport({
-  companyId,
-  candidateId: query.candidateId,
-  search: query.search,
-  clientId: query.clientId,
-  subclientId: query.subclientId,
-  status: query.status,
-  dateFrom: query.dateFrom,
-  dateTo: query.dateTo,
-  sortBy: ['candidateCode', 'firstName', 'lastName', 'email', 'status', 'createdAt', 'updatedAt'].includes(query.sortBy)
-    ? query.sortBy
-    : 'createdAt',
-  sortOrder: ['asc', 'desc'].includes(query.sortOrder) ? query.sortOrder : 'desc',
-});
+const listForExport = async ({ companyId, query }) => {
+  const derivedStatusFilter = ['IN_PROGRESS', 'DETAILS_SUBMITTED'].includes(query.status);
+  const candidates = await repo.listForExport({
+    companyId,
+    candidateId: query.candidateId,
+    search: query.search,
+    clientId: query.clientId,
+    subclientId: query.subclientId,
+    status: derivedStatusFilter ? ['IN_PROGRESS', 'DETAILS_SUBMITTED', 'INVITED'] : query.status,
+    dateFrom: query.dateFrom,
+    dateTo: query.dateTo,
+    sortBy: ['candidateCode', 'firstName', 'lastName', 'email', 'status', 'createdAt', 'updatedAt'].includes(query.sortBy)
+      ? query.sortBy
+      : 'createdAt',
+    sortOrder: ['asc', 'desc'].includes(query.sortOrder) ? query.sortOrder : 'desc',
+  });
+  const matchingCandidates = candidates.filter((candidate) =>
+    !derivedStatusFilter || candidatePortalService.getCandidateIntakeStatus(candidate) === query.status,
+  );
+  return matchingCandidates.map((candidate) => {
+    const status = candidatePortalService.getCandidateIntakeStatus(candidate);
+    const { client, subclient, ...details } = candidate;
+    delete details.bgvCases;
+    return {
+      ...details,
+      status,
+      client: client ? { name: client.name } : null,
+      subclient: subclient ? { name: subclient.name } : null,
+    };
+  });
+};
 
 const update = async ({ id, companyId, payload, currentUser }) => {
   const existing = await repo.findById(id, companyId);
@@ -260,6 +285,13 @@ const update = async ({ id, companyId, payload, currentUser }) => {
     where: { candidateId: id, companyId, status: 'COMPLETED' },
     select: { id: true },
   });
+  if (payload.status === 'COMPLETED' && !completedCase) {
+    throw new BadRequestError('A candidate can be marked completed only after a BGV case is completed.');
+  }
+  if (payload.status === 'DETAILS_SUBMITTED'
+    && ((existing.bgvCases?.length || 0) > 0 || candidatePortalService.getCandidateProgress(existing).pendingCount > 0)) {
+    throw new BadRequestError('Candidate details can be marked submitted only after all required form details, documents, and consent are complete.');
+  }
   const isCompanyRemarkOnly = Object.keys(payload).length === 1 && Object.prototype.hasOwnProperty.call(payload, 'companyRemark');
   if (completedCase && !isCompanyRemarkOnly) throw new ConflictError('Candidate details cannot be changed after the BGV case is completed.');
 

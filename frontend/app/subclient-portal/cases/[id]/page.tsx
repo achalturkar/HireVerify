@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Download, FileCheck2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { downloadSubclientReport, getSubclientCase, type SubclientCaseDetail } from '@/src/lib/api/subclient-portal';
+import { bgvCaseStatusClass, bgvCaseStatusLabel } from '@/src/lib/bgv-case-status';
 
 export default function SubclientCasePage() {
   const params = useParams<{ id: string }>();
@@ -57,7 +58,7 @@ export default function SubclientCasePage() {
   return <div className="space-y-5">
     <Link href="/subclient-portal/cases" className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--primary)]"><ArrowLeft size={14} />All cases</Link>
     <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--primary)]">BGV case</p><h2 className="mt-1 font-mono text-xl font-semibold">{item.caseNumber}</h2><p className="mt-1 text-sm text-[var(--muted)]">{candidateName} · {item.candidate.candidateCode}</p></div><div className="flex items-center gap-2"><span className="rounded-full bg-[var(--surface-muted)] px-3 py-1.5 text-xs font-semibold">{item.status.replaceAll('_', ' ')}</span>{item.status === 'COMPLETED' && <button type="button" onClick={() => void downloadReport()} disabled={downloading} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-[var(--primary-foreground)] disabled:opacity-50">{downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}Report PDF</button>}</div></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--primary)]">BGV case</p><h2 className="mt-1 font-mono text-xl font-semibold">{item.caseNumber}</h2><p className="mt-1 text-sm text-[var(--muted)]">{candidateName} · {item.candidate.candidateCode}</p></div><div className="flex items-center gap-2"><span className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold ${bgvCaseStatusClass(item.status)}`}>{bgvCaseStatusLabel(item.status)}</span>{item.status === 'COMPLETED' && <button type="button" onClick={() => void downloadReport()} disabled={downloading} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-[var(--primary-foreground)] disabled:opacity-50">{downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}Report PDF</button>}</div></div>
     </section>
     {error && <p role="alert" className="rounded-lg bg-rose-500/10 p-3 text-sm text-rose-700">{error}</p>}
     <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">

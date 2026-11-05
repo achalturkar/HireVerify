@@ -567,6 +567,7 @@ const candidateSummary = (candidate) => ({
   email: candidate.email,
   phone: candidate.phone,
   status: candidate.status,
+  detailsSubmitted: candidate.intakeProgress?.pendingCount === 0,
   createdAt: candidate.createdAt,
   subclient: candidate.subclient
     ? { id: candidate.subclient.id, name: candidate.subclient.name, clientCode: candidate.subclient.clientCode }
@@ -649,7 +650,10 @@ const getCandidate = asyncHandler(async (req, res) => {
   });
   if (!candidate) throw new NotFoundError('Candidate not found.');
   const intakeProgress = candidatePortalService.getCandidateProgress(candidate);
-  const candidateData = { ...candidate };
+  const candidateData = {
+    ...candidate,
+    status: candidatePortalService.getCandidateIntakeStatus(candidate),
+  };
   delete candidateData.consents;
   const bgvCases = candidate.bgvCases.map(({ checks, consents, ...item }) => item);
   return success(res, {

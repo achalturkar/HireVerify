@@ -7,6 +7,7 @@ import { ArrowLeft, Download } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { ClientPortalApiError, downloadPortalReport, getPortalCase, hasPortalPermission, type PortalCaseDetail } from '@/src/lib/api/client-portal';
 import { formatCandidateName } from '@/src/lib/candidate-name';
+import { bgvCaseStatusClass, bgvCaseStatusLabel } from '@/src/lib/bgv-case-status';
 
 function dateLabel(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : '—';
@@ -77,7 +78,7 @@ export default function ClientPortalCasePage() {
         {caseData.status === 'COMPLETED' && canDownload && <button type="button" disabled={downloading} onClick={() => void downloadReport()} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-[var(--primary-foreground)] disabled:opacity-50"><Download size={14} />{downloading ? 'Preparing…' : 'Download report'}</button>}
       </section>
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[['Status', caseData.status], ['Overall result', caseData.overallResult || 'PENDING'], ['Initiated', dateLabel(caseData.initiatedAt)], ['Completed', dateLabel(caseData.completedAt)]].map(([label, value]) => <div key={label} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4"><p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</p><span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${label === 'Status' || label === 'Overall result' ? badgeClass(value) : ''}`}>{value.replaceAll('_', ' ')}</span></div>)}
+        {[['Status', caseData.status], ['Overall result', caseData.overallResult || 'PENDING'], ['Initiated', dateLabel(caseData.initiatedAt)], ['Completed', dateLabel(caseData.completedAt)]].map(([label, value]) => <div key={label} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4"><p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</p><span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${label === 'Status' ? bgvCaseStatusClass(value) : label === 'Overall result' ? badgeClass(value) : ''}`}>{label === 'Status' ? bgvCaseStatusLabel(value) : value.replaceAll('_', ' ')}</span></div>)}
       </section>
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
         <div className="border-b border-[var(--border)] px-5 py-4"><h3 className="text-[14px] font-semibold">Verification checks</h3><p className="mt-1 text-[11px] text-[var(--muted)]">{caseData.checks.length} check{caseData.checks.length === 1 ? '' : 's'}</p></div>

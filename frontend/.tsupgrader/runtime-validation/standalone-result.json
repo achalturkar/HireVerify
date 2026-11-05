@@ -1,8 +1,8 @@
 {
-  "planHash": "4d20fa3c2072066853b1648971a5b1d2aec96f023c93f356ab22c7d255e6e5cd",
+  "planHash": "9e2a39a9034bde0a44d9455767bc52764bef682ed217ef27102e04ded4cea889",
   "phase": "standalone",
-  "recordedAtUtc": "2026-10-28T07:51:25.4389930Z",
-  "retryCount": 1,
+  "recordedAtUtc": "2026-11-05T07:15:01.8135804Z",
+  "retryCount": 0,
   "resetBaseline": false,
   "complete": true,
   "result": {
@@ -20,7 +20,7 @@
         "skippedReason": null,
         "exitCode": 0,
         "outputSample": "\r\n\u003E frontend@0.1.0 lint\r\n\u003E eslint app/candidate-portal/[token]/page.tsx src/lib/candidate-document-status.ts src/lib/candidate-document-status.test.ts\r\n\r\n",
-        "durationMs": 8951
+        "durationMs": 23949
       },
       {
         "name": "typescript-no-emit",
@@ -32,7 +32,7 @@
         "skippedReason": null,
         "exitCode": 0,
         "outputSample": "",
-        "durationMs": 5829
+        "durationMs": 18865
       },
       {
         "name": "production-build",
@@ -43,8 +43,8 @@
         "skipped": false,
         "skippedReason": null,
         "exitCode": 0,
-        "outputSample": "\r\n\u003E frontend@0.1.0 build\r\n\u003E next build --webpack\r\n\r\n\u25B2 Next.js 16.2.12 (webpack)\r\n- Environments: .env.local\r\n\r\n  Creating an optimized production build ...\r\n\u2713 Compiled successfully in 12.0s\r\n  Running TypeScript ...\r\n  Finished TypeScript in 22.6s ...\r\n  Collecting page data using 11 workers ...\r\n  Generating static pages using 11 workers (0/62) ...\r\n  Generating static pages using 11 workers (15/62) \r\n  Generating static pages using 11 workers (30/62) \r\n  Generating static pages using 11 workers (46/62) \r\n\u2713 Generating static pages using 11 workers (62/62) in 2.4s\r\n  Finalizing page optimization ...\r\n  Collecting build traces ...\r\n\r\nRoute (app)\r\n\u250C \u25CB /\r\n\u251C \u25CB /_not-found\r\n\u251C \u0192 /candidate-portal/[token]\r\n\u251C \u0192 /candidate/[id]\r\n\u251C \u25CB /client-portal\r\n\u251C \u25CB /client-portal/account\r\n\u251C \u25CB /client-portal/candidates\r\n\u251C \u0192 /client-portal/candidates/[id]\r\n\u251C \u25CB /client-portal/cases\r\n\u251C \u0192 /client-portal/cases/[id]\r\n\u251C \u25CB /client-portal/invoices\r\n\u251C \u25CB /client-portal/reports\r\n\u251C \u25CB /client-portal/requests\r\n\u251C \u25CB /client-portal/subclients\r\n\u251C \u25CB /company\r\n\u251C \u25CB /company/analytics\r\n\u251C \u25CB /company/audit\r\n\u251C \u25CB /company/bgv-cases\r\n\u251C \u0192 /company/bgv-cases/[id]\r\n\u251C \u0192 /company/candidate/[id]\r\n\u251C \u25CB /company/candidates\r\n\u251C \u25CB /company/client-requests\r\n\u251C \u25CB /company/clients\r\n\u251C \u0192 /company/clients/[id]\r\n\u251C \u25CB /company/dashboard\r\n\u251C \u25CB /company/document-verification\r\n\u251C \u25CB /company/government-portals\r\n\u251C \u25CB /company/help\r\n\u251C \u25CB /company/invoices\r\n\u251C \u25CB /company/manual-bgv\r\n\u251C \u25CB /company/marketing\r\n\u251C \u25CB /company/profile\r\n\u251C \u25CB /company/reports\r\n\u251C \u25CB /company/roles\r\n\u251C \u25CB /company/settings\r\n\u251C \u25CB /company/users\r\n\u251C \u25CB /company/verifications\r\n\u251C \u25CB /company/verifiers\r\n\u251C \u25CB /contact\r\n\u251C \u25CB /forgot-password\r\n\u251C \u25CB /login\r\n\u251C \u25CB /marketing/unsubscribe\r\n\u251C \u25CB /opengraph-image\r\n\u251C \u25CB /reset-password\r\n\u251C \u25CB /robots.txt\r\n\u251C \u25CB /signup\r\n\u251C \u25CB /sitemap.xml\r\n\u251C \u25CB /subclient-portal\r\n\u251C \u25CB /subclient-portal/account\r\n\u251C \u25CB /subclient-portal/candidates\r\n\u251C \u25CB /subclient-portal/cases\r\n\u251C \u0192 /subclient-portal/cases/[id]\r\n\u251C \u25CB /subclient-portal/reports\r\n\u251C \u25CB /super-admin/audit\r\n\u251C \u25CB /super-admin/bgv\r\n\u251C \u25CB /super-admin/candidate\r\n\u251C \u0192 /super-admin/candidate/[id]\r\n\u251C \u25CB /super-admin/change-password\r\n\u251C \u25CB /super-admin/client\r\n\u251C \u25CB /super-admin/companies\r\n\u251C \u0192 /super-admin/companies/[id]\r\n\u251C \u25CB /super-admin/dashboard\r\n\u251C \u25CB /super-admin/invoices\r\n\u251C \u25CB /super-admin/locations\r\n\u251C \u25CB /super-admin/permissions\r\n\u251C \u25CB /super-admin/profile\r\n\u251C \u25CB /super-admin/roles\r\n\u251C \u25CB /super-admin/settings\r\n\u251C \u25CB /super-admin/users\r\n\u2514 \u25CB /super-admin/verification-checks\r\n\r\n\r\n\u25CB  (Static)   prerendered as static content\r\n\u0192  (Dynamic)  server-rendered on demand\r\n\r\n",
-        "durationMs": 61815
+        "outputSample": "\r\n\u003E frontend@0.1.0 build\r\n\u003E next build --webpack\r\n\r\n\u25B2 Next.js 16.2.12 (webpack)\r\n- Environments: .env.local\r\n\r\n  Creating an optimized production build ...\r\n\u2713 Compiled successfully in 29.1s\r\n  Running TypeScript ...\r\n  Finished TypeScript in 43s ...\r\n  Collecting page data using 11 workers ...\r\n  Generating static pages using 11 workers (0/63) ...\r\n  Generating static pages using 11 workers (15/63) \r\n  Generating static pages using 11 workers (31/63) \r\n  Generating static pages using 11 workers (47/63) \r\n\u2713 Generating static pages using 11 workers (63/63) in 3.2s\r\n  Finalizing page optimization ...\r\n  Collecting build traces ...\r\n\r\nRoute (app)\r\n\u250C \u25CB /\r\n\u251C \u25CB /_not-found\r\n\u251C \u0192 /candidate-portal/[token]\r\n\u251C \u0192 /candidate/[id]\r\n\u251C \u25CB /client-portal\r\n\u251C \u25CB /client-portal/account\r\n\u251C \u25CB /client-portal/candidates\r\n\u251C \u0192 /client-portal/candidates/[id]\r\n\u251C \u25CB /client-portal/cases\r\n\u251C \u0192 /client-portal/cases/[id]\r\n\u251C \u25CB /client-portal/invoices\r\n\u251C \u25CB /client-portal/reports\r\n\u251C \u25CB /client-portal/requests\r\n\u251C \u25CB /client-portal/subclients\r\n\u251C \u25CB /company\r\n\u251C \u25CB /company/analytics\r\n\u251C \u25CB /company/audit\r\n\u251C \u25CB /company/bgv-cases\r\n\u251C \u0192 /company/bgv-cases/[id]\r\n\u251C \u0192 /company/candidate/[id]\r\n\u251C \u25CB /company/candidates\r\n\u251C \u25CB /company/client-requests\r\n\u251C \u25CB /company/clients\r\n\u251C \u0192 /company/clients/[id]\r\n\u251C \u25CB /company/dashboard\r\n\u251C \u25CB /company/document-verification\r\n\u251C \u25CB /company/government-portals\r\n\u251C \u25CB /company/help\r\n\u251C \u25CB /company/invoices\r\n\u251C \u25CB /company/manual-bgv\r\n\u251C \u25CB /company/marketing\r\n\u251C \u25CB /company/profile\r\n\u251C \u25CB /company/reports\r\n\u251C \u25CB /company/roles\r\n\u251C \u25CB /company/settings\r\n\u251C \u25CB /company/users\r\n\u251C \u25CB /company/verifications\r\n\u251C \u25CB /company/verifiers\r\n\u251C \u25CB /contact\r\n\u251C \u25CB /forgot-password\r\n\u251C \u25CB /login\r\n\u251C \u25CB /marketing/unsubscribe\r\n\u251C \u25CB /opengraph-image\r\n\u251C \u25CB /reset-password\r\n\u251C \u25CB /robots.txt\r\n\u251C \u25CB /signup\r\n\u251C \u25CB /sitemap.xml\r\n\u251C \u25CB /subclient-portal\r\n\u251C \u25CB /subclient-portal/account\r\n\u251C \u25CB /subclient-portal/candidates\r\n\u251C \u25CB /subclient-portal/cases\r\n\u251C \u0192 /subclient-portal/cases/[id]\r\n\u251C \u25CB /subclient-portal/reports\r\n\u251C \u25CB /super-admin/audit\r\n\u251C \u25CB /super-admin/bgv\r\n\u251C \u25CB /super-admin/candidate\r\n\u251C \u0192 /super-admin/candidate/[id]\r\n\u251C \u25CB /super-admin/change-password\r\n\u251C \u25CB /super-admin/client\r\n\u251C \u25CB /super-admin/companies\r\n\u251C \u0192 /super-admin/companies/[id]\r\n\u251C \u25CB /super-admin/dashboard\r\n\u251C \u25CB /super-admin/document-verification\r\n\u251C \u25CB /super-admin/invoices\r\n\u251C \u25CB /super-admin/locations\r\n\u251C \u25CB /super-admin/permissions\r\n\u251C \u25CB /super-admin/profile\r\n\u251C \u25CB /super-admin/roles\r\n\u251C \u25CB /super-admin/settings\r\n\u251C \u25CB /super-admin/users\r\n\u2514 \u25CB /super-admin/verification-checks\r\n\r\n\r\n\u25CB  (Static)   prerendered as static content\r\n\u0192  (Dynamic)  server-rendered on demand\r\n\r\n",
+        "durationMs": 123224
       },
       {
         "name": "tests-pass",
@@ -55,13 +55,13 @@
         "skipped": false,
         "skippedReason": null,
         "exitCode": 0,
-        "outputSample": "\r\n\u003E frontend@0.1.0 test\r\n\u003E vitest run\r\n\r\n\r\n\u001B[1m\u001B[46m RUN \u001B[49m\u001B[22m \u001B[36mv3.2.4 \u001B[39m\u001B[90mC:/Users/Roshan Verma/Desktop/BGV/frontend\u001B[39m\r\n\r\n \u001B[32m\u2713\u001B[39m src/lib/candidate-document-status.test.ts \u001B[2m(\u001B[22m\u001B[2m2 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 5\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m src/lib/candidate-portal-forms.test.ts \u001B[2m(\u001B[22m\u001B[2m4 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 7\u001B[2mms\u001B[22m\u001B[39m\r\n\r\n\u001B[2m Test Files \u001B[22m \u001B[1m\u001B[32m2 passed\u001B[39m\u001B[22m\u001B[90m (2)\u001B[39m\r\n\u001B[2m      Tests \u001B[22m \u001B[1m\u001B[32m6 passed\u001B[39m\u001B[22m\u001B[90m (6)\u001B[39m\r\n\u001B[2m   Start at \u001B[22m 13:21:20\r\n\u001B[2m   Duration \u001B[22m 1.12s\u001B[2m (transform 200ms, setup 0ms, collect 216ms, tests 12ms, environment 1ms, prepare 547ms)\u001B[22m\r\n\r\n",
-        "durationMs": 2573,
+        "outputSample": "\r\n\u003E frontend@0.1.0 test\r\n\u003E vitest run\r\n\r\n\r\n\u001B[1m\u001B[46m RUN \u001B[49m\u001B[22m \u001B[36mv3.2.4 \u001B[39m\u001B[90mC:/Users/Roshan Verma/Desktop/BGV/frontend\u001B[39m\r\n\r\n \u001B[32m\u2713\u001B[39m src/lib/candidate-document-status.test.ts \u001B[2m(\u001B[22m\u001B[2m2 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 7\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m src/lib/candidate-document-display.test.ts \u001B[2m(\u001B[22m\u001B[2m4 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 10\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m src/lib/candidate-portal-forms.test.ts \u001B[2m(\u001B[22m\u001B[2m5 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 12\u001B[2mms\u001B[22m\u001B[39m\r\n\r\n\u001B[2m Test Files \u001B[22m \u001B[1m\u001B[32m3 passed\u001B[39m\u001B[22m\u001B[90m (3)\u001B[39m\r\n\u001B[2m      Tests \u001B[22m \u001B[1m\u001B[32m11 passed\u001B[39m\u001B[22m\u001B[90m (11)\u001B[39m\r\n\u001B[2m   Start at \u001B[22m 12:44:53\r\n\u001B[2m   Duration \u001B[22m 1.60s\u001B[2m (transform 461ms, setup 0ms, collect 646ms, tests 30ms, environment 2ms, prepare 1.07s)\u001B[22m\r\n\r\n",
+        "durationMs": 4799,
         "testResults": {
           "testFramework": "vitest",
           "runnerDetectedFrom": "package_json",
-          "testsTotal": 6,
-          "testsPassed": 6,
+          "testsTotal": 11,
+          "testsPassed": 11,
           "testsFailed": 0,
           "testsSkipped": 0,
           "parseFailed": false
@@ -76,14 +76,14 @@
         "skipped": false,
         "skippedReason": null,
         "exitCode": 1,
-        "outputSample": "server exited before responding (exit=1)\n--- server output ---\n\r\n\u003E frontend@0.1.0 dev\r\n\u003E next dev --webpack --hostname 127.0.0.1 --port 3010\r\n\r\n\u25B2 Next.js 16.2.12 (webpack)\r\n- Local:         http://127.0.0.1:3010\r\n- Network:       http://127.0.0.1:3010\r\n- Environments: .env.local\r\n\u2713 Ready in 941ms\r\n\u2A2F Another next dev server is already running.\r\n\r\n- Local:        http://localhost:3000\r\n- PID:          6840\r\n- Dir:          C:\\Users\\Roshan Verma\\Desktop\\BGV\\frontend\r\n- Log:          .next\\dev\\logs\\next-development.log\r\n\r\nRun taskkill /PID 6840 /F to stop it.\r\n\u001B[?25h\r\n",
-        "durationMs": 3375
+        "outputSample": "server exited before responding (exit=1)\n--- server output ---\n\r\n\u003E frontend@0.1.0 dev\r\n\u003E next dev --webpack --hostname 127.0.0.1 --port 3010\r\n\r\n\u25B2 Next.js 16.2.12 (webpack)\r\n- Local:         http://127.0.0.1:3010\r\n- Network:       http://127.0.0.1:3010\r\n- Environments: .env.local\r\n\u2713 Ready in 2.1s\r\n\u2A2F Another next dev server is already running.\r\n\r\n- Local:        http://localhost:3000\r\n- PID:          17952\r\n- Dir:          C:\\Users\\Roshan Verma\\Desktop\\BGV\\frontend\r\n- Log:          .next\\dev\\logs\\next-development.log\r\n\r\nRun taskkill /PID 17952 /F to stop it.\r\n\u001B[?25h\r\n",
+        "durationMs": 5941
       }
     ],
     "executions": [
       {
         "source": "candidate-portal-lint",
-        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
         "args": [
           "run",
           "lint",
@@ -95,7 +95,19 @@
         "cwd": "C:\\Users\\Roshan Verma\\Desktop\\BGV\\frontend",
         "env": {},
         "prependPath": [],
-        "platform": "win32"
+        "platform": "win32",
+        "nodeExecutable": "C:\\Program Files\\nodejs\\node.EXE",
+        "nodeVersion": "v22.11.0",
+        "packageManager": "npm",
+        "packageManagerExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+        "packageManagerVersion": "10.9.0",
+        "cleanup": {
+          "RootProcessId": 10812,
+          "Completed": true,
+          "ProcessesObserved": 7,
+          "ProcessesTerminated": 0,
+          "Failure": null
+        }
       },
       {
         "source": "typescript-no-emit",
@@ -107,11 +119,23 @@
         "cwd": "C:\\Users\\Roshan Verma\\Desktop\\BGV\\frontend",
         "env": {},
         "prependPath": [],
-        "platform": "win32"
+        "platform": "win32",
+        "nodeExecutable": null,
+        "nodeVersion": null,
+        "packageManager": null,
+        "packageManagerExecutable": null,
+        "packageManagerVersion": null,
+        "cleanup": {
+          "RootProcessId": 25176,
+          "Completed": true,
+          "ProcessesObserved": 7,
+          "ProcessesTerminated": 1,
+          "Failure": null
+        }
       },
       {
         "source": "production-build",
-        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
         "args": [
           "run",
           "build"
@@ -119,22 +143,46 @@
         "cwd": "C:\\Users\\Roshan Verma\\Desktop\\BGV\\frontend",
         "env": {},
         "prependPath": [],
-        "platform": "win32"
+        "platform": "win32",
+        "nodeExecutable": "C:\\Program Files\\nodejs\\node.EXE",
+        "nodeVersion": "v22.11.0",
+        "packageManager": "npm",
+        "packageManagerExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+        "packageManagerVersion": "10.9.0",
+        "cleanup": {
+          "RootProcessId": 15604,
+          "Completed": true,
+          "ProcessesObserved": 26,
+          "ProcessesTerminated": 1,
+          "Failure": null
+        }
       },
       {
         "source": "tests-pass",
-        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
         "args": [
           "test"
         ],
         "cwd": "C:\\Users\\Roshan Verma\\Desktop\\BGV\\frontend",
         "env": {},
         "prependPath": [],
-        "platform": "win32"
+        "platform": "win32",
+        "nodeExecutable": "C:\\Program Files\\nodejs\\node.EXE",
+        "nodeVersion": "v22.11.0",
+        "packageManager": "npm",
+        "packageManagerExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+        "packageManagerVersion": "10.9.0",
+        "cleanup": {
+          "RootProcessId": 30252,
+          "Completed": true,
+          "ProcessesObserved": 26,
+          "ProcessesTerminated": 1,
+          "Failure": null
+        }
       },
       {
         "source": "home-page-responds",
-        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
         "args": [
           "run",
           "dev",
@@ -147,7 +195,19 @@
         "cwd": "C:\\Users\\Roshan Verma\\Desktop\\BGV\\frontend",
         "env": {},
         "prependPath": [],
-        "platform": "win32"
+        "platform": "win32",
+        "nodeExecutable": "C:\\Program Files\\nodejs\\node.EXE",
+        "nodeVersion": "v22.11.0",
+        "packageManager": "npm",
+        "packageManagerExecutable": "C:\\Program Files\\nodejs\\npm.cmd",
+        "packageManagerVersion": "10.9.0",
+        "cleanup": {
+          "RootProcessId": 25716,
+          "Completed": true,
+          "ProcessesObserved": 9,
+          "ProcessesTerminated": 1,
+          "Failure": null
+        }
       }
     ]
   }

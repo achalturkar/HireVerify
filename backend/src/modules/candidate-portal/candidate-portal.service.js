@@ -517,18 +517,45 @@ const pendingFor = (candidate) => {
 };
 
 const getCandidateIntakeStatus = (candidate) => {
-  if (!['IN_PROGRESS', 'COMPLETED'].includes(candidate.status)) return candidate.status;
-  const progress = pendingFor(candidate);
-  return progress.profileComplete && !progress.pending.some((item) => item.type === 'document')
-    ? 'COMPLETED'
-    : 'IN_PROGRESS';
+  const latestCase = candidate.bgvCases?.[0];
+  if (latestCase?.status === 'COMPLETED') return 'COMPLETED';
+  if (latestCase?.status === 'CANCELLED') return 'CANCELLED';
+  if (latestCase) {
+    return candidate.status === 'ON_HOLD' || latestCase.status === 'ON_HOLD'
+      ? 'ON_HOLD'
+      : 'VERIFICATION_IN_PROGRESS';
+  }
+  if (candidate.status === 'COMPLETED') return 'IN_PROGRESS';
+  if (['INVITED', 'IN_PROGRESS', 'DETAILS_SUBMITTED'].includes(candidate.status)
+    && pendingFor(candidate).pending.length === 0) {
+    return 'DETAILS_SUBMITTED';
+  }
+  return candidate.status === 'DETAILS_SUBMITTED' ? 'IN_PROGRESS' : candidate.status;
 };
 
-const syncCandidateIntakeStatus = async (candidateId, currentStatus, progress) => {
-  if (!['PENDING', 'INVITED', 'IN_PROGRESS', 'COMPLETED'].includes(currentStatus)) return;
-  const requiredDocumentsComplete = !progress.pending.some((item) => item.type === 'document');
-  const status = progress.profileComplete && requiredDocumentsComplete ? 'COMPLETED' : 'IN_PROGRESS';
-  if (status !== currentStatus) {
+const syncCandidateIntakeStatus = async (candidateId, currentStatus) => {
+  if (!['PENDING', 'INVITED', 'IN_PROGRESS', 'DETAILS_SUBMITTED'].includes(currentStatus)) return;
+  const candidate = await prisma.candidate.findUnique({
+    where: { id: candidateId },
+    include: {
+      client: { select: { candidateFormConfig: true } },
+      subclient: { select: { candidateFormConfig: true } },
+      documents: true,
+      consents: {
+        where: { consentType: 'BGV_CONSENT' },
+        orderBy: { createdAt: 'desc' },
+      },
+      bgvCases: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        include: { checks: { include: { documents: true } }, consents: true },
+      },
+    },
+  });
+  if (!candidate) throw new NotFoundError('Candidate not found');
+  if (candidate.bgvCases.length > 0) return;
+  const status = pendingFor(candidate).pending.length === 0 ? 'DETAILS_SUBMITTED' : 'IN_PROGRESS';
+  if (status !== candidate.status) {
     await prisma.candidate.update({ where: { id: candidateId }, data: { status } });
   }
 };
@@ -572,7 +599,7 @@ const toDto = (invitation) => {
   return {
     candidate: {
       id: candidate.id,
-      status: candidate.status,
+      status: getCandidateIntakeStatus(candidate),
       fullName: candidate.fullName,
       firstName: candidate.firstName,
       middleName: candidate.middleName,
@@ -1083,12 +1110,11 @@ const updateProfile = async (token, payload) => {
     }
   }
   if (!Object.keys(data).length) throw new BadRequestError('Provide at least one detail to update.');
-  const candidateAfterUpdate = { ...invitation.candidate, ...data };
-  const progress = pendingFor(candidateAfterUpdate);
-  const nextStatus = ['PENDING', 'INVITED', 'IN_PROGRESS', 'COMPLETED'].includes(invitation.candidate.status)
-    ? progress.profileComplete && !progress.pending.some((item) => item.type === 'document') ? 'COMPLETED' : 'IN_PROGRESS'
+  const nextStatus = ['PENDING', 'INVITED', 'IN_PROGRESS', 'DETAILS_SUBMITTED', 'COMPLETED'].includes(invitation.candidate.status)
+    ? 'IN_PROGRESS'
     : invitation.candidate.status;
   await prisma.candidate.update({ where: { id: invitation.candidateId }, data: { ...data, status: nextStatus } });
+  await syncCandidateIntakeStatus(invitation.candidateId, nextStatus);
   return getPortal(token);
 };
 
@@ -1119,6 +1145,7 @@ const recordConsent = async (token, payload, request) => {
   await prisma.candidateConsent.create({
     data: { candidateId: invitation.candidateId, caseId: activeCase?.id || null, consentType: 'BGV_CONSENT', ...data },
   });
+  await syncCandidateIntakeStatus(invitation.candidateId, invitation.candidate.status);
   return getPortal(token);
 };
 
@@ -1230,7 +1257,7 @@ const addDocument = async (token, file, documentType, documentNumber, customForm
   const fileName = path.basename(file.originalname).replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 255) || 'document';
   const document = await prisma.candidateDocument.create({ data: { candidateId: invitation.candidateId, documentType, documentNumber: storedDocumentNumber, fileName, fileUrl: `/uploads/candidate-documents/portal/${token}/${path.basename(file.filename)}`, mimeType: file.mimetype, fileSize: file.size } });
   const status = await getPortal(token);
-  await syncCandidateIntakeStatus(invitation.candidateId, invitation.candidate.status, status.progress);
+  await syncCandidateIntakeStatus(invitation.candidateId, invitation.candidate.status);
   return { document, status };
 };
 
@@ -1268,7 +1295,7 @@ const deletePortalDocument = async (token, documentId) => {
     if (error.code !== 'ENOENT') throw error;
   });
   const status = await getPortal(token);
-  await syncCandidateIntakeStatus(invitation.candidateId, invitation.candidate.status, status.progress);
+  await syncCandidateIntakeStatus(invitation.candidateId, invitation.candidate.status);
   return status;
 };
 

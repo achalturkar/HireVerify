@@ -1,7 +1,7 @@
 import type { PaginationMeta } from '@/src/types/user';
 import type { CandidateFormConfig } from '@/src/types/client';
 
-export type CandidateStatus = 'PENDING' | 'INVITED' | 'IN_PROGRESS' | 'VERIFICATION_IN_PROGRESS' | 'COMPLETED' | 'WITHDRAWN' | 'ON_HOLD';
+export type CandidateStatus = 'PENDING' | 'INVITED' | 'IN_PROGRESS' | 'DETAILS_SUBMITTED' | 'VERIFICATION_IN_PROGRESS' | 'COMPLETED' | 'WITHDRAWN' | 'CANCELLED' | 'ON_HOLD';
 
 export interface ClientRef {
   id: string;

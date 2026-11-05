@@ -64,7 +64,7 @@ const listValidator = {
     search: Joi.string().max(100).allow(''),
     subclientId: Joi.alternatives().try(Joi.string().uuid(), Joi.string().valid('none')),
     status: Joi.string().valid(
-      'PENDING', 'INVITED', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'ON_HOLD',
+      'PENDING', 'INVITED', 'IN_PROGRESS', 'DETAILS_SUBMITTED', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'CANCELLED', 'ON_HOLD',
       'DRAFT', 'INITIATED', 'CONSENT_PENDING', 'UNDER_REVIEW', 'CANCELLED',
       'CLEAR', 'MINOR_DISCREPANCY', 'MAJOR_DISCREPANCY', 'UNABLE_TO_VERIFY', 'REQUIRES_REVIEW',
       'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE',

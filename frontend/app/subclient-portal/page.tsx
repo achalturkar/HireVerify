@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, FileCheck2, FileText, Users } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getSubclientDashboard, type SubclientDashboard } from '@/src/lib/api/subclient-portal';
+import { bgvCaseStatusClass, bgvCaseStatusLabel } from '@/src/lib/bgv-case-status';
 
 export default function SubclientPortalPage() {
   const { accessToken, user } = useAuth();
@@ -44,7 +45,7 @@ export default function SubclientPortalPage() {
       <div className="flex items-center justify-between border-b border-[var(--border)] p-4"><div><h3 className="text-sm font-semibold">Recent cases</h3><p className="mt-1 text-xs text-[var(--muted)]">The latest cases assigned to this subclient.</p></div><Link href="/subclient-portal/cases" className="text-xs font-semibold text-[var(--primary)] hover:underline">View all</Link></div>
       {loading ? <p className="p-8 text-center text-xs text-[var(--muted)]">Loading cases…</p>
         : !dashboard?.recentCases.length ? <p className="p-8 text-center text-xs text-[var(--muted)]">No cases are available yet.</p>
-          : <div className="divide-y divide-[var(--border)]">{dashboard.recentCases.map((item) => <Link key={item.id} href={`/subclient-portal/cases/${item.id}`} className="flex flex-wrap items-center justify-between gap-3 p-4 hover:bg-[var(--surface-muted)]"><div><p className="font-mono text-xs font-semibold">{item.caseNumber}</p><p className="mt-1 text-xs text-[var(--muted)]">{item.candidate.fullName || [item.candidate.firstName, item.candidate.middleName, item.candidate.lastName].filter(Boolean).join(' ')}</p></div><span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-[10px] font-semibold">{item.status.replaceAll('_', ' ')}</span></Link>)}</div>}
+          : <div className="divide-y divide-[var(--border)]">{dashboard.recentCases.map((item) => <Link key={item.id} href={`/subclient-portal/cases/${item.id}`} className="flex flex-wrap items-center justify-between gap-3 p-4 hover:bg-[var(--surface-muted)]"><div><p className="font-mono text-xs font-semibold">{item.caseNumber}</p><p className="mt-1 text-xs text-[var(--muted)]">{item.candidate.fullName || [item.candidate.firstName, item.candidate.middleName, item.candidate.lastName].filter(Boolean).join(' ')}</p></div><span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${bgvCaseStatusClass(item.status)}`}>{bgvCaseStatusLabel(item.status)}</span></Link>)}</div>}
     </section>
   </div>;
 }

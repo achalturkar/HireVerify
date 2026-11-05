@@ -39,6 +39,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { ApiError, activateCandidatePortal, downloadCandidateExcel, downloadCandidateFormPdf, extendCandidatePortal, getCandidate, getCandidatePortalStatus, sendCandidatePortalReminder, setCandidatePortalLocked, unlockCandidatePortalForCorrections, updateCandidate, type CandidatePortalStatus } from '@/src/lib/api/candidates';
 import { formatCandidateName } from '@/src/lib/candidate-name';
+import { candidateStatusLabel } from '@/src/lib/candidate-status';
 import CandidateSubmittedDetails from '@/src/components/CandidateSubmittedDetails';
 import CandidatePortalPreview from '@/src/components/CandidatePortalPreview';
 import CandidatePendingItems from '@/src/components/CandidatePendingItems';
@@ -756,10 +757,11 @@ export default function CandidateDetailPage() {
             ) : null}
             {canUpdateCandidate ? (
               <select id="candidate-status" aria-label="Candidate status" value={candidate.status} onChange={(event) => changeCandidateStatus(event.target.value as Candidate['status'])} disabled={busy} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium disabled:opacity-50">
-                {(['PENDING', 'INVITED', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'ON_HOLD'] as Candidate['status'][]).map((status) => <option key={status} value={status}>{humanize(status)}</option>)}
+                {candidate.status === 'COMPLETED' && <option value="COMPLETED" disabled>{candidateStatusLabel('COMPLETED')}</option>}
+                {(['PENDING', 'INVITED', 'IN_PROGRESS', 'DETAILS_SUBMITTED', 'WITHDRAWN', 'CANCELLED', 'ON_HOLD'] as Candidate['status'][]).map((status) => <option key={status} value={status}>{candidateStatusLabel(status)}</option>)}
               </select>
             ) : (
-              <Pill className="bg-[var(--surface-muted)] text-[var(--muted)] ring-[var(--border)]">{humanize(candidate.status)}</Pill>
+              <Pill className="bg-[var(--surface-muted)] text-[var(--muted)] ring-[var(--border)]">{candidateStatusLabel(candidate.status)}</Pill>
             )}
             <button type="button" onClick={() => setTab('portal')} className="rounded-full" aria-label={`Portal link ${stateInfo.label}. Open portal access`}>
               <Pill className={stateInfo.badge} icon={StateIcon}>Portal {stateInfo.label.toLowerCase()}</Pill>

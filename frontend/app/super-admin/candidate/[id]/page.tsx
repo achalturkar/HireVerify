@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getPlatformCandidate, updatePlatformCandidate, type PlatformCandidateDetail } from '@/src/lib/api/platform-candidates';
+import { candidateStatusLabel } from '@/src/lib/candidate-status';
 import type { Candidate, CandidateStatus } from '@/src/types/candidate';
 
 type CandidateField = Exclude<keyof Candidate, 'id' | 'companyId' | 'clientId' | 'client' | 'candidateCode' | 'createdById' | 'updatedById' | 'createdAt' | 'updatedAt' | 'status' | 'bgvCaseCount' | 'portalInvitation'>;
@@ -47,7 +48,7 @@ const TABS: { id: CandidateTab; label: string }[] = [
   { id: 'identity', label: 'Identity' }, { id: 'education', label: 'Education' }, { id: 'employment', label: 'Employment' },
   { id: 'addresses', label: 'Addresses' }, { id: 'documents', label: 'Documents' },
 ];
-const STATUSES: CandidateStatus[] = ['PENDING', 'INVITED', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'ON_HOLD'];
+const STATUSES: CandidateStatus[] = ['PENDING', 'INVITED', 'IN_PROGRESS', 'DETAILS_SUBMITTED', 'WITHDRAWN', 'CANCELLED', 'ON_HOLD'];
 const inputClass = 'mt-1.5 w-full rounded-lg border border-white/10 bg-[#0F1430] px-3 py-2.5 text-[13px] text-white';
 
 function draftFrom(candidate: Candidate): FormValues {
@@ -128,7 +129,7 @@ export default function SuperAdminCandidateDetailPage() {
         <section className="grid gap-4 rounded-2xl border border-white/[0.08] bg-[#161C3A] p-5 sm:grid-cols-2">
           <div><p className="text-[10px] uppercase text-[#8891B8]">Company</p><p className="mt-1 text-[13px]">{candidate.company.name} {candidate.company.shortCode ? `(${candidate.company.shortCode})` : ''}</p></div>
           <div><p className="text-[10px] uppercase text-[#8891B8]">Client</p><p className="mt-1 text-[13px]">{candidate.client?.name || '—'}</p></div>
-          <label className="text-[10px] uppercase text-[#8891B8]">Status<select value={status} onChange={(event) => setStatus(event.target.value as CandidateStatus)} className={inputClass}>{STATUSES.map((item) => <option key={item} value={item}>{item.replaceAll('_', ' ')}</option>)}</select></label>
+          <label className="text-[10px] uppercase text-[#8891B8]">Status<select value={status} onChange={(event) => setStatus(event.target.value as CandidateStatus)} className={inputClass}>{status === 'COMPLETED' && <option value="COMPLETED" disabled>{candidateStatusLabel('COMPLETED')}</option>}{STATUSES.map((item) => <option key={item} value={item}>{candidateStatusLabel(item)}</option>)}</select></label>
           <div><p className="text-[10px] uppercase text-[#8891B8]">Created</p><p className="mt-1 text-[13px]">{new Date(candidate.createdAt).toLocaleString()}</p></div>
         </section>
       )}

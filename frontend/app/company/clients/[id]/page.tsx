@@ -9,6 +9,7 @@ import {
 import { useAuth } from '@/src/auth/AuthProvider';
 import { getReportVerificationStatus, getVerificationStatus } from '@/src/lib/verification-status';
 import { formatCandidateName } from '@/src/lib/candidate-name';
+import { candidateStatusLabel, candidateStatusOptions } from '@/src/lib/candidate-status';
 import { getClient, updateClient, uploadCandidateFormTemplate, updateCandidateFormTemplate, removeCandidateFormTemplate, downloadCandidateFormTemplate, activateClient, inactivateClient, listClientPortalUsers, inviteClientPortalUser, updateClientPortalUser, revokeClientPortalUser, listSubclients, createSubclient, updateSubclient, deleteSubclient, ApiError as ClientApiError } from '@/src/lib/api/clients';
 import { listCandidates, exportCandidates, createCandidate, sendCandidatePortalLink, ApiError as CandidateApiError } from '@/src/lib/api/candidates';
 import { ApiError as BGVApiError, downloadBGVReport, listBGVCases, listVerificationCheckTypes } from '@/src/lib/api/bgv';
@@ -25,7 +26,7 @@ import type { CandidateCustomForm, CandidateCustomFormCategory, CandidateEmploym
 import type { Candidate, CandidateFormValues, CandidateStatus, PaginationMeta } from '@/src/types/candidate';
 
 const PAGE_SIZE = 10;
-const CANDIDATE_STATUSES: CandidateStatus[] = ['PENDING', 'INVITED', 'IN_PROGRESS', 'VERIFICATION_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN', 'ON_HOLD'];
+const CANDIDATE_STATUSES: CandidateStatus[] = candidateStatusOptions;
 const candidateRequiredFieldsFor = (key: typeof CANDIDATE_FORM_REQUIRED_FIELD_GROUPS[number]['key']) =>
   CANDIDATE_FORM_REQUIRED_FIELD_GROUPS.find((group) => group.key === key)?.fields ?? [];
 type TabKey = 'overview' | 'analytics' | 'billing' | 'subclients' | 'candidates' | 'cases' | 'reports' | 'invoices' | 'report-branding' | 'candidate-form' | 'portal-access' | 'client-portal';
@@ -2250,7 +2251,7 @@ export default function ClientDetailPage() {
               <label className="min-w-0 text-[10px] font-medium text-[var(--muted)]">Status
                 <select value={candidateStatusFilter} onChange={(event) => { setCandidateStatusFilter(event.target.value as CandidateStatus | ''); setCandidatesPage(1); }} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[12px] text-[var(--foreground)]">
                   <option value="">All statuses</option>
-                  {CANDIDATE_STATUSES.map((status) => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
+                  {CANDIDATE_STATUSES.map((status) => <option key={status} value={status}>{candidateStatusLabel(status)}</option>)}
                 </select>
               </label>
               <label className="min-w-0 text-[10px] font-medium text-[var(--muted)]">Added from
@@ -2286,7 +2287,7 @@ export default function ClientDetailPage() {
                     <td className="px-5 py-3.5 text-[11px] text-[var(--muted)]">{c.subclient?.name || 'Client'}</td>
                     <td className="px-5 py-3.5"><span className="inline-flex min-w-8 justify-center rounded-md bg-[var(--surface-muted)] px-2 py-1 font-mono text-[11px] tabular-nums">{c.bgvCaseCount ?? 0}</span></td>
                     <td className="whitespace-nowrap px-5 py-3.5">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${c.status === 'COMPLETED' ? 'bg-[#159A7A]/10 text-[#147A68]' : c.status === 'WITHDRAWN' ? 'bg-[#C94C4C]/10 text-[#B53D3D]' : c.status === 'ON_HOLD' || c.status.includes('PENDING') || c.status.includes('PROGRESS') || c.status === 'INVITED' ? 'bg-[#D88A22]/10 text-[#9B6414]' : 'bg-[var(--surface-muted)] text-[var(--muted)]'}`}>{c.status.replaceAll('_', ' ')}</span>
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${c.status === 'COMPLETED' || c.status === 'DETAILS_SUBMITTED' ? 'bg-[#159A7A]/10 text-[#147A68]' : c.status === 'WITHDRAWN' || c.status === 'CANCELLED' ? 'bg-[#C94C4C]/10 text-[#B53D3D]' : c.status === 'ON_HOLD' || c.status.includes('PENDING') || c.status.includes('PROGRESS') || c.status === 'INVITED' ? 'bg-[#D88A22]/10 text-[#9B6414]' : 'bg-[var(--surface-muted)] text-[var(--muted)]'}`}>{candidateStatusLabel(c.status)}</span>
                     </td>
                     <td className="px-4 py-3.5 text-right"><ChevronRight size={16} className="ml-auto text-[var(--muted)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--primary)]" /></td>
                   </tr>

@@ -35,6 +35,7 @@ export interface PortalCandidate {
   email: string | null;
   phone: string | null;
   status: string;
+  detailsSubmitted?: boolean;
   createdAt: string;
   subclient: (Pick<PortalSubclient, 'id' | 'name' | 'clientCode'> & { candidateFormConfig?: CandidateFormConfig }) | null;
 }

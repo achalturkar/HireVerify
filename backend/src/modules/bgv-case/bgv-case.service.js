@@ -110,7 +110,7 @@ const transition = async ({ id, companyId, status, remarks, currentUser }) => {
     : status === 'ON_HOLD'
       ? 'ON_HOLD'
       : status === 'CANCELLED'
-        ? 'WITHDRAWN'
+        ? 'CANCELLED'
         : 'VERIFICATION_IN_PROGRESS';
   await prisma.$transaction(async (tx) => {
     await tx.bGVCase.update({ where: { id }, data });

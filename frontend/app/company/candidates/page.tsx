@@ -7,6 +7,7 @@ import { useAuth } from '@/src/auth/AuthProvider';
 import CandidateConfirmDialog from '@/src/components/layout/company/candidate/CandidateConfirmDialog';
 import CandidateFormModal from '@/src/components/layout/company/candidate/CandidateFormModal';
 import { formatCandidateName } from '@/src/lib/candidate-name';
+import { candidateStatusLabel, candidateStatusOptions } from '@/src/lib/candidate-status';
 import { ApiError, createCandidate, deleteCandidate, exportCandidates, listCandidates, sendCandidatePortalLink, updateCandidate } from '@/src/lib/api/candidates';
 import { listClients, listSubclients } from '@/src/lib/api/clients';
 import type { Candidate, CandidateFormValues, CandidateStatus, PaginationMeta } from '@/src/types/candidate';
@@ -17,25 +18,20 @@ const candidateSummaryCards = [
   { label: 'All candidates', status: '' as const, accent: 'var(--primary)', icon: Users },
   { label: 'Pending', status: 'PENDING' as const, accent: '#8891B8', icon: Clock3 },
   { label: 'Mail sent', status: 'INVITED' as const, accent: '#F2AE55', icon: Mail },
-  { label: 'In progress', status: 'IN_PROGRESS' as const, accent: '#5EA8D9', icon: UserRound },
-  { label: 'Intake complete', status: 'COMPLETED' as const, accent: '#269A78', icon: CheckCircle2 },
+  { label: 'Details in progress', status: 'IN_PROGRESS' as const, accent: '#5EA8D9', icon: UserRound },
+  { label: 'Details submitted', status: 'DETAILS_SUBMITTED' as const, accent: '#269A78', icon: CheckCircle2 },
+  { label: 'Verification in progress', status: 'VERIFICATION_IN_PROGRESS' as const, accent: 'var(--primary)', icon: FileCheck2 },
+  { label: 'Verification completed', status: 'COMPLETED' as const, accent: '#269A78', icon: CheckCircle2 },
 ];
-const statusLabel: Record<CandidateStatus, string> = {
-  PENDING: 'Pending',
-  INVITED: 'Mail sent',
-  IN_PROGRESS: 'In progress',
-  VERIFICATION_IN_PROGRESS: 'Verification in progress',
-  COMPLETED: 'Intake complete',
-  WITHDRAWN: 'Withdrawn',
-  ON_HOLD: 'On hold',
-};
 const statusStyle: Record<CandidateStatus, string> = {
   PENDING: 'bg-[var(--surface-muted)] text-[var(--muted)]',
   INVITED: 'bg-[#F2AE55]/15 text-[#F2AE55]',
   IN_PROGRESS: 'bg-[var(--primary)]/15 text-[var(--primary)]',
+  DETAILS_SUBMITTED: 'bg-[#269A78]/15 text-[#269A78]',
   VERIFICATION_IN_PROGRESS: 'bg-[var(--primary)]/15 text-[var(--primary)]',
   COMPLETED: 'bg-[#269A78]/15 text-[#269A78]',
   WITHDRAWN: 'bg-[#FF6B6B]/15 text-[#FF6B6B]',
+  CANCELLED: 'bg-[#FF6B6B]/15 text-[#FF6B6B]',
   ON_HOLD: 'bg-[#F2AE55]/15 text-[#F2AE55]',
 };
 
@@ -251,7 +247,7 @@ export default function CandidatesPage() {
         <h2 className="text-[15px] font-semibold text-[var(--foreground)]">Candidate overview</h2>
         <p className="mt-0.5 text-[11px] text-[var(--muted)]">Select a card to filter candidates. Counts follow the search, client, and date filters.</p>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
         {candidateSummaryCards.map((card) => {
           const selected = status === card.status;
           const Icon = card.icon;
@@ -274,7 +270,7 @@ export default function CandidatesPage() {
           <input value={search} onChange={(event) => { setPage(1); setSearch(event.target.value); }} placeholder="Name, reference, email or mobile" className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-9 pr-3 text-[13px] text-[var(--foreground)]" />
         </label>
         <label className="min-w-0 text-[11px] font-medium text-[var(--muted)]">Status
-          <select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as CandidateStatus | ''); }} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)]" aria-label="Filter by candidate status"><option value="">All statuses</option>{Object.keys(statusStyle).map((value) => <option key={value} value={value}>{statusLabel[value as CandidateStatus]}</option>)}</select>
+          <select value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as CandidateStatus | ''); }} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)]" aria-label="Filter by candidate status"><option value="">All statuses</option>{candidateStatusOptions.map((value) => <option key={value} value={value}>{candidateStatusLabel(value)}</option>)}</select>
         </label>
         <label className="min-w-0 text-[11px] font-medium text-[var(--muted)]">Client
           <select value={clientId} onChange={(event) => { setPage(1); setClientId(event.target.value); setSubclientId(''); setSubclients([]); setSubclientsError(null); }} className="mt-1 block w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--foreground)]" aria-label="Filter candidates by client"><option value="">All clients</option>{clients.filter((client) => !client.parentClientId).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select>
@@ -297,7 +293,7 @@ export default function CandidatesPage() {
     </section>
     {subclientsError && <p role="alert" className="text-[12px] text-[#FF6B6B]">{subclientsError}</p>}
     <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]"><div className="overflow-x-auto"><table className="w-full text-left text-[13px]"><thead className="border-b border-[var(--border)] text-[11px] uppercase tracking-wider text-[var(--muted)]"><tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Candidate</th><th className="px-5 py-3">Client</th><th className="px-5 py-3">Cases</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Actions</th></tr></thead><tbody className="divide-y divide-[var(--border)]">
-      {loading ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]">Loading candidates...</td></tr> : error ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[#FF6B6B]">{error}</td></tr> : items.length === 0 ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]"><Users size={24} className="mx-auto mb-2" />No candidates found.</td></tr> : items.map((candidate) => <tr key={candidate.id} onClick={() => { window.location.href = `/company/candidate/${candidate.id}`; }} className="cursor-pointer transition-colors hover:bg-[var(--surface-muted)]"><td className="px-5 py-4 font-mono text-[12px] text-[var(--muted)]">{candidate.candidateCode}</td><td className="px-5 py-4"><Link href={`/company/candidate/${candidate.id}`} className="font-medium hover:text-[var(--primary)]">{formatCandidateName(candidate)}</Link><p className="text-[11px] text-[var(--muted)]">{candidate.email}</p></td><td className="px-5 py-4 text-[var(--muted)]"><p>{clientMap.get(candidate.clientId) ?? '—'}</p>{candidate.subclient?.name && <p className="mt-0.5 text-[11px]">Subclient: {candidate.subclient.name}</p>}</td><td className="px-5 py-4">{candidate.bgvCaseCount ?? 0}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${statusStyle[candidate.status]}`}>{statusLabel[candidate.status]}</span></td><td className="px-5 py-4 text-right"><div className="inline-flex items-center gap-1">
+      {loading ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]">Loading candidates...</td></tr> : error ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[#FF6B6B]">{error}</td></tr> : items.length === 0 ? <tr><td colSpan={6} className="px-5 py-12 text-center text-[var(--muted)]"><Users size={24} className="mx-auto mb-2" />No candidates found.</td></tr> : items.map((candidate) => <tr key={candidate.id} onClick={() => { window.location.href = `/company/candidate/${candidate.id}`; }} className="cursor-pointer transition-colors hover:bg-[var(--surface-muted)]"><td className="px-5 py-4 font-mono text-[12px] text-[var(--muted)]">{candidate.candidateCode}</td><td className="px-5 py-4"><Link href={`/company/candidate/${candidate.id}`} className="font-medium hover:text-[var(--primary)]">{formatCandidateName(candidate)}</Link><p className="text-[11px] text-[var(--muted)]">{candidate.email}</p></td><td className="px-5 py-4 text-[var(--muted)]"><p>{clientMap.get(candidate.clientId) ?? '—'}</p>{candidate.subclient?.name && <p className="mt-0.5 text-[11px]">Subclient: {candidate.subclient.name}</p>}</td><td className="px-5 py-4">{candidate.bgvCaseCount ?? 0}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${statusStyle[candidate.status]}`}>{candidateStatusLabel(candidate.status)}</span></td><td className="px-5 py-4 text-right"><div className="inline-flex items-center gap-1">
         {(candidate.bgvCaseCount ?? 0) > 0 && <Link href={`/company/bgv-cases?candidateId=${encodeURIComponent(candidate.id)}`} aria-label={`View ${candidate.bgvCaseCount} BGV cases for ${candidate.firstName} ${candidate.lastName}`} title="Open this candidate's BGV cases" onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-1 rounded-md px-2 py-2 text-xs font-semibold text-[var(--primary)] hover:bg-[var(--surface-muted)]"><FileCheck2 size={15} /><span>Cases</span></Link>}
         <button aria-label="Send candidate portal link" title="Send or resend candidate portal link" onClick={(event) => { event.stopPropagation(); setActive(candidate); setModal('edit'); }} className="rounded-md p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)]"><Mail size={15} /></button><button aria-label="Edit candidate" onClick={(event) => { event.stopPropagation(); setActive(candidate); setModal('edit'); }} className="rounded-md p-2 text-[var(--muted)] hover:bg-[var(--surface-muted)]"><Pencil size={15} /></button><button aria-label={(candidate.bgvCaseCount ?? 0) > 0 ? `Cannot delete ${candidate.firstName} ${candidate.lastName}: candidate has a BGV case` : `Delete candidate ${candidate.firstName} ${candidate.lastName}`} title={(candidate.bgvCaseCount ?? 0) > 0 ? 'Candidates with BGV cases cannot be deleted' : 'Delete candidate'} disabled={(candidate.bgvCaseCount ?? 0) > 0} onClick={(event) => { event.stopPropagation(); setDeleteTarget(candidate); }} className="rounded-md p-2 text-[#FF6B6B] hover:bg-[#FF6B6B]/10 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={15} /></button></div></td></tr>)}</tbody></table></div>        <div className="flex flex-col items-center gap-2.5 border-t border-[var(--border)] px-5 py-3 text-[12px] text-[var(--muted)]"><span>{meta.total} candidates</span><div className="flex justify-center gap-2"><button disabled={page <= 1} onClick={() => setPage((current) => current - 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Previous</button><button disabled={page >= meta.totalPages} onClick={() => setPage((current) => current + 1)} className="rounded-md border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">Next</button></div></div></div>
     {modal && <CandidateFormModal mode={modal} candidate={active} canInvite={user?.role.isCompanyAdmin || user?.role.isSuperAdmin} submitting={submitting} error={formError} onClose={() => { setModal(null); setActive(null); }} onSubmit={submit} />}{deleteTarget && <CandidateConfirmDialog title="Delete candidate?" description="This hides the candidate from active BGV workflows." confirmLabel="Delete" submitting={submitting} onConfirm={remove} onCancel={() => setDeleteTarget(null)} />}
