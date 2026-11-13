@@ -122,7 +122,7 @@ export interface Candidate {
   consents?: { consentGiven: boolean; consentVersion: string | null; consentedAt: string | null; revokedAt: string | null; createdAt: string }[];
   portalInvitation?: CandidatePortalSummary | null;
   intakeProgress?: {
-    pending: { key: string; label: string; type: string }[];
+    pending: { key: string; label: string; type: string; documentType?: string }[];
     pendingCount: number;
     profileComplete: boolean;
   };

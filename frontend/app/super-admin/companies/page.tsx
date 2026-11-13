@@ -3,24 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Space_Grotesk, Inter, JetBrains_Mono } from 'next/font/google';
 import { useAuth } from '@/src/auth/AuthProvider';
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
-  variable: '--font-display',
-});
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-body',
-});
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['500'],
-  variable: '--font-mono',
-});
 
 // ---------- Types ----------
 type CompanyStatus = 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
@@ -382,7 +365,7 @@ export default function CompaniesPage() {
 
   return (
     <div
-      className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable} min-h-screen  text-[#F2F4FA]`}
+      className="min-h-screen text-[#F2F4FA]"
       style={{ fontFamily: 'var(--font-body)' }}
     >
       <div className="max-w-6xl mx-auto px-6 py-10">

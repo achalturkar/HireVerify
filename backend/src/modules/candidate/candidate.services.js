@@ -328,7 +328,8 @@ const update = async ({ id, companyId, payload, currentUser }) => {
     });
   data.updatedById = currentUser?.id || null;
 
-  return toDto(await repo.update(id, data));
+  await repo.update(id, data);
+  return toDto(await repo.findById(id, companyId));
 };
 
 const remove = async ({ id, companyId }) => {
