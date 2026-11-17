@@ -48,7 +48,7 @@ const list = async ({ companyId, clientId, subclientId, candidateId, status, ove
         candidate: { select: { id: true, candidateCode: true, fullName: true, firstName: true, middleName: true, lastName: true, email: true } },
         client: { select: { id: true, name: true, clientCode: true, contactEmail: true } },
         subclient: { select: { id: true, name: true, clientCode: true } },
-        checks: { select: { type: true, status: true, result: true, resultData: true, remarks: true, documents: { select: { id: true } } } },
+        checks: { select: { type: true, status: true, checkType: { select: { label: true } }, result: true, resultData: true, remarks: true, documents: { select: { id: true } } } },
         consents: {
           where: { consentType: 'BGV_CONSENT' },
           select: { consentType: true, consentGiven: true, revokedAt: true, consentedAt: true, createdAt: true, consentVersion: true, consentText: true },
@@ -64,6 +64,11 @@ const list = async ({ companyId, clientId, subclientId, candidateId, status, ove
     items: items.map(({ checks, ...item }) => ({
       ...item,
       verificationStatuses: checks.map((check) => check.status),
+      verificationChecks: checks.map((check) => ({
+        type: check.type,
+        label: check.checkType?.label || check.type.replaceAll('_', ' '),
+        status: check.status,
+      })),
       reportVerificationStatus: getOverallVerificationStatus(checks, item.overallResult),
     })),
     total,

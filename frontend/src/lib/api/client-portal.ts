@@ -156,9 +156,11 @@ export interface PortalCase {
   status: string;
   overallResult: string | null;
   verificationStatuses: string[];
+  verificationChecks?: { type: string; label?: string | null; status: string }[];
   initiatedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  updatedAt?: string;
   candidate: { fullName: string; firstName: string; middleName: string | null; lastName: string; candidateCode: string };
 }
 

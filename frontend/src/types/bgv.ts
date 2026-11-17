@@ -57,6 +57,7 @@ export interface BGVCase {
   client?: { id: string; name: string; clientCode: string };
   subclient?: { id: string; name: string; clientCode: string } | null;
   checks?: VerificationCheck[];
+  verificationChecks?: { type: VerificationType; label?: string | null; status: VerificationStatus }[];
   verificationStatuses?: VerificationStatus[];
   reportVerificationStatus?: string;
   consents?: { consentType: string; consentGiven: boolean; revokedAt: string | null; consentedAt?: string | null; createdAt?: string; consentVersion?: string | null; consentText?: string | null }[];

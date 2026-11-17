@@ -8,8 +8,10 @@ import { listClients, listSubclients } from '@/src/lib/api/clients';
 import { getVerificationStatus } from '@/src/lib/verification-status';
 import { formatCandidateName } from '@/src/lib/candidate-name';
 import { bgvCaseStatusClass, bgvCaseStatusLabel } from '@/src/lib/bgv-case-status';
+import { formatBGVTat } from '@/src/lib/bgv-tat';
 import { createBGVCase, downloadBGVReport, exportBGVCases, getBGVCase, listBGVCases, transitionBGVCase, updateBGVCaseChecks, updateBGVCaseMeta, ApiError } from '@/src/lib/api/bgv';
 import BGVCaseWizardModal from '@/src/components/layout/company/bgv/BGVCaseWizardModal';
+import VerificationCheckIcons from '@/src/components/bgv/VerificationCheckIcons';
 import type { BGVCase, BGVCaseStatus } from '@/src/types/bgv';
 import type { CreateBGVCasePayload } from '@/src/types/bgv';
 import type { Client } from '@/src/types/client';
@@ -357,6 +359,7 @@ export default function BGVCaseListPage() {
                 <th className="px-5 py-3">Case</th>
                 <th className="px-5 py-3">Candidate</th>
                 <th className="px-5 py-3">Client</th>
+                <th className="px-5 py-3">TAT (business days)</th>
                 <th className="px-5 py-3">Checks</th>
                 <th className="px-5 py-3">Verification status</th>
                 <th className="px-5 py-3">Status</th>
@@ -366,12 +369,12 @@ export default function BGVCaseListPage() {
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
               {loading ? (
-                <tr><td colSpan={8} className="px-5 py-12 text-center text-[var(--muted)]">Loading cases...</td></tr>
+                <tr><td colSpan={9} className="px-5 py-12 text-center text-[var(--muted)]">Loading cases...</td></tr>
               ) : error ? (
-                <tr><td colSpan={8} className="px-5 py-12 text-center text-[#FF6B6B]">{error}</td></tr>
+                <tr><td colSpan={9} className="px-5 py-12 text-center text-[#FF6B6B]">{error}</td></tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-[var(--muted)]">
+                  <td colSpan={9} className="px-5 py-12 text-center text-[var(--muted)]">
                     <FileCheck2 size={24} className="mx-auto mb-2" />
                     No BGV cases found.
                   </td>
@@ -384,7 +387,10 @@ export default function BGVCaseListPage() {
                       {item.candidate ? formatCandidateName(item.candidate) : item.candidateId}
                     </td>
                     <td className="px-5 py-4 text-[var(--muted)]"><p>{item.client?.name ?? item.clientId}</p>{item.subclient?.name && <p className="mt-0.5 text-[11px]">Subclient: {item.subclient.name}</p>}</td>
-                    <td className="px-5 py-4">{item._count?.checks ?? item.checks?.length ?? 0}</td>
+                    <td className="px-5 py-4 tabular-nums text-[var(--muted)]" title="Elapsed business days from initiation until completion or now">
+                      {formatBGVTat(item.initiatedAt ?? item.createdAt, item.completedAt ?? (item.status === 'CANCELLED' ? item.updatedAt : null))}
+                    </td>
+                    <td className="px-5 py-4"><VerificationCheckIcons checks={item.verificationChecks ?? []} /></td>
                     <td className="px-5 py-4">
                       {(() => {
                         const verification = getVerificationStatus(item.verificationStatuses);

@@ -753,7 +753,8 @@ const listCases = asyncHandler(async (req, res) => {
         initiatedAt: true,
         completedAt: true,
         createdAt: true,
-        checks: { select: { status: true } },
+        updatedAt: true,
+        checks: { select: { type: true, status: true, checkType: { select: { label: true } } } },
         candidate: { select: { fullName: true, firstName: true, middleName: true, lastName: true, candidateCode: true } },
       },
     }),
@@ -764,6 +765,11 @@ const listCases = asyncHandler(async (req, res) => {
     data: items.map(({ checks, ...item }) => ({
       ...item,
       verificationStatuses: checks.map((check) => check.status),
+      verificationChecks: checks.map((check) => ({
+        type: check.type,
+        label: check.checkType?.label || check.type.replaceAll('_', ' '),
+        status: check.status,
+      })),
     })),
     meta: buildMeta({ page: pagination.page, limit: pagination.limit, total }),
   });
